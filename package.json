@@ -1,0 +1,26 @@
+{
+    "name": "grapes-editor",
+    "version": "1.0.0",
+    "description": "Custom GrapesJS Web Builder with Premium UI",
+    "main": "index.html",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "keywords": [
+        "grapesjs",
+        "web-builder",
+        "page-builder",
+        "wysiwyg",
+        "editor"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "grapesjs": "^0.22.14"
+    },
+    "devDependencies": {
+        "vite": "^5.4.0"
+    }
+}

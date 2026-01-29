@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GrapesJS Ultimate Editor</title>
+    <meta name="description" content="A powerful drag-and-drop web page builder powered by GrapesJS" />
+    
+    <!-- GrapesJS Core CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/grapesjs@0.22.14/dist/css/grapes.min.css" />
+    
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+
+  <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading GrapesJS Ultimate Editor...</div>
+    </div>
+
+    <!-- Header Toolbar -->
+    <header class="editor-header">
+      <div class="editor-logo">
+        <svg viewBox="0 0 100 100">
+          <path d="M40 5l-12.9 7.4 -12.9 7.4c-1.4 0.8-2.7 2.3-3.7 3.9 -0.9 1.6-1.5 3.5-1.5 5.1v14.9 14.9c0 1.7 0.6 3.5 1.5 5.1 0.9 1.6 2.2 3.1 3.7 3.9l12.9 7.4 12.9 7.4c1.4 0.8 3.3 1.2 5.2 1.2 1.9 0 3.8-0.4 5.2-1.2l12.9-7.4 12.9-7.4c1.4-0.8 2.7-2.2 3.7-3.9 0.9-1.6 1.5-3.5 1.5-5.1v-14.9 -12.7c0-4.6-3.8-6-6.8-4.2l-28 16.2" />
+        </svg>
+        <span>GrapesJS Ultimate</span>
+      </div>
+
+      <div class="device-switcher" id="device-switcher">
+        <button class="device-btn active" data-device="Desktop" title="Desktop" aria-label="Desktop view">
+          <i class="fas fa-desktop"></i>
+        </button>
+        <button class="device-btn" data-device="Tablet" title="Tablet" aria-label="Tablet view">
+          <i class="fas fa-tablet-alt"></i>
+        </button>
+        <button class="device-btn" data-device="Mobile portrait" title="Mobile" aria-label="Mobile view">
+          <i class="fas fa-mobile-alt"></i>
+        </button>
+      </div>
+
+      <div class="header-actions">
+        <button class="header-btn header-btn-outline" id="btn-undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+          <i class="fas fa-undo"></i>
+        </button>
+        <button class="header-btn header-btn-outline" id="btn-redo" title="Redo (Ctrl+Y)" aria-label="Redo">
+          <i class="fas fa-redo"></i>
+        </button>
+        <button class="header-btn header-btn-outline" id="btn-clear" title="Clear Canvas" aria-label="Clear canvas">
+          <i class="fas fa-trash"></i>
+        </button>
+        <button class="header-btn header-btn-outline" id="btn-code" title="View Code" aria-label="View code">
+          <i class="fas fa-code"></i>
+        </button>
+        <button class="header-btn header-btn-outline" id="btn-preview" title="Preview" aria-label="Preview">
+          <i class="fas fa-eye"></i>
+        </button>
+        <button class="header-btn header-btn-outline" id="btn-fullscreen" title="Fullscreen" aria-label="Fullscreen">
+          <i class="fas fa-expand"></i>
+        </button>
+        <button class="header-btn header-btn-primary" id="btn-export" title="Export" aria-label="Export">
+          <i class="fas fa-download"></i>
+          <span>Export</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Editor Layout -->
+    <div class="editor-wrapper">
+      <!-- Left Sidebar - Blocks -->
+      <aside class="blocks-panel">
+        <div class="blocks-section-title">
+          <i class="fas fa-cube"></i>&nbsp; Components & Blocks
+        </div>
+        <div id="blocks-container"></div>
+      </aside>
+
+      <!-- Canvas -->
+      <main class="canvas-container">
+        <div id="gjs">
+          <div class="welcome-content" style="padding: 60px 40px; text-align: center; font-family: 'Inter', sans-serif;">
+            <h1 style="font-size: 48px; margin-bottom: 20px; background: linear-gradient(135deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+              Welcome to GrapesJS Ultimate
+            </h1>
+            <p style="font-size: 18px; color: #64748b; max-width: 600px; margin: 0 auto 40px;">
+              The most powerful, feature-packed web builder with plugins pre-installed. 
+              Start building amazing websites by dragging components from the left panel.
+            </p>
+            <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+              <div style="padding: 30px; background: linear-gradient(135deg, #f0f9ff, #e0f2fe); border-radius: 16px; width: 200px;">
+                <div style="font-size: 40px; margin-bottom: 10px;">🎨</div>
+                <h3 style="margin: 0 0 8px; color: #0284c7;">Style Manager</h3>
+                <p style="margin: 0; font-size: 14px; color: #64748b;">Advanced styling tools</p>
+              </div>
+              <div style="padding: 30px; background: linear-gradient(135deg, #fdf4ff, #fae8ff); border-radius: 16px; width: 200px;">
+                <div style="font-size: 40px; margin-bottom: 10px;">📦</div>
+                <h3 style="margin: 0 0 8px; color: #a855f7;">Plugins</h3>
+                <p style="margin: 0; font-size: 14px; color: #64748b;">Pre-installed & ready</p>
+              </div>
+              <div style="padding: 30px; background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-radius: 16px; width: 200px;">
+                <div style="font-size: 40px; margin-bottom: 10px;">🚀</div>
+                <h3 style="margin: 0 0 8px; color: #16a34a;">Export Ready</h3>
+                <p style="margin: 0; font-size: 14px; color: #64748b;">Download as ZIP</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Sidebar - Style Manager -->
+      <aside class="style-panel">
+        <div class="panel-tabs">
+          <div class="panel-tab active" data-panel="styles">
+            <i class="fas fa-paint-brush"></i> Styles
+          </div>
+          <div class="panel-tab" data-panel="traits">
+            <i class="fas fa-cog"></i> Settings
+          </div>
+          <div class="panel-tab" data-panel="layers">
+            <i class="fas fa-layer-group"></i> Layers
+          </div>
+        </div>
+        <div id="selectors-container"></div>
+        <div id="styles-container"></div>
+        <div id="traits-container" style="display: none;"></div>
+        <div id="layers-container" style="display: none;"></div>
+      </aside>
+    </div>
+
+    <!-- GrapesJS Core -->
+    <script src="https://unpkg.com/grapesjs@0.22.14"></script>
+    
+    <!-- Editor Script -->
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
