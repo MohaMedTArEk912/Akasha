@@ -20,7 +20,11 @@
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.1.5"
+    "mongoose": "^9.1.5",
+    "pg": "^8.17.2",
+    "reflect-metadata": "^0.2.2",
+    "sequelize": "^6.37.7",
+    "sequelize-typescript": "^2.1.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -29,6 +33,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mongoose": "^5.11.96",
     "@types/node": "^25.1.0",
+    "@types/pg": "^8.16.0",
     "nodemon": "^3.1.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
