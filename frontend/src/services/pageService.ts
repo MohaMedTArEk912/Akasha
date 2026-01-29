@@ -45,7 +45,10 @@ export interface UpdatePageDto {
 }
 
 const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('grapes_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const token = user?.token;
+
     return {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),

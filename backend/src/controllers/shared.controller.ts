@@ -80,7 +80,7 @@ export const upsertSharedComponent = async (req: Request, res: Response) => {
 
         // @ts-ignore - Mongoose 9 typing issue
         const component = await SharedComponent.findOneAndUpdate(
-            { projectId, type },
+            { projectId, type } as any,
             {
                 name: name || type.charAt(0).toUpperCase() + type.slice(1),
                 type,

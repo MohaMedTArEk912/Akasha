@@ -106,7 +106,7 @@ export const createFile = async (req: Request, res: Response) => {
         }
 
         // Create file with auto-organization
-        const fileData = FileRegistry.createFile(projectId, name, type, schema || {});
+        const fileData = FileRegistry.createFile(projectId as string, name, type, schema || {});
 
         const file = await VFSFileModel.create({
             ...fileData,
@@ -165,7 +165,7 @@ export const updateFile = async (req: Request, res: Response) => {
             file.path = FileRegistry.generatePath(file.type as FileType, updates.name);
         }
         if (updates.schema !== undefined) {
-            file.schema = updates.schema;
+            file.dataSchema = updates.schema;
         }
 
         await file.save();
@@ -179,6 +179,105 @@ export const updateFile = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             error: 'Failed to update file'
+        });
+    }
+};
+
+/**
+ * Move file to new path (validated)
+ */
+export const moveFile = async (req: Request, res: Response) => {
+    try {
+        const { fileId } = req.params;
+        const { path } = req.body as { path?: string };
+
+        if (!path || typeof path !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: 'Target path is required'
+            });
+        }
+
+        // @ts-ignore
+        const file = await VFSFileModel.findById(fileId);
+        if (!file) {
+            return res.status(404).json({
+                success: false,
+                error: 'File not found'
+            });
+        }
+
+        // Load project files/blocks for guard + snapshot
+        // @ts-ignore
+        const allFiles = await VFSFileModel.find({ projectId: file.projectId }).lean();
+        // @ts-ignore
+        const allBlocks = await VFSBlockModel.find({ projectId: file.projectId }).lean();
+
+        // @ts-ignore
+        const guard = await SafetyGuard.guardOperation(
+            file.toObject() as any,
+            'move',
+            file.projectId.toString(),
+            allFiles as any,
+            allBlocks as any
+        );
+
+        if (!guard.allowed) {
+            return res.status(403).json({
+                success: false,
+                error: guard.reason || 'Move not allowed'
+            });
+        }
+
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+        const extension = FileRegistry.getExtension(file.type as FileType);
+
+        if (!normalizedPath.endsWith(`.${extension}`)) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid path extension. Expected .${extension}`
+            });
+        }
+
+        if (!AutoOrganizer.isValidPathForType(normalizedPath, file.type as FileType)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid path for file type',
+                hint: `Suggested path: ${AutoOrganizer.suggestPath(file.toObject() as any)}`
+            });
+        }
+
+        // Check for existing file conflict
+        // @ts-ignore
+        const conflict = await VFSFileModel.findOne({
+            projectId: file.projectId,
+            path: normalizedPath,
+            _id: { $ne: file._id },
+            isArchived: false
+        });
+
+        if (conflict) {
+            return res.status(409).json({
+                success: false,
+                error: 'A file with this path already exists'
+            });
+        }
+
+        const parsed = FileRegistry.parsePath(normalizedPath);
+        file.path = normalizedPath;
+        file.name = parsed.name;
+
+        await file.save();
+
+        res.json({
+            success: true,
+            data: { file }
+        });
+    } catch (error) {
+        console.error('Error moving file:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to move file'
         });
     }
 };

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import grapesjs from 'grapesjs';
 // @ts-ignore - No types available for this plugin
 import grapesjsTailwind from 'grapesjs-tailwind';
+// @ts-ignore - No types available for this plugin
+import grapesjsRulers from 'grapesjs-rulers';
 import { initBlocks } from '../utils/blocks';
 import { GrapesEditor } from '../types/grapes';
 
@@ -18,27 +20,33 @@ export const useGrapes = () => {
             height: '100%',
             width: 'auto',
             fromElement: true,
+            // Enable free-form absolute positioning validation
+            dragMode: 'absolute',
             // Tailwind-first: All styling uses Tailwind CSS classes
-            plugins: [grapesjsTailwind],
+            plugins: [grapesjsTailwind, grapesjsRulers],
             pluginsOpts: {
                 // grapesjs-tailwind plugin options
                 'grapesjs-tailwind': {
-                    // Enable Tailwind blocks from Tailblocks.cc
+                    // Disable plugin's blocks - we use our own responsive blocks
+                    blocks: [],
                     tailwindPlayCdn: true,
+                },
+                'grapesjs-rulers': {
+                    dragMode: 'translate',
                 }
             },
             storageManager: {
                 type: 'local',
                 id: 'gjs-ultimate-',
                 autosave: true,
-                autoload: true,
+                autoload: false, // Always start with clean canvas
                 stepsBeforeSave: 1,
             },
             deviceManager: {
                 devices: [
-                    { name: 'Desktop', width: '' },
-                    { name: 'Tablet', width: '768px', widthMedia: '992px' },
-                    { name: 'Mobile portrait', width: '320px', widthMedia: '575px' },
+                    { name: 'Desktop', width: '' }, // Full width, lg: breakpoint (>=1024px)
+                    { name: 'Tablet', width: '768px', widthMedia: '768px' }, // md: breakpoint
+                    { name: 'Mobile portrait', width: '375px', widthMedia: '640px' }, // Below sm: breakpoint
                 ]
             },
             panels: { defaults: [] },
@@ -110,51 +118,35 @@ export const useGrapes = () => {
                     // Tailwind Play CDN for real-time Tailwind compilation
                     'https://cdn.tailwindcss.com',
                 ],
+                // Ensure the canvas frame has proper styling for responsive preview
+                frameStyle: `
+                    html {
+                        height: 100%;
+                        width: 100%;
+                    }
+                    body { 
+                        background-color: #ffffff !important; 
+                        margin: 0;
+                        padding: 0;
+                        min-height: 100vh !important;
+                        height: 100%;
+                        width: 100%;
+                        overflow-x: hidden;
+                    }
+                    * { 
+                        box-sizing: border-box; 
+                    }
+                    img, video, iframe, embed, object {
+                        max-width: 100%;
+                        height: auto;
+                    }
+                    section, div, article, aside, header, footer, nav, main {
+                        max-width: 100%;
+                    }
+                `,
             },
         });
-        // Manually Register 'preview' command to ensure we have a 'real' preview
-        editorInstance.Commands.add('preview', {
-            run: (editor: GrapesEditor) => {
-                // 1. Stop core editing helpers
-                try { editor.stopCommand('sw-visibility'); } catch (e) { console.warn(e) }
-                try { editor.stopCommand('core:component-outline'); } catch (e) { /* ignore */ }
-                try { editor.stopCommand('core:canvas-tooltips'); } catch (e) { /* ignore */ }
 
-                // 2. Clear selection
-                editor.select(undefined);
-
-                // 3. Manually clean up any lingering CSS classes for a "Real" preview
-                const canvasBody = editor.Canvas.getBody();
-                if (canvasBody) {
-                    canvasBody.classList.remove('gjs-dashed');
-                    // Add a class that we can target with CSS to hide other editor-specific elements if needed
-                    canvasBody.classList.add('gjs-preview-active');
-                }
-
-                // 4. Notify UI
-                editor.trigger('run:preview');
-            },
-            stop: (editor: GrapesEditor) => {
-                // 1. Remove preview class explicitly
-                const canvasBody = editor.Canvas.getBody();
-                if (canvasBody) {
-                    canvasBody.classList.remove('gjs-preview-active');
-                    // Forcefully add the class back if sw-visibility fails to do so immediately
-                    canvasBody.classList.add('gjs-dashed');
-                }
-
-                // 2. Restore core editing helpers
-                // Force stop then start to ensure it resets the internal state correctly
-                try { editor.stopCommand('sw-visibility'); } catch (e) { /* ignore */ }
-                try { editor.runCommand('sw-visibility'); } catch (e) { /* ignore */ }
-
-                try { editor.runCommand('core:component-outline'); } catch (e) { /* ignore */ }
-                try { editor.runCommand('core:canvas-tooltips'); } catch (e) { /* ignore */ }
-
-                // 3. Notify UI
-                editor.trigger('stop:preview');
-            }
-        });
 
         initBlocks(editorInstance);
         setEditor(editorInstance);

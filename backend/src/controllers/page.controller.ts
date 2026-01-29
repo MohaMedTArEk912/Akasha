@@ -1,8 +1,38 @@
 import { Request, Response } from 'express';
 import Page from '../models/Page';
 import Project from '../models/Project';
+import VFSFileModel from '../models/VFSFile';
+import { FileRegistry } from '../vfs';
+import { FileType } from '../vfs/types';
 
 // ========== PAGE CRUD ==========
+
+const upsertPageFile = async (projectId: string, page: any) => {
+    // @ts-ignore - Mongoose typing
+    const existing = await VFSFileModel.findOne({ projectId, 'schema.pageId': page._id });
+
+    const schema = {
+        pageId: page._id.toString(),
+        slug: page.slug,
+        isHome: page.isHome,
+    };
+
+    if (existing) {
+        existing.name = page.name;
+        existing.path = FileRegistry.generatePath(FileType.PAGE, page.name);
+        // @ts-ignore - alias for schema
+        existing.dataSchema = { ...existing.dataSchema, ...schema };
+        await existing.save();
+        return existing;
+    }
+
+    const fileData = FileRegistry.createFile(projectId, page.name, FileType.PAGE, schema);
+    const created = await VFSFileModel.create({
+        ...fileData,
+        projectId,
+    });
+    return created;
+};
 
 /**
  * @desc    Get all pages for a project
@@ -102,6 +132,7 @@ export const createPage = async (req: Request, res: Response) => {
         });
 
         const created = await page.save();
+        await upsertPageFile(projectId, created);
         res.status(201).json(created);
     } catch (error: any) {
         if (error.code === 11000) {
@@ -148,6 +179,7 @@ export const updatePage = async (req: Request, res: Response) => {
         if (order !== undefined) page.order = order;
 
         const updated = await page.save();
+        await upsertPageFile(projectId, updated);
         res.json(updated);
     } catch (error: any) {
         if (error.code === 11000) {
@@ -186,6 +218,14 @@ export const deletePage = async (req: Request, res: Response) => {
         const pageCount = await Page.countDocuments({ projectId });
         if (pageCount <= 1) {
             return res.status(400).json({ message: 'Cannot delete the only page' });
+        }
+
+        // Archive VFS file (safe delete)
+        // @ts-ignore - Mongoose typing
+        const vfsFile = await VFSFileModel.findOne({ projectId, 'schema.pageId': pageId });
+        if (vfsFile && !vfsFile.isArchived) {
+            vfsFile.isArchived = true;
+            await vfsFile.save();
         }
 
         await page.deleteOne();
@@ -246,6 +286,7 @@ export const duplicatePage = async (req: Request, res: Response) => {
         });
 
         const created = await duplicatedPage.save();
+        await upsertPageFile(projectId, created);
         res.status(201).json(created);
     } catch (error: any) {
         res.status(500).json({ message: error.message });

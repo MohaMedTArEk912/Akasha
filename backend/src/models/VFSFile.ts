@@ -18,7 +18,7 @@ export interface IVFSFile extends Document {
     path: string;
     type: typeof FileTypeValues[number];
     protection: typeof ProtectionLevelValues[number];
-    schema: Record<string, unknown>;
+    dataSchema: Record<string, unknown>;
     isArchived: boolean;
     archivedAt?: Date;
     createdAt: Date;
@@ -58,7 +58,8 @@ const VFSFileSchema = new Schema<IVFSFile>(
         },
         schema: {
             type: Schema.Types.Mixed,
-            default: {}
+            default: {},
+            alias: 'dataSchema'
         },
         isArchived: {
             type: Boolean,
@@ -68,7 +69,7 @@ const VFSFileSchema = new Schema<IVFSFile>(
         archivedAt: {
             type: Date
         }
-    },
+    } as any,
     {
         timestamps: true,
         collection: 'vfs_files'
@@ -91,7 +92,7 @@ VFSFileSchema.index({ projectId: 1, type: 1 });
 VFSFileSchema.index({ projectId: 1, isArchived: 1 });
 
 // Archive management - auto-set archivedAt
-VFSFileSchema.pre('save', function (next) {
+VFSFileSchema.pre('save', function (this: IVFSFile, next: any) {
     if (this.isModified('isArchived') && this.isArchived && !this.archivedAt) {
         this.archivedAt = new Date();
     }

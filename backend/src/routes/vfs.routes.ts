@@ -23,6 +23,9 @@ router.post('/project/:projectId/file', vfsController.createFile);
 // Update file
 router.put('/file/:fileId', vfsController.updateFile);
 
+// Move file
+router.put('/file/:fileId/move', vfsController.moveFile);
+
 // Delete file (only for free_code files)
 router.delete('/file/:fileId', vfsController.deleteFile);
 

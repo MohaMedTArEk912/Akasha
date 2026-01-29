@@ -125,8 +125,131 @@ html {
 }
 
 /* Real Preview Mode Force Overrides */
-.gjs-preview-active .gjs-badge, .gjs-preview-active .gjs-toolbar, .gjs-preview-active .gjs-resizer, .gjs-preview-active .gjs-highlighter, .gjs-preview-active .gjs-highlighter-sel, .gjs-preview-active .gjs-placeholder, .gjs-preview-active .gjs-ghost, .gjs-preview-active .gjs-dropzone { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
-.gjs-preview-active, .gjs-preview-active * { cursor: auto !important; }
-.gjs-preview-active .gjs-comp-selected { outline: none !important; box-shadow: none !important; }
-.gjs-preview-active .gjs-dashed * { outline: none !important; }
-.gjs-preview-active .gjs-hovered { outline: none !important; }
+.gjs-preview-active .gjs-badge,
+.gjs-preview-active .gjs-toolbar,
+.gjs-preview-active .gjs-resizer,
+.gjs-preview-active .gjs-highlighter,
+.gjs-preview-active .gjs-highlighter-sel,
+.gjs-preview-active .gjs-placeholder,
+.gjs-preview-active .gjs-ghost,
+.gjs-preview-active .gjs-dropzone {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.gjs-preview-active,
+.gjs-preview-active * {
+    cursor: auto !important;
+}
+
+.gjs-preview-active .gjs-comp-selected {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.gjs-preview-active .gjs-dashed * {
+    outline: none !important;
+}
+
+.gjs-preview-active .gjs-hovered {
+    outline: none !important;
+}
+
+/* ===== Canvas & Device Responsive Styling ===== */
+.gjs-cv-canvas {
+    background-color: var(--gjs-darker-bg) !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    padding: 40px !important;
+    height: 100% !important;
+    width: 100% !important;
+}
+
+.gjs-frame-wrapper {
+    background-color: #fff !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5) !important;
+    border-radius: 4px !important;
+    overflow: hidden !important;
+    transition: width 0.3s ease !important;
+    position: relative !important;
+    margin: 0 auto !important;
+    height: 100% !important;
+    min-height: calc(100vh - 120px) !important;
+}
+
+.gjs-frame-wrapper--dashed {
+    border: 2px dashed var(--gjs-border-color) !important;
+}
+
+.gjs-frame {
+    border: none !important;
+    background-color: #fff !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    height: 100% !important;
+    width: 100% !important;
+    display: block !important;
+}
+
+/* Category Styling */
+.gjs-block-category {
+    background: transparent !important;
+    border: none !important;
+}
+
+.gjs-block-category .gjs-title {
+    background: var(--gjs-darker-bg) !important;
+    border: 1px solid var(--gjs-border-color) !important;
+    border-radius: 6px !important;
+    color: var(--gjs-text-color) !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    padding: 10px 12px !important;
+    margin-bottom: 6px !important;
+}
+
+.gjs-block-category .gjs-title:hover {
+    border-color: var(--gjs-primary-color) !important;
+}
+
+.gjs-blocks-c {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+    padding: 4px !important;
+}
+
+/* Layer Manager Styling */
+.gjs-layer {
+    background: var(--gjs-darker-bg) !important;
+    border: 1px solid var(--gjs-border-color) !important;
+    border-radius: 6px !important;
+    margin-bottom: 4px !important;
+}
+
+.gjs-layer:hover {
+    border-color: var(--gjs-primary-color) !important;
+}
+
+.gjs-layer-name {
+    color: var(--gjs-text-color) !important;
+}
+
+/* Selector Manager */
+.gjs-clm-tags {
+    background: var(--gjs-darker-bg) !important;
+    border: 1px solid var(--gjs-border-color) !important;
+    border-radius: 6px !important;
+    padding: 8px !important;
+}
+
+.gjs-clm-tag {
+    background: var(--gjs-primary-color) !important;
+    border-radius: 4px !important;
+    color: white !important;
+}

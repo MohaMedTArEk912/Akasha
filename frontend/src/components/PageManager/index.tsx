@@ -64,6 +64,14 @@ export const PageManager: React.FC<PageManagerProps> = ({
         }
     }, [projectId, fetchPages]);
 
+    if (!projectId) {
+        return (
+            <div className="p-4 text-slate-400 text-center">
+                Select or create a project to manage pages.
+            </div>
+        );
+    }
+
     // Create new page
     const handleCreatePage = async () => {
         if (!newPageName.trim()) return;

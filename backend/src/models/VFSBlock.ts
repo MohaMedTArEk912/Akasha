@@ -155,7 +155,8 @@ const VFSBlockSchema = new Schema<IVFSBlock>(
 );
 
 // CRITICAL: Ensure file exists before saving block
-VFSBlockSchema.pre('save', async function (next) {
+// CRITICAL: Ensure file exists before saving block
+VFSBlockSchema.pre('save', async function () {
     if (this.isNew || this.isModified('fileId')) {
         const VFSFile = mongoose.model('VFSFile');
         // @ts-ignore - Mongoose typing issue
@@ -167,7 +168,6 @@ VFSBlockSchema.pre('save', async function (next) {
             throw new Error(`Cannot add block to archived file ${this.fileId}`);
         }
     }
-    next();
 });
 
 // Fast lookup for file's blocks ordered

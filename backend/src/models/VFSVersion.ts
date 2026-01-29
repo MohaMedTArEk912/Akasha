@@ -72,7 +72,7 @@ VFSVersionSchema.index(
 );
 
 // Static method to cleanup old versions (keep last 50 per project)
-VFSVersionSchema.statics.cleanupOldVersions = async function (projectId: string, keepCount = 50) {
+VFSVersionSchema.statics.cleanupOldVersions = async function (this: any, projectId: string, keepCount = 50) {
     const versions = await this.find({ projectId })
         .sort({ createdAt: -1 })
         .skip(keepCount)
@@ -88,6 +88,7 @@ VFSVersionSchema.statics.cleanupOldVersions = async function (projectId: string,
 
 // Static method to create snapshot
 VFSVersionSchema.statics.createSnapshot = async function (
+    this: any,
     projectId: string,
     files: any[],
     blocks: any[],
@@ -109,4 +110,9 @@ VFSVersionSchema.statics.createSnapshot = async function (
     return version;
 };
 
-export default mongoose.model<IVFSVersion>('VFSVersion', VFSVersionSchema);
+interface IVFSVersionModel extends mongoose.Model<IVFSVersion> {
+    cleanupOldVersions(projectId: string, keepCount?: number): Promise<number>;
+    createSnapshot(projectId: string, files: any[], blocks: any[], trigger?: string, label?: string, metadata?: any): Promise<IVFSVersion>;
+}
+
+export default mongoose.model<IVFSVersion, IVFSVersionModel>('VFSVersion', VFSVersionSchema);

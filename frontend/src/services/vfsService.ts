@@ -131,6 +131,15 @@ interface ApiResponse<T> {
  * Get auth token from storage
  */
 function getAuthToken(): string | null {
+    const userStr = localStorage.getItem('grapes_user');
+    if (userStr) {
+        try {
+            const user = JSON.parse(userStr);
+            if (user?.token) return user.token;
+        } catch {
+            // ignore parse errors
+        }
+    }
     return localStorage.getItem('token');
 }
 
@@ -239,6 +248,22 @@ export async function updateFile(
         method: 'PUT',
         headers: buildHeaders(),
         body: JSON.stringify(updates),
+    });
+
+    return handleResponse(response);
+}
+
+/**
+ * Move file to new path
+ */
+export async function moveFile(
+    fileId: string,
+    path: string
+): Promise<{ file: VFSFile }> {
+    const response = await fetch(`${API_BASE}/vfs/file/${fileId}/move`, {
+        method: 'PUT',
+        headers: buildHeaders(),
+        body: JSON.stringify({ path }),
     });
 
     return handleResponse(response);

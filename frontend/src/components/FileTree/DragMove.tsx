@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { VFSFile, FolderNode } from './index';
-import './DragMove.css';
+// import './DragMove.css';
 
 // ============================================================================
 // TYPES
@@ -98,9 +98,13 @@ export function validateMove(file: VFSFile, targetPath: string): DragMoveResult 
 
     // Move is allowed
     const fileName = file.name;
+    const currentExt = file.path.includes('.')
+        ? file.path.substring(file.path.lastIndexOf('.') + 1)
+        : '';
+    const withExt = currentExt ? `${fileName}.${currentExt}` : fileName;
     const newPath = targetPath.endsWith('/')
-        ? `${targetPath}${fileName}`
-        : `${targetPath}/${fileName}`;
+        ? `${targetPath}${withExt}`
+        : `${targetPath}/${withExt}`;
 
     return {
         allowed: true,
