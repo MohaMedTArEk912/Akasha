@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useGrapes } from '../../hooks/useGrapes';
 import { Toolbar } from '../Toolbar';
-import { Box, Paintbrush, Cog, Layers, EyeOff, CircuitBoard, Image } from 'lucide-react';
+import { Box, Paintbrush, Cog, Layers, EyeOff, CircuitBoard, Image, Package } from 'lucide-react';
 import { StyleInspector } from '../StyleInspector';
 import { LogicPanel } from '../LogicPanel';
 import { PropertyEditor } from '../PropertyEditor';
 import { AssetManager } from '../AssetManager';
 import { AutoLayoutPanel } from '../AutoLayoutPanel';
+import { SymbolPanel } from '../SymbolPanel';
 import { RuntimeEngine } from '../../utils/runtime';
 import { useLogic } from '../../context/LogicContext';
 
@@ -15,12 +16,12 @@ export const Editor = () => {
     const { flows, variables, updateVariable } = useLogic();
     const runtimeRef = useRef<RuntimeEngine | null>(null);
 
-    const [activeTab, setActiveTab] = useState<'styles' | 'traits' | 'layers' | 'logic'>('styles');
+    const [activeTab, setActiveTab] = useState<'styles' | 'traits' | 'layers' | 'logic' | 'symbols'>('styles');
     const [previewMode, setPreviewMode] = useState(false);
     const [isAssetManagerOpen, setIsAssetManagerOpen] = useState(false);
 
     // Handle Tab Switching
-    const handleTabClick = (tab: 'styles' | 'traits' | 'layers' | 'logic') => {
+    const handleTabClick = (tab: 'styles' | 'traits' | 'layers' | 'logic' | 'symbols') => {
         setActiveTab(tab);
     };
 
@@ -183,6 +184,12 @@ export const Editor = () => {
                                 label="Logic"
                                 onClick={() => handleTabClick('logic')}
                             />
+                            <TabBtn
+                                active={activeTab === 'symbols'}
+                                icon={<Package size={14} />}
+                                label="Symbols"
+                                onClick={() => handleTabClick('symbols')}
+                            />
                         </div>
 
                         <div className="flex-1 overflow-y-auto">
@@ -204,6 +211,11 @@ export const Editor = () => {
                             {/* Logic Tab */}
                             <div className={activeTab === 'logic' ? 'h-full' : 'hidden'}>
                                 <LogicPanel editor={editor} />
+                            </div>
+
+                            {/* Symbols Tab */}
+                            <div className={activeTab === 'symbols' ? 'h-full' : 'hidden'}>
+                                <SymbolPanel editor={editor} />
                             </div>
                         </div>
                     </aside>
