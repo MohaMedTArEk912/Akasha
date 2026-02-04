@@ -56,3 +56,22 @@ coverage/
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+
+# Rust/Cargo
+target/
+**/*.rs.bk
+Cargo.lock
+*.pdb
+
+# Tauri
+**/gen/
+**/WixTools/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Error logs
+*_errors*.txt
+build_error*.txt
