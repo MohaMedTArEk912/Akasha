@@ -42,9 +42,11 @@ A modern, production-ready visual web builder powered by **GrapesJS**, built wit
 - **Logic Graph Engine** – Visual state and event management
 - **CSS-to-Tailwind Conversion** – Automatic Tailwind class generation
 - **React Code Export** – Export projects as production-ready React apps
-- **Real-time Collaboration** – WebSocket-based multi-user editing
-- **Virtual File System (VFS)** – In-browser file management
+- **Real-time Collaboration** – WebSocket-based multi-user editing with comments
+- **Virtual File System (VFS)** – File management with version control and block ownership
 - **Hot Reload Support** – Instant preview updates
+- **Multi-Platform Publishing** – Deploy to Vercel, Netlify, and more
+- **E-commerce Integration** – Stripe and PayPal payment processing
 
 ---
 
@@ -59,7 +61,7 @@ A modern, production-ready visual web builder powered by **GrapesJS**, built wit
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/MohaMedTArEk912/grapes-editor.git
+git clone <your-repository-url>
 cd grapes-editor
 ```
 
@@ -92,11 +94,23 @@ JWT_SECRET=your-super-secret-jwt-key
 JWT_EXPIRES_IN=7d
 
 # Optional: PostgreSQL (if using Sequelize features)
+POSTGRES_URL=postgresql://user:password@localhost:5432/grapes_editor
+# OR use individual connection parameters:
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DB=grapes_editor
 POSTGRES_USER=your_user
 POSTGRES_PASSWORD=your_password
+
+# Publishing Providers (Optional)
+VERCEL_TOKEN=your-vercel-token
+NETLIFY_TOKEN=your-netlify-token
+
+# Payment Providers (Optional)
+STRIPE_SECRET_KEY=your-stripe-secret-key
+PAYPAL_CLIENT_ID=your-paypal-client-id
+PAYPAL_CLIENT_SECRET=your-paypal-client-secret
+PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
 ```
 
 **`frontend/.env`**
@@ -198,12 +212,14 @@ grapes-editor/
 ### Additional APIs
 - `/api/symbols` – Reusable component symbols
 - `/api/forms` – Form submissions
-- `/api/cms` – CMS content management
-- `/api/commerce` – E-commerce products/orders
-- `/api/analytics` – Analytics events
-- `/api/publish` – Publishing workflow
+- `/api/cms` – CMS content management (collections, items)
+- `/api/products` – Product catalog management
+- `/api/commerce` – E-commerce cart and checkout (Stripe/PayPal)
+- `/api/analytics` – Analytics events tracking
+- `/api/publish` – Publishing workflow (Vercel/Netlify deployment)
 - `/api/templates` – Page templates
-- `/api/vfs` – Virtual file system operations
+- `/api/shared` – Shared components
+- `/api/vfs` – Virtual file system operations (files, blocks, versions)
 
 ---
 
@@ -240,8 +256,8 @@ npm run start  # Run compiled production server
 
 ### Development
 ```bash
-docker-compose up -d  # Start MongoDB
-npm run dev           # Start application
+docker-compose up -d  # Start MongoDB on port 27017
+npm run dev           # Start application (frontend: 5173, backend: 5000)
 ```
 
 ### Production (Example)
@@ -277,10 +293,12 @@ volumes:
 ## 🔒 Security Considerations
 
 - **JWT Authentication** – All protected routes require valid JWT tokens
+- **Password Hashing** – bcryptjs for secure password storage
 - **Helmet.js** – Security headers enabled
 - **CORS** – Configured for allowed origins
 - **Input Validation** – Server-side validation on all endpoints
 - **Environment Variables** – Secrets stored in `.env` files (never committed)
+- **WebSocket Authentication** – JWT-based connection validation for real-time features
 
 ---
 
