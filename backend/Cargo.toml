@@ -1,0 +1,32 @@
+[package]
+name = "grapes-backend"
+version = "0.1.0"
+edition = "2021"
+description = "Grapes IDE Backend - Rust API Server"
+authors = ["Grapes Team"]
+
+[dependencies]
+# Web framework
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging & Errors
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+anyhow = "1.0"
+
+[profile.release]
+lto = true
+opt-level = 3

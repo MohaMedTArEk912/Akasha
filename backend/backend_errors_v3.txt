@@ -1,0 +1,68 @@
+    Checking grapes-backend v0.1.0 (D:\2-Mozakra\Projects\GP-Project\Grapes\grapes-editor\backend)
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `tracing_subscriber`
+  --> src\main.rs:21:5
+   |
+21 | use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+   |     ^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `tracing_subscriber`
+   |
+   = help: if you wanted to use a crate named `tracing_subscriber`, use `cargo add tracing_subscriber` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `thiserror`
+ --> src\error.rs:9:5
+  |
+9 | use thiserror::Error;
+  |     ^^^^^^^^^ use of unresolved module or unlinked crate `thiserror`
+  |
+  = help: if you wanted to use a crate named `thiserror`, use `cargo add thiserror` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `tracing`
+  --> src\main.rs:87:5
+   |
+87 |     tracing::info!("≡ƒìç Grapes Backend listening on http://{}", addr);
+   |     ^^^^^^^ use of unresolved module or unlinked crate `tracing`
+
+error: cannot find attribute `error` in this scope
+  --> src\error.rs:14:7
+   |
+14 |     #[error("Not found: {0}")]
+   |       ^^^^^
+
+error: cannot find attribute `error` in this scope
+  --> src\error.rs:17:7
+   |
+17 |     #[error("Bad request: {0}")]
+   |       ^^^^^
+
+error: cannot find attribute `error` in this scope
+  --> src\error.rs:20:7
+   |
+20 |     #[error("Internal error: {0}")]
+   |       ^^^^^
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `tracing_subscriber`
+  --> src\main.rs:30:15
+   |
+30 |         .with(tracing_subscriber::fmt::layer())
+   |               ^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `tracing_subscriber`
+   |
+   = help: if you wanted to use a crate named `tracing_subscriber`, use `cargo add tracing_subscriber` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `tracing_subscriber`
+  --> src\main.rs:31:15
+   |
+31 |         .with(tracing_subscriber::EnvFilter::try_from_default_env()
+   |               ^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `tracing_subscriber`
+   |
+   = help: if you wanted to use a crate named `tracing_subscriber`, use `cargo add tracing_subscriber` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `tracing_subscriber`
+  --> src\main.rs:29:5
+   |
+29 |     tracing_subscriber::registry()
+   |     ^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `tracing_subscriber`
+   |
+   = help: if you wanted to use a crate named `tracing_subscriber`, use `cargo add tracing_subscriber` to add it to your `Cargo.toml`
+
+Some errors have detailed explanations: E0432, E0433.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `grapes-backend` (bin "grapes-backend") due to 9 previous errors

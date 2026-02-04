@@ -1,0 +1,5 @@
+/* Purged legacy styles to avoid conflicts with the new Design System */
+#root {
+  width: 100%;
+  height: 100%;
+}

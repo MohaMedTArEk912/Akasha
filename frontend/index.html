@@ -1,18 +1,31 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GrapesJS Ultimate React Editor</title>
-    <!-- GrapesJS Core CSS is now imported in styles/index.css via package, but we might need the CDN if not using the pure CSS import correctly. 
-         Wait, grapesjs package usually comes with CSS. I'll rely on the import. 
-         Actually, grapesjs CSS is often imported in JS: import 'grapesjs/dist/css/grapes.min.css';
-         Let's stick to the cleanest React way. I'll import it in main.tsx or use the CDN link here as fallback.
-    -->
-    <link rel="stylesheet" href="https://unpkg.com/grapesjs@0.22.14/dist/css/grapes.min.css" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f0f1a" />
+    <meta name="description" content="Grapes IDE - Visual Full-Stack Builder" />
+    
+    <!-- Preload Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    
+    <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
+    <title>Grapes IDE - Visual Full-Stack Builder</title>
+    
+    <style>
+      /* Prevent flash of unstyled content */
+      html {
+        background-color: #0f0f1a;
+      }
+    </style>
   </head>
+
   <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+
+    <script src="/src/index.tsx" type="module"></script>
   </body>
 </html>

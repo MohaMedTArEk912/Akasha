@@ -1,0 +1,27 @@
+    Checking grapes-ide v0.1.0 (D:\2-Mozakra\Projects\GP-Project\Grapes\grapes-editor\frontend-solid\src-tauri)
+warning: unused import: `std::collections::HashMap`
+ --> src\schema\api.rs:6:5
+  |
+6 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::collections::HashMap`
+ --> src\schema\logic_flow.rs:6:5
+  |
+6 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0119]: conflicting implementations of trait `std::default::Default` for type `ProjectSettings`
+   --> src\schema\project.rs:68:24
+    |
+ 68 | #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+    |                        ^^^^^^^ conflicting implementation for `ProjectSettings`
+...
+333 | impl Default for ProjectSettings {
+    | -------------------------------- first implementation here
+
+For more information about this error, try `rustc --explain E0119`.
+warning: `grapes-ide` (lib) generated 2 warnings
+error: could not compile `grapes-ide` (lib) due to 1 previous error; 2 warnings emitted

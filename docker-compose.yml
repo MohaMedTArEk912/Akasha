@@ -1,14 +1,17 @@
 version: '3.8'
 
 services:
-  mongo:
-    image: mongo:latest
-    container_name: grapes_mongo
-    restart: always
+  # Unified Grapes IDE Service
+  grapes-ide:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "27017:27017"
+      - "3001:3001"
     volumes:
-      - mongo_data:/data/db
-
-volumes:
-  mongo_data:
+      - ./data:/app/data
+      - ./grapes.db:/app/grapes.db
+    environment:
+      - RUST_LOG=info
+      - PORT=3001
+    restart: unless-stopped

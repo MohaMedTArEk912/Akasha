@@ -11,10 +11,14 @@
         "install:all": "cd frontend && npm install && cd ../backend && npm install"
     },
     "devDependencies": {
-        "concurrently": "^8.2.2"
+        "autoprefixer": "^10.4.24",
+        "concurrently": "^8.2.2",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^4.1.18"
     },
     "dependencies": {
         "@monaco-editor/react": "^4.7.0",
+        "@tauri-apps/api": "^2.10.1",
         "@types/ws": "^8.18.1",
         "stripe": "^20.3.0",
         "ws": "^8.19.0"

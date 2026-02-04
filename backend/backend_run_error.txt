@@ -1,0 +1,43 @@
+warning: struct `ActionData` is never constructed
+   --> src\schema\logic_flow.rs:274:12
+    |
+274 | pub struct ActionData;
+    |            ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: multiple associated functions are never used
+   --> src\schema\logic_flow.rs:278:12
+    |
+276 | impl ActionData {
+    | --------------- associated functions in this implementation
+277 |     /// Create SetVariable action data
+278 |     pub fn set_variable(name: &str, value: Value) -> Value {
+    |            ^^^^^^^^^^^^
+...
+286 |     pub fn navigate(path: &str) -> Value {
+    |            ^^^^^^^^
+...
+293 |     pub fn alert(message: &str, alert_type: &str) -> Value {
+    |            ^^^^^
+...
+301 |     pub fn condition(left: &str, operator: &str, right: Value) -> Value {
+    |            ^^^^^^^^^
+...
+310 |     pub fn db_read(model: &str, filter: Option<Value>) -> Value {
+    |            ^^^^^^^
+...
+319 |     pub fn db_create(model: &str, data: Value) -> Value {
+    |            ^^^^^^^^^
+...
+327 |     pub fn return_response(status: u16, data: Value) -> Value {
+    |            ^^^^^^^^^^^^^^^
+
+warning: `grapes-backend` (bin "grapes-backend") generated 2 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running `target\debug\grapes-backend.exe`
+
+thread 'main' (14176) panicked at src\main.rs:51:10:
+Path segments must not start with `:`. For capture groups, use `{capture}`. If you meant to literally match a segment starting with a colon, call `without_v07_checks` on the router.
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: process didn't exit successfully: `target\debug\grapes-backend.exe` (exit code: 101)

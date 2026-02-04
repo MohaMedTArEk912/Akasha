@@ -1,69 +1,63 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { LogicProvider } from './context/LogicContext';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { ProjectProvider } from './context/ProjectContext';
-import { CollaborationProvider } from './context/CollaborationContext';
-import { PanelStateProvider } from './context/PanelStateContext';
-import { Editor } from './components/Editor';
-import { Login } from './pages/Auth/Login';
-import { Register } from './pages/Auth/Register';
-import { PagePreview } from './pages/Preview/PagePreview';
+/**
+ * Grapes IDE - Main Application
+ * 
+ * Desktop-First Visual Full-Stack IDE
+ */
 
-// Protected Route Wrapper
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-    const { isAuthenticated, loading } = useAuth();
+import { Component, onMount, Switch, Match } from "solid-js";
+import "./index.css";
 
-    if (loading) {
-        return (
-            <div className="h-screen w-full flex items-center justify-center bg-[#0f0f23] text-white">
-                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-        );
+// Components
+import IDELayout from "./components/Layout/IDELayout";
+import Toolbar from "./components/Toolbar/Toolbar";
+import FileTree from "./components/FileTree/FileTree";
+import Canvas from "./components/Canvas/Canvas";
+import LogicCanvas from "./components/Canvas/LogicCanvas";
+import ERDCanvas from "./components/Canvas/ERDCanvas";
+import ApiList from "./components/Canvas/ApiList";
+import Inspector from "./components/Inspector/Inspector";
+
+// Stores
+import { loadProject, projectState } from "./stores/projectStore";
+
+const App: Component = () => {
+  // Try to load any existing project on mount
+  onMount(async () => {
+    try {
+      await loadProject();
+    } catch (err) {
+      console.log("No project loaded on startup:", err);
     }
+  });
 
-    if (!isAuthenticated) {
-        return <Navigate to="/login" replace />;
-    }
-    return children;
-};
-
-function App() {
+  // Render the appropriate canvas based on active tab
+  const renderCanvas = () => {
     return (
-        <Router>
-            <AuthProvider>
-                <ProjectProvider>
-                    <CollaborationProvider>
-                        <LogicProvider>
-                            <Routes>
-                                <Route path="/login" element={<Login />} />
-                                <Route path="/register" element={<Register />} />
-                                <Route
-                                    path="/"
-                                    element={
-                                        <ProtectedRoute>
-                                            <PanelStateProvider>
-                                                <Editor />
-                                            </PanelStateProvider>
-                                        </ProtectedRoute>
-                                    }
-                                />
-                                <Route
-                                    path="/preview/:projectId/:pageId"
-                                    element={
-                                        <ProtectedRoute>
-                                            <PanelStateProvider>
-                                                <PagePreview />
-                                            </PanelStateProvider>
-                                        </ProtectedRoute>
-                                    }
-                                />
-                            </Routes>
-                        </LogicProvider>
-                    </CollaborationProvider>
-                </ProjectProvider>
-            </AuthProvider>
-        </Router>
+      <Switch fallback={<Canvas />}>
+        <Match when={projectState.activeTab === "canvas"}>
+          <Canvas />
+        </Match>
+        <Match when={projectState.activeTab === "logic"}>
+          <LogicCanvas />
+        </Match>
+        <Match when={projectState.activeTab === "api"}>
+          <ApiList />
+        </Match>
+        <Match when={projectState.activeTab === "erd"}>
+          <ERDCanvas />
+        </Match>
+      </Switch>
     );
-}
+  };
+
+  return (
+    <IDELayout
+      toolbar={<Toolbar />}
+      fileTree={<FileTree />}
+      canvas={renderCanvas()}
+      inspector={<Inspector />}
+    />
+  );
+};
 
 export default App;

@@ -1,0 +1,30 @@
+    Checking grapes-backend v0.1.0 (D:\2-Mozakra\Projects\GP-Project\Grapes\grapes-editor\backend)
+warning: unused imports: `DataModelSchema`, `LogicFlowSchema`, and `VariableSchema`
+ --> src\db.rs:7:5
+  |
+7 |     DataModelSchema, LogicFlowSchema, VariableSchema,
+  |     ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0308]: mismatched types
+   --> src\db.rs:143:17
+    |
+143 |                 created_at,
+    |                 ^^^^^^^^^^ expected `DateTime<Utc>`, found `String`
+    |
+    = note: expected struct `DateTime<Utc>`
+               found struct `std::string::String`
+
+error[E0308]: mismatched types
+   --> src\db.rs:144:17
+    |
+144 |                 updated_at,
+    |                 ^^^^^^^^^^ expected `DateTime<Utc>`, found `String`
+    |
+    = note: expected struct `DateTime<Utc>`
+               found struct `std::string::String`
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `grapes-backend` (bin "grapes-backend") generated 1 warning
+error: could not compile `grapes-backend` (bin "grapes-backend") due to 2 previous errors; 1 warning emitted
