@@ -1,10 +1,10 @@
-# 🍇 Grapes Editor
+# 🍇 Grapes IDE - Desktop Only
 
-A modern, production-ready visual web builder powered by **GrapesJS**, built with **React**, **TypeScript**, and **Tailwind CSS**.
+A modern, powerful **visual full-stack builder** as a native desktop application. Build, design, and deploy web applications entirely from your desktop without managing separate backend/frontend services.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-desktop-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
 
 ---
 
@@ -12,39 +12,24 @@ A modern, production-ready visual web builder powered by **GrapesJS**, built wit
 
 ### 🎨 Visual Editor
 - **Drag & Drop Interface** – Intuitive block-based page building
-- **GrapesJS Core** – Headless visual editor with full customization
-- **Tailwind CSS Integration** – Built-in Tailwind support via `grapesjs-tailwind`
-- **Responsive Design** – Device preview and breakpoint management
-- **Code Preview Modal** – Live HTML, CSS, and React JSX code generation
+- **Real-time Preview** – Live updates as you build
+- **Responsive Design** – Mobile, tablet, and desktop previews
+- **Tailwind CSS Integration** – Built-in Tailwind support
+- **Code Preview** – View generated HTML, CSS, and React JSX
 
-### 🧩 Component Panels
-| Panel | Description |
-|-------|-------------|
-| `AssetManager` | Upload and manage media assets |
-| `AutoLayoutPanel` | Flexbox and grid layout controls |
-| `AnimationPanel` | Animation configuration |
-| `CodeInjectionPanel` | Custom code injection |
-| `CollaborationPanel` | Real-time multi-user collaboration |
-| `DataModelPanel` | Data binding and modeling |
-| `EcommercePanel` | E-commerce components |
-| `LogicPanel` | Visual logic flow builder |
-| `MarketplacePanel` | Templates and plugins marketplace |
-| `PageManager` | Multi-page project management |
-| `PublishingPanel` | One-click publishing workflow |
-| `SEOPanel` | SEO meta tag management |
-| `StyleInspector` | CSS property inspector |
-| `SymbolPanel` | Reusable component symbols |
-| `VersionHistoryPanel` | Version control and rollback |
-| `AccessibilityPanel` | A11y audit and improvements |
-| `AnalyticsPanel` | Integrated analytics tracking |
+### 🛠️ Full-Stack Development
+- **Embedded Rust Backend** – RESTful API server built-in
+- **SQLite Database** – Local data persistence
+- **Frontend Code Generation** – Export React/HTML/CSS
+- **Backend Code Generation** – Generate backend logic and database schemas
+- **Project Management** – Create, save, import, and export projects
 
-### 🛠️ Advanced Features
-- **Logic Graph Engine** – Visual state and event management
-- **CSS-to-Tailwind Conversion** – Automatic Tailwind class generation
-- **React Code Export** – Export projects as production-ready React apps
-- **Real-time Collaboration** – WebSocket-based multi-user editing
-- **Virtual File System (VFS)** – In-browser file management
-- **Hot Reload Support** – Instant preview updates
+### 📦 Advanced Features
+- **Virtual File System** – Organized project file management
+- **Schema Management** – Data models, API endpoints, logic flows
+- **Code Generation** – Full-stack code from visual designs
+- **Local Storage** – All projects stored locally in SQLite
+- **Export/Import** – Share projects across devices
 
 ---
 
@@ -52,74 +37,39 @@ A modern, production-ready visual web builder powered by **GrapesJS**, built wit
 
 ### Prerequisites
 
+- **Rust** >= 1.75 (for building from source)
 - **Node.js** >= 18.0.0
 - **npm** or **yarn**
-- **MongoDB** (via Docker or local installation)
 
-### 1. Clone the Repository
+### Installation
+
+#### Option 1: Use Pre-built Binary
+```bash
+# Download the latest release for your platform
+# https://github.com/MohaMedTArEk912/grapes-editor/releases
+```
+
+#### Option 2: Build from Source
 
 ```bash
+# Clone the repository
 git clone https://github.com/MohaMedTArEk912/grapes-editor.git
 cd grapes-editor
-```
 
-### 2. Install Dependencies
-
-```bash
-# Install all dependencies (frontend + backend)
+# Install dependencies
 npm run install:all
 
-# Or install individually
-cd frontend && npm install
-cd ../backend && npm install
+# Build the desktop application
+npm run build
 ```
 
-### 3. Environment Configuration
-
-Create `.env` files in both `frontend/` and `backend/` directories:
-
-**`backend/.env`**
-```env
-# Server
-PORT=5000
-NODE_ENV=development
-
-# Database
-MONGODB_URI=mongodb://localhost:27017/grapes-editor
-
-# Authentication
-JWT_SECRET=your-super-secret-jwt-key
-JWT_EXPIRES_IN=7d
-
-# Optional: PostgreSQL (if using Sequelize features)
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=grapes_editor
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-```
-
-**`frontend/.env`**
-```env
-VITE_API_URL=http://localhost:5000/api
-VITE_WS_URL=ws://localhost:5000/ws
-```
-
-### 4. Start MongoDB (Docker)
-
+#### Option 3: Development Mode
 ```bash
-docker-compose up -d
-```
+# Install dependencies
+npm run install:all
 
-### 5. Run the Development Server
-
-```bash
-# Run both frontend and backend concurrently
+# Run in development mode with hot reload
 npm run dev
-
-# Or run individually
-npm run frontend  # Starts Vite dev server on http://localhost:5173
-npm run backend   # Starts Express server on http://localhost:5000
 ```
 
 ---
@@ -128,159 +78,178 @@ npm run backend   # Starts Express server on http://localhost:5000
 
 ```
 grapes-editor/
-├── frontend/                 # React + Vite frontend
+├── desktop/                  # Main Tauri Desktop App
 │   ├── src/
-│   │   ├── components/       # UI Components
-│   │   │   ├── Editor/       # Main GrapesJS editor wrapper
-│   │   │   ├── Toolbar/      # Editor toolbar
-│   │   │   ├── FileTree/     # File navigator
-│   │   │   └── ...           # Other panels
-│   │   ├── context/          # React Context providers
-│   │   │   ├── AuthContext.tsx
-│   │   │   ├── ProjectContext.tsx
-│   │   │   ├── LogicContext.tsx
-│   │   │   └── CollaborationContext.tsx
-│   │   ├── hooks/            # Custom React hooks
-│   │   ├── pages/            # Route pages (Auth, Preview)
-│   │   ├── services/         # API service layer
-│   │   ├── utils/            # Utility functions
-│   │   │   ├── blocks.ts     # Block definitions
-│   │   │   ├── schema.ts     # Data schemas
-│   │   │   ├── css-to-tailwind.ts
-│   │   │   ├── logic-graph-engine.ts
-│   │   │   └── generator/    # React code generator
-│   │   ├── styles/           # Global CSS
-│   │   └── types/            # TypeScript type definitions
+│   │   ├── lib.rs           # Core Rust library
+│   │   ├── main.rs          # Entry point
+│   │   ├── backend/         # Embedded API server
+│   │   │   ├── mod.rs       # Backend module
+│   │   │   ├── routes/      # API route handlers
+│   │   │   ├── schema/      # Data schemas
+│   │   │   ├── db.rs        # SQLite database layer
+│   │   │   ├── state.rs     # App state
+│   │   │   └── error.rs     # Error types
+│   │   ├── frontend/        # React/TypeScript UI
+│   │   │   ├── src/
+│   │   │   │   ├── components/  # React components
+│   │   │   │   ├── context/     # Context providers
+│   │   │   │   ├── hooks/       # Custom hooks
+│   │   │   │   └── stores/      # State management
+│   │   │   └── package.json
+│   │   ├── commands/        # Tauri IPC commands
+│   │   ├── generator/       # Code generation
+│   │   ├── schema/          # Unified schemas
+│   │   ├── storage/         # Storage layer
+│   │   └── vfs/             # Virtual file system
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
 │   └── package.json
 │
-├── backend/                  # Express + TypeScript backend
-│   ├── src/
-│   │   ├── config/           # Database configurations
-│   │   ├── controllers/      # Route controllers
-│   │   ├── middleware/       # Express middleware
-│   │   ├── models/           # Mongoose & Sequelize models
-│   │   ├── routes/           # API route definitions
-│   │   ├── vfs/              # Virtual File System logic
-│   │   └── server.ts         # Main server entry
-│   └── package.json
-│
-├── docker-compose.yml        # MongoDB container setup
-├── package.json              # Root package with workspace scripts
+├── docker-compose.yml       # Docker development setup
+├── Dockerfile              # Multi-stage build for containerization
+├── package.json            # Root scripts
 └── README.md
 ```
 
 ---
 
-## 🔌 API Endpoints
+## 📡 API Endpoints
 
-### Authentication
+The embedded backend provides RESTful APIs for all operations:
+
+### Health Check
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/auth/register` | Register new user |
-| `POST` | `/api/auth/login` | User login |
+| `GET` | `/health` | Server health check |
 
 ### Projects
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/projects` | List user projects |
-| `POST` | `/api/projects` | Create new project |
-| `GET` | `/api/projects/:id` | Get project details |
-| `PUT` | `/api/projects/:id` | Update project |
-| `DELETE` | `/api/projects/:id` | Archive project |
+| `GET` | `/api/project` | Get current project |
+| `POST` | `/api/project` | Create new project |
+| `POST` | `/api/project/import` | Import project from JSON |
+| `GET` | `/api/project/export` | Export project as JSON |
+
+### Blocks (UI Components)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/blocks` | Add block to project |
+| `PUT` | `/api/blocks/:id` | Update block |
+| `DELETE` | `/api/blocks/:id` | Delete block |
 
 ### Pages
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/pages/:projectId` | List project pages |
-| `POST` | `/api/pages` | Create new page |
-| `PUT` | `/api/pages/:id` | Update page content |
+| `POST` | `/api/pages` | Add page to project |
 
-### Additional APIs
-- `/api/symbols` – Reusable component symbols
-- `/api/forms` – Form submissions
-- `/api/cms` – CMS content management
-- `/api/commerce` – E-commerce products/orders
-- `/api/analytics` – Analytics events
-- `/api/publish` – Publishing workflow
-- `/api/templates` – Page templates
-- `/api/vfs` – Virtual file system operations
+### Data Models
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/models` | Add data model |
+
+### API Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/endpoints` | Add API endpoint |
+
+### Code Generation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/generate/frontend` | Generate frontend code |
+| `POST` | `/api/generate/backend` | Generate backend code |
+| `POST` | `/api/generate/database` | Generate database schema |
+| `GET` | `/api/generate/zip` | Download all generated code as ZIP |
 
 ---
 
-## 🧪 Scripts Reference
+## 🧪 Development Scripts
 
-### Root (`package.json`)
+### Root Level
 ```bash
-npm run dev           # Run frontend + backend concurrently
-npm run frontend      # Run frontend only
-npm run backend       # Run backend only
-npm run build:frontend # Build frontend for production
-npm run build:backend  # Build backend for production
-npm run install:all   # Install all dependencies
+npm run dev              # Start desktop app in development mode
+npm run build           # Build production desktop app
+npm run tauri          # Direct tauri command access
+npm run install:all    # Install all dependencies
 ```
 
-### Frontend (`frontend/package.json`)
+### Desktop/Tauri Specific
 ```bash
-npm run dev      # Start Vite dev server
-npm run build    # TypeScript compile + Vite build
-npm run preview  # Preview production build
-npm run lint     # ESLint check
+cd desktop
+npm run tauri dev      # Run in dev mode
+npm run tauri build    # Build for release
+npm run tauri info     # Show system information
 ```
 
-### Backend (`backend/package.json`)
-```bash
-npm run dev    # Start with nodemon (hot reload)
-npm run build  # TypeScript compile
-npm run start  # Run compiled production server
-```
+---
+
+## 🔧 Configuration
+
+### Tauri Configuration (`desktop/tauri.conf.json`)
+- **App Title** – "Grapes IDE - Visual Full-Stack Builder"
+- **Window Size** – 1400x900 (resizable)
+- **Minimum Size** – 1024x768
+- **Frontend URL** – Built-in React app
+
+### Backend Configuration (`desktop/Cargo.toml`)
+- **Web Framework** – Axum
+- **Runtime** – Tokio
+- **Database** – rusqlite (SQLite)
+- **Serialization** – serde/serde_json
 
 ---
 
 ## 🐳 Docker Deployment
 
-### Development
+### Development with Docker
 ```bash
-docker-compose up -d  # Start MongoDB
-npm run dev           # Start application
+docker-compose up -d
 ```
 
-### Production (Example)
-```yaml
-# docker-compose.prod.yml
-version: '3.8'
-services:
-  mongo:
-    image: mongo:latest
-    restart: always
-    volumes:
-      - mongo_data:/data/db
-
-  backend:
-    build: ./backend
-    environment:
-      - MONGODB_URI=mongodb://mongo:27017/grapes-editor
-      - JWT_SECRET=${JWT_SECRET}
-    depends_on:
-      - mongo
-
-  frontend:
-    build: ./frontend
-    depends_on:
-      - backend
-
-volumes:
-  mongo_data:
-```
+This will build and run the complete desktop application in a container with:
+- Frontend: Built from source
+- Backend: Embedded Rust API server
+- Database: SQLite (persisted to volume)
+- API Port: 3001
 
 ---
 
-## 🔒 Security Considerations
+## 📊 Technology Stack
 
-- **JWT Authentication** – All protected routes require valid JWT tokens
-- **Helmet.js** – Security headers enabled
-- **CORS** – Configured for allowed origins
-- **Input Validation** – Server-side validation on all endpoints
-- **Environment Variables** – Secrets stored in `.env` files (never committed)
+| Layer | Technology |
+|-------|-----------|
+| **Desktop** | Tauri 2.0, Rust 1.75+ |
+| **Frontend** | React, TypeScript, Tailwind CSS, Vite |
+| **Backend** | Axum, Tokio, SQLite |
+| **Data** | serde (JSON serialization) |
+| **Build** | Cargo, npm |
+
+---
+
+## 🔒 Security
+
+- **Local Storage** – All data stored locally in SQLite
+- **Tauri Sandboxing** – Desktop app security through Tauri's sandbox
+- **IPC Communication** – Type-safe Rust-to-JavaScript bridge
+- **API CORS** – Configured for local development
+
+---
+
+## 🚀 Production Deployment
+
+### Build for Production
+```bash
+npm run build
+```
+
+This creates:
+- macOS: `.app` bundle
+- Windows: `.exe` installer
+- Linux: `.AppImage` or `.deb`
+
+### System Requirements
+- **macOS** – 10.13+
+- **Windows** – 7+ (64-bit)
+- **Linux** – Ubuntu 18.04+ equivalent
 
 ---
 
@@ -292,15 +261,14 @@ volumes:
 4. Push to branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request
 
-### Code Standards
-- **TypeScript** – Strict mode enabled
-- **ESLint** – Linting enforced
-- **Tailwind CSS** – Utility-first styling
-- **Atomic Design** – Component modularity
+### Development Guidelines
+- **Rust** – Use `rustfmt` and `clippy`
+- **TypeScript** – ESLint + strict mode
+- **Commit Messages** – Clear, descriptive messages
 
 ---
 
-## 📜 License
+## 📝 License
 
 This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
 
@@ -308,13 +276,17 @@ This project is licensed under the **MIT License** – see the [LICENSE](LICENSE
 
 ## 🙏 Acknowledgments
 
-- [GrapesJS](https://grapesjs.com/) – The core visual editor
-- [React](https://react.dev/) – UI framework
-- [Vite](https://vitejs.dev/) – Build tool
+- [Tauri](https://tauri.app/) – Desktop framework
+- [Axum](https://github.com/tokio-rs/axum) – Web framework
+- [React](https://react.dev/) – UI library
 - [Tailwind CSS](https://tailwindcss.com/) – Styling
-- [Lucide Icons](https://lucide.dev/) – Icon library
+- [SQLite](https://www.sqlite.org/) – Database
 
 ---
+
+<p align="center">
+  ✨ Build beautiful full-stack web applications with Grapes IDE ✨
+</p>
 
 <p align="center">
   Made with ❤️ by Mohamed Tarek

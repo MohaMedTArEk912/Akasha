@@ -1,14 +1,23 @@
 version: '3.8'
 
 services:
-  mongo:
-    image: mongo:latest
-    container_name: grapes_mongo
-    restart: always
+  # Unified Grapes IDE Desktop Application
+  grapes-ide:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grapes-ide
+    # For desktop apps, ports would typically not be exposed in Docker
+    # But if running the backend as a service, expose the API port
     ports:
-      - "27017:27017"
+      - "3001:3001"
     volumes:
-      - mongo_data:/data/db
-
-volumes:
-  mongo_data:
+      - ./data:/app/data
+      - ./grapes.db:/app/grapes.db
+    environment:
+      - RUST_LOG=info
+      - PORT=3001
+    restart: unless-stopped
+    # Desktop apps typically don't run in headless docker
+    # This setup is primarily for development/CI purposes
+    # For production, use the native desktop binary

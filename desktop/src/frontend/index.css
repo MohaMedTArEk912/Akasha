@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom CSS Variables - High-end Deep Space Theme */
+:root {
+    --ide-bg: #050508;
+    --ide-sidebar: #0a0a0f;
+    --ide-panel: #0d0d14;
+    --ide-panel-light: #12121e;
+    --ide-border: rgba(255, 255, 255, 0.08);
+    --ide-border-bright: rgba(255, 255, 255, 0.15);
+    --ide-accent: #6366f1;
+    --ide-accent-glow: rgba(99, 102, 241, 0.4);
+    --ide-text: #f8fafc;
+    --ide-text-muted: #94a3b8;
+    --ide-glass: rgba(15, 15, 26, 0.7);
+}
+
+/* Base Styles */
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--ide-bg);
+    color: var(--ide-text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Glassmorphism utility */
+.glass {
+    background: var(--ide-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--ide-border);
+}
+
+/* Scrollbar Styling - Minimalist and elegant */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--ide-accent);
+}
+
+/* Layout Utilities */
+.ide-grid {
+    display: grid;
+    grid-template-rows: 48px 1fr 24px;
+    grid-template-columns: auto 1fr auto;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Animations */
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-up {
+    animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Premium Button Overrides */
+.btn-primary {
+    @apply relative overflow-hidden bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition-all duration-300 shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center gap-2;
+}
+
+.btn-secondary {
+    @apply bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-lg border border-white/10 transition-all duration-300 backdrop-blur-md active:scale-95 flex items-center gap-2;
+}
+
+.btn-ghost {
+    @apply hover:bg-white/10 text-slate-400 hover:text-white px-3 py-2 rounded-lg transition-all duration-200 flex items-center gap-2;
+}
+
+/* Input Styles */
+.input {
+    @apply bg-black/40 border border-white/5 text-white px-3 py-2 rounded-lg focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600;
+}
+
+/* Canvas Grid Background - Subtle and professional */
+.canvas-grid {
+    background-image:
+        radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.03) 1px, transparent 0);
+    background-size: 24px 24px;
+}
+
+/* Glow Elements */
+.accent-glow {
+    filter: drop-shadow(0 0 8px var(--ide-accent-glow));
+}
+
+/* Custom indicator for tabs */
+.tab-active {
+    @apply relative text-white;
+}
+
+.tab-active::after {
+    content: '';
+    @apply absolute -bottom-[1px] left-0 right-0 h-0.5 bg-indigo-500 rounded-full;
+}
