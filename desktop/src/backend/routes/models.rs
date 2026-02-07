@@ -53,12 +53,19 @@ pub async fn add_field(
     let mut project = state.get_project().await
         .ok_or_else(|| ApiError::NotFound("No project loaded".into()))?;
     
-    let field_type = match req.field_type.as_str() {
+    let field_type = match req.field_type.to_lowercase().as_str() {
+        "string" => crate::schema::data_model::FieldType::String,
         "int" => crate::schema::data_model::FieldType::Int,
         "float" => crate::schema::data_model::FieldType::Float,
         "boolean" => crate::schema::data_model::FieldType::Boolean,
         "datetime" => crate::schema::data_model::FieldType::DateTime,
-        _ => crate::schema::data_model::FieldType::String,
+        "json" => crate::schema::data_model::FieldType::Json,
+        "uuid" => crate::schema::data_model::FieldType::Uuid,
+        "email" => crate::schema::data_model::FieldType::Email,
+        "url" => crate::schema::data_model::FieldType::Url,
+        "bytes" => crate::schema::data_model::FieldType::Bytes,
+        "text" => crate::schema::data_model::FieldType::Text,
+        other => return Err(ApiError::BadRequest(format!("Unknown field type: '{}'. Supported: string, int, float, boolean, datetime, json, uuid, email, url, bytes, text", other))),
     };
     
     let model = project.data_models.iter_mut()

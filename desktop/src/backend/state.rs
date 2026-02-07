@@ -24,43 +24,57 @@ impl AppState {
     
     /// Get all projects from DB
     pub async fn get_all_projects(&self) -> Vec<ProjectSchema> {
-        self.db.get_all_projects().unwrap_or_else(|_| Vec::new())
+        self.db.get_all_projects().unwrap_or_else(|e| {
+            log::error!("Failed to load projects from database: {}", e);
+            Vec::new()
+        })
     }
 
-    /// Get current project from DB
+    /// Get current project from DB (returns the most recently updated project)
     pub async fn get_project(&self) -> Option<ProjectSchema> {
-        // Default to most recent for compatibility if needed, 
-        // but now we prefer explicit loading
         self.db.get_all_projects()
+            .map_err(|e| log::error!("Failed to load projects: {}", e))
             .ok()
             .and_then(|vals| vals.first().cloned())
     }
 
     /// Get project by ID
     pub async fn get_project_by_id(&self, id: &str) -> Option<ProjectSchema> {
-        self.db.get_project_by_id(id).unwrap_or(None)
+        self.db.get_project_by_id(id).unwrap_or_else(|e| {
+            log::error!("Failed to load project {}: {}", id, e);
+            None
+        })
     }
-    
+
     /// Set current project (save to DB)
     pub async fn set_project(&self, project: ProjectSchema) {
         if let Err(e) = self.db.save_project(&project) {
-            eprintln!("Failed to save project: {}", e);
+            log::error!("Failed to save project '{}': {}", project.name, e);
         }
     }
 
     /// Delete project
     pub async fn delete_project(&self, id: &str) -> bool {
-        self.db.delete_project(id).is_ok()
+        match self.db.delete_project(id) {
+            Ok(()) => true,
+            Err(e) => {
+                log::error!("Failed to delete project {}: {}", id, e);
+                false
+            }
+        }
     }
 
     /// Workspace path management
     pub async fn get_workspace_path(&self) -> Option<String> {
-        self.db.get_workspace_path().unwrap_or(None)
+        self.db.get_workspace_path().unwrap_or_else(|e| {
+            log::error!("Failed to load workspace path: {}", e);
+            None
+        })
     }
 
     pub async fn set_workspace_path(&self, path: String) {
         if let Err(e) = self.db.set_workspace_path(&path) {
-            eprintln!("Failed to save workspace path: {}", e);
+            log::error!("Failed to save workspace path: {}", e);
         }
     }
 }

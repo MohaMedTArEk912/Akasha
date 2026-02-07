@@ -205,11 +205,10 @@ npm run tauri info     # Show system information
 docker-compose up -d
 ```
 
-This will build and run the complete desktop application in a container with:
-- Frontend: Built from source
+This will build and run the embedded backend API server in **headless mode** (no desktop UI) with:
 - Backend: Embedded Rust API server
 - Database: SQLite (persisted to volume)
-- API Port: 3001
+- API Port: 3001 (`http://localhost:3001/health`)
 
 ---
 

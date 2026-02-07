@@ -4,12 +4,15 @@
  * Manages the current project and provides reactive access to its parts for React.
  */
 
-import { useApi, ProjectSchema, BlockSchema, PageSchema } from "../hooks/useTauri";
+import { useApi, ProjectSchema, BlockSchema, PageSchema, InstallResult } from "../hooks/useTauri";
 
 // Store state type
 interface ProjectState {
     project: ProjectSchema | null;
     loading: boolean;
+    loadingMessage: string | null;
+    installLog: string | null;
+    installError: string | null;
     error: string | null;
     selectedBlockId: string | null;
     selectedPageId: string | null;
@@ -28,6 +31,9 @@ interface ProjectState {
 const initialState: ProjectState = {
     project: null,
     loading: false,
+    loadingMessage: null,
+    installLog: null,
+    installError: null,
     error: null,
     selectedBlockId: null,
     selectedPageId: null,
@@ -45,7 +51,8 @@ let state: ProjectState = { ...initialState };
 let listeners: Set<() => void> = new Set();
 let isDirtyValue = false;
 
-// HTTP API client (Note: useApi is called outside component, assuming it returns static methods or handles its own context)
+// HTTP API client — useApi() returns a plain object of static functions (no React hooks inside),
+// so it is safe to call at module level despite the "use" naming convention.
 const api = useApi();
 
 /**
@@ -69,6 +76,64 @@ export function getSnapshot() {
 function updateState(updater: (prev: ProjectState) => Partial<ProjectState>) {
     state = { ...state, ...updater(state) };
     listeners.forEach(l => l());
+}
+
+function formatInstallResult(result: InstallResult): string {
+    return result.steps.map(step => {
+        const header = `=== ${step.target} (${step.status}) | ${step.duration_ms}ms ===`;
+        const stdout = step.stdout?.trim() ? `\n${step.stdout.trim()}` : "";
+        const stderr = step.stderr?.trim() ? `\n[stderr]\n${step.stderr.trim()}` : "";
+        return `${header}${stdout}${stderr}`;
+    }).join("\n\n");
+}
+
+export async function installProjectDependencies(): Promise<boolean> {
+    updateState(() => ({
+        loadingMessage: "Installing dependencies (client + server)...",
+        installError: null,
+        installLog: null
+    }));
+
+    try {
+        const result = await api.installDependencies();
+        const log = formatInstallResult(result);
+
+        if (!result.success) {
+            updateState(() => ({
+                loadingMessage: "Dependency installation failed",
+                installError: "Dependency installation failed",
+                installLog: log
+            }));
+            return false;
+        }
+
+        updateState(() => ({
+            loadingMessage: "Dependencies installed!",
+            installLog: log
+        }));
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        updateState(() => ({
+            loadingMessage: null,
+            installError: null,
+            installLog: null
+        }));
+        return true;
+    } catch (err) {
+        updateState(() => ({
+            loadingMessage: "Dependency installation failed",
+            installError: String(err),
+            installLog: String(err)
+        }));
+        return false;
+    }
+}
+
+export function clearInstallStatus(): void {
+    updateState(() => ({
+        loadingMessage: null,
+        installError: null,
+        installLog: null
+    }));
 }
 
 /**
@@ -153,19 +218,26 @@ export async function createProject(name: string): Promise<void> {
             await api.setProjectRoot(projectPath);
             // Reload project to get updated root_path
             project = await api.getProject() as ProjectSchema;
+
+            // AUTO-INSTALL DEPENDENCIES
+            await installProjectDependencies();
         }
 
         updateState(() => ({
             project,
             selectedPageId: null,
-            isDashboardActive: false
+            isDashboardActive: false,
+            loadingMessage: null
         }));
         await initWorkspace(); // Refresh projects list
     } catch (err) {
         updateState(() => ({ error: String(err) }));
         throw err;
     } finally {
-        updateState(() => ({ loading: false }));
+        updateState(prev => ({
+            loading: false,
+            loadingMessage: prev.installError ? prev.loadingMessage : null
+        }));
     }
 }
 
@@ -185,6 +257,22 @@ export async function openProject(id: string): Promise<void> {
             project = await api.getProject() as ProjectSchema;
         }
 
+        // CHECK IF node_modules EXISTS
+        if (project.root_path) {
+            try {
+                const listing = await api.listDirectory(project.root_path);
+                const hasNodeModules = listing.entries.some(
+                    e => e.name === 'node_modules' && e.is_directory
+                );
+
+                if (!hasNodeModules) {
+                    await installProjectDependencies();
+                }
+            } catch (err) {
+                console.error("Failed to check/install dependencies:", err);
+            }
+        }
+
         updateState(() => ({
             project,
             selectedPageId: null,
@@ -194,7 +282,10 @@ export async function openProject(id: string): Promise<void> {
         updateState(() => ({ error: String(err) }));
         throw err;
     } finally {
-        updateState(() => ({ loading: false }));
+        updateState(prev => ({
+            loading: false,
+            loadingMessage: prev.installError ? prev.loadingMessage : null
+        }));
     }
 }
 
@@ -202,12 +293,8 @@ export async function openProject(id: string): Promise<void> {
  * Delete a project
  */
 export async function deleteProject(id: string): Promise<void> {
-    try {
-        await api.deleteProjectById(id);
-        await initWorkspace();
-    } catch (err) {
-        console.error("Failed to delete project:", err);
-    }
+    await api.deleteProjectById(id);
+    await initWorkspace();
 }
 
 /**
@@ -237,7 +324,8 @@ export async function refreshCurrentProject(): Promise<void> {
 }
 
 /**
- * Load the current project from the backend (Legacy fallback)
+ * Load the current project from the backend.
+ * Preserves selectedPageId and selectedBlockId so mutations don't lose user context.
  */
 export async function loadProject(): Promise<void> {
     updateState(() => ({ loading: true, error: null }));
@@ -247,7 +335,6 @@ export async function loadProject(): Promise<void> {
         if (project) {
             updateState(() => ({
                 project,
-                selectedPageId: null,
                 isDashboardActive: false
             }));
         } else {
@@ -298,7 +385,6 @@ export async function addBlock(
     const block = await api.addBlock(blockType, name, parentId, state.selectedPageId || undefined);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
     return block;
 }
 
@@ -313,7 +399,13 @@ export async function updateBlockProperty(
     await api.updateBlockProperty(blockId, property, value);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
+
+    // Auto-sync to disk in visual mode
+    if (state.editMode === "visual" && state.project?.root_path) {
+        await api.syncToDisk().catch(err =>
+            console.error("Auto-sync failed:", err)
+        );
+    }
 }
 
 /**
@@ -327,7 +419,13 @@ export async function updateBlockStyle(
     await api.updateBlockStyle(blockId, style, value);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
+
+    // Auto-sync to disk in visual mode
+    if (state.editMode === "visual" && state.project?.root_path) {
+        await api.syncToDisk().catch(err =>
+            console.error("Auto-sync failed:", err)
+        );
+    }
 }
 
 /**
@@ -340,8 +438,6 @@ export async function archiveBlock(blockId: string): Promise<void> {
 
     if (state.selectedBlockId === blockId) {
         updateState(() => ({ selectedBlockId: null }));
-    } else {
-        listeners.forEach(l => l());
     }
 }
 
@@ -352,7 +448,6 @@ export async function addPage(name: string, path: string): Promise<PageSchema> {
     const page = await api.addPage(name, path);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
     return page;
 }
 
@@ -363,7 +458,6 @@ export async function addDataModel(name: string): Promise<void> {
     await api.addDataModel(name);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
 }
 
 /**
@@ -377,7 +471,6 @@ export async function addApi(
     await api.addApi(method, path, name);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
 }
 
 /**
@@ -392,7 +485,6 @@ export async function addField(
     await api.addFieldToModel(modelId, name, fieldType, required);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
 }
 
 /**
@@ -476,23 +568,37 @@ export function setViewport(viewport: "desktop" | "tablet" | "mobile"): void {
 
 /**
  * Set the edit mode (visual blocks or code)
+ * Implements bidirectional sync between visual and code modes
  */
 export async function setEditMode(mode: "visual" | "code"): Promise<void> {
-    // 1. Optimistic update - switch immediately
+    // Don't sync if no project or root path
+    if (!state.project?.root_path) {
+        updateState(() => ({ editMode: mode }));
+        return;
+    }
+
+    const previousMode = state.editMode;
+
+    // 1. Optimistic update - switch immediately for instant UI feedback
     updateState(() => ({ editMode: mode }));
 
-    // 2. Background sync if entering visual mode
-    if (mode === "visual" && state.project?.root_path) {
-        // Don't block the UI, but show loading state
-        updateState(() => ({ loading: true }));
-        try {
+    // 2. Bidirectional sync based on mode
+    updateState(() => ({ loading: true }));
+    try {
+        if (mode === "visual") {
+            // Entering visual mode: Load latest changes from disk
             await api.syncDiskToProject();
             await loadProject();
-        } catch (err) {
-            console.error("Failed to sync from disk:", err);
-        } finally {
-            updateState(() => ({ loading: false }));
+        } else if (mode === "code") {
+            // Entering code mode: Save visual changes to disk
+            await api.syncToDisk();
         }
+    } catch (err) {
+        console.error(`Failed to sync when switching to ${mode} mode:`, err);
+        // Rollback to previous mode on failure
+        updateState(() => ({ editMode: previousMode }));
+    } finally {
+        updateState(() => ({ loading: false }));
     }
 }
 
@@ -511,7 +617,6 @@ export async function addLogicFlow(name: string, context: 'frontend' | 'backend'
     await api.createLogicFlow(name, context);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
 }
 
 /**
@@ -521,7 +626,6 @@ export async function deleteLogicFlow(id: string): Promise<void> {
     await api.deleteLogicFlow(id);
     await loadProject();
     isDirtyValue = true;
-    listeners.forEach(l => l());
 }
 
 /**
@@ -545,6 +649,7 @@ export async function getFileContent(path: string): Promise<string> {
  */
 export async function syncToDisk(): Promise<void> {
     await api.syncToDisk();
+    isDirtyValue = false;
 }
 
 /**
@@ -604,6 +709,6 @@ export function getPage(pageId: string): PageSchema | undefined {
     return state.project?.pages.find(p => p.id === pageId && !p.archived);
 }
 
-// Export reactive state access
-export const projectState = state;
+// Export reactive state access — use getSnapshot() for current state
 export const isDirty = () => isDirtyValue;
+export function clearDirty(): void { isDirtyValue = false; }

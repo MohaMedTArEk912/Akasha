@@ -108,11 +108,13 @@ pub async fn add_block(
     // Auto-sync
     if let Some(root) = &project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
-        let _ = engine.sync_page_to_disk_by_block(&result.id, &project);
+        if let Err(e) = engine.sync_page_to_disk_by_block(&result.id, &project) {
+            log::error!("Auto-sync failed for block {}: {}", result.id, e);
+        }
     }
-    
+
     state.set_project(project).await;
-    
+
     Ok(Json(result))
 }
 
@@ -124,21 +126,21 @@ pub async fn update_block(
 ) -> Result<Json<BlockSchema>, ApiError> {
     let mut project = state.get_project().await
         .ok_or_else(|| ApiError::NotFound("No project loaded".into()))?;
-    
+
     let block = project.find_block_mut(&id)
         .ok_or_else(|| ApiError::NotFound(format!("Block {} not found", id)))?;
-    
+
     // Check if we are updating a style
     if req.property.starts_with("styles.") {
         let style_name = &req.property[7..];
-        
+
         let style_value = match req.value {
             serde_json::Value::String(s) => crate::schema::block::StyleValue::String(s),
             serde_json::Value::Number(n) => crate::schema::block::StyleValue::Number(n.as_f64().unwrap_or(0.0)),
             serde_json::Value::Bool(b) => crate::schema::block::StyleValue::Boolean(b),
             _ => return Err(ApiError::BadRequest(format!("Invalid style value for {}", style_name))),
         };
-        
+
         block.styles.insert(style_name.to_string(), style_value);
     } else {
         // Update property based on name
@@ -158,15 +160,17 @@ pub async fn update_block(
             }
         }
     }
-    
+
     let result = block.clone();
-    
+
     // Auto-sync
     if let Some(root) = &project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
-        let _ = engine.sync_page_to_disk_by_block(&id, &project);
+        if let Err(e) = engine.sync_page_to_disk_by_block(&id, &project) {
+            log::error!("Auto-sync failed for block {}: {}", id, e);
+        }
     }
-    
+
     state.set_project(project).await;
     Ok(Json(result))
 }
@@ -178,7 +182,7 @@ pub async fn delete_block(
 ) -> Result<Json<bool>, ApiError> {
     let mut project = state.get_project().await
         .ok_or_else(|| ApiError::NotFound("No project loaded".into()))?;
-    
+
     // 1. Remove from parent's children if linked
     let mut parent_id_to_sync = None;
     let mut page_id_to_sync = None;
@@ -206,22 +210,25 @@ pub async fn delete_block(
 
     // 2. Archive the block
     let success = project.archive_block(&id);
-    
+
     // Auto-sync
     if let Some(root) = &project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
-        
+
         if let Some(pid) = parent_id_to_sync {
-            // Sync the page containing the (now changed) parent
-            let _ = engine.sync_page_to_disk_by_block(&pid, &project);
+            if let Err(e) = engine.sync_page_to_disk_by_block(&pid, &project) {
+                log::error!("Auto-sync failed after block delete: {}", e);
+            }
         } else if let Some(pgid) = page_id_to_sync {
-            // Sync the page that just lost its root
-            let _ = engine.sync_page_to_disk(&pgid, &project);
+            if let Err(e) = engine.sync_page_to_disk(&pgid, &project) {
+                log::error!("Auto-sync failed after block delete: {}", e);
+            }
         } else {
-            // Fallback: sync all pages to be safe
             for page in &project.pages {
                 if !page.archived {
-                    let _ = engine.sync_page_to_disk(&page.id, &project);
+                    if let Err(e) = engine.sync_page_to_disk(&page.id, &project) {
+                        log::error!("Auto-sync failed for page {}: {}", page.id, e);
+                    }
                 }
             }
         }

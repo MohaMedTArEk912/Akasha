@@ -76,6 +76,46 @@ pub struct FileContentResponse {
     pub path: String,
 }
 
+/// Validate that a resolved path stays within the project root to prevent path traversal attacks.
+/// Returns the canonicalized path if valid, or an error if the path escapes the root.
+fn validate_path(root_path: &str, user_path: &str) -> Result<PathBuf, ApiError> {
+    let root = PathBuf::from(root_path);
+    let target = root.join(user_path);
+
+    // Canonicalize root (it must exist)
+    let canon_root = root.canonicalize()
+        .map_err(|e| ApiError::Internal(format!("Failed to resolve root path: {}", e)))?;
+
+    // For paths that don't exist yet (create operations), canonicalize the existing parent
+    // and then append the remaining components.
+    if let Ok(canon_target) = target.canonicalize() {
+        if !canon_target.starts_with(&canon_root) {
+            return Err(ApiError::BadRequest("Path escapes project root".into()));
+        }
+        return Ok(canon_target);
+    }
+
+    // Target doesn't exist yet — validate by checking that no ".." component escapes root.
+    // Normalize the path components manually.
+    let mut normalized = canon_root.clone();
+    for component in PathBuf::from(user_path).components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+                if !normalized.starts_with(&canon_root) {
+                    return Err(ApiError::BadRequest("Path escapes project root".into()));
+                }
+            }
+            std::path::Component::Normal(c) => {
+                normalized.push(c);
+            }
+            std::path::Component::CurDir => { /* skip "." */ }
+            _ => { /* skip prefix/root */ }
+        }
+    }
+    Ok(normalized)
+}
+
 /// List directory contents
 pub async fn list_directory(
     State(state): State<AppState>,
@@ -87,9 +127,9 @@ pub async fn list_directory(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
     
-    // Determine the directory to list
+    // Determine the directory to list (with path traversal protection)
     let target_path = match &query.path {
-        Some(p) if !p.is_empty() => PathBuf::from(root_path).join(p),
+        Some(p) if !p.is_empty() => validate_path(root_path, p)?,
         _ => PathBuf::from(root_path),
     };
     
@@ -168,12 +208,12 @@ pub async fn create_file(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
     
-    let file_path = PathBuf::from(root_path).join(&req.path);
-    
+    let file_path = validate_path(root_path, &req.path)?;
+
     if file_path.exists() {
         return Err(ApiError::BadRequest("File already exists".into()));
     }
-    
+
     // Create parent directories if needed
     if let Some(parent) = file_path.parent() {
         fs::create_dir_all(parent)
@@ -211,7 +251,7 @@ pub async fn create_folder(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
     
-    let folder_path = PathBuf::from(root_path).join(&req.path);
+    let folder_path = validate_path(root_path, &req.path)?;
     
     if folder_path.exists() {
         return Err(ApiError::BadRequest("Folder already exists".into()));
@@ -244,8 +284,8 @@ pub async fn rename_file(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
     
-    let old_path = PathBuf::from(root_path).join(&req.old_path);
-    let new_path = PathBuf::from(root_path).join(&req.new_path);
+    let old_path = validate_path(root_path, &req.old_path)?;
+    let new_path = validate_path(root_path, &req.new_path)?;
     
     if !old_path.exists() {
         return Err(ApiError::NotFound("Source file/folder not found".into()));
@@ -291,7 +331,7 @@ pub async fn delete_file(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
     
-    let target_path = PathBuf::from(root_path).join(&req.path);
+    let target_path = validate_path(root_path, &req.path)?;
     
     if !target_path.exists() {
         return Err(ApiError::NotFound("File/folder not found".into()));
@@ -324,7 +364,7 @@ pub async fn read_file(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
     
-    let file_path = PathBuf::from(root_path).join(&query.path);
+    let file_path = validate_path(root_path, &query.path)?;
     
     if !file_path.exists() {
         return Err(ApiError::NotFound("File not found".into()));

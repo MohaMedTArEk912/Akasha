@@ -122,7 +122,21 @@ impl Database {
             )",
             [],
         )?;
-        
+
+        // Logic Flows table (migration — add if missing)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS logic_flows (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                flow_json TEXT NOT NULL,
+                archived BOOLEAN NOT NULL DEFAULT 0,
+                FOREIGN KEY(project_id) REFERENCES projects(id)
+            )",
+            [],
+        )?;
+
         Ok(())
     }
     
@@ -250,6 +264,7 @@ impl Database {
                     "Container" => BlockType::Container,
                     "Text" => BlockType::Text,
                     "Heading" => BlockType::Heading,
+                    "Paragraph" => BlockType::Paragraph,
                     "Button" => BlockType::Button,
                     "Image" => BlockType::Image,
                     "Input" => BlockType::Input,
@@ -260,7 +275,27 @@ impl Database {
                     "Column" => BlockType::Column,
                     "Flex" => BlockType::Flex,
                     "Grid" => BlockType::Grid,
-                    _ => BlockType::Container // Fallback
+                    "Page" => BlockType::Page,
+                    "Video" => BlockType::Video,
+                    "Icon" => BlockType::Icon,
+                    "TextArea" => BlockType::TextArea,
+                    "Select" => BlockType::Select,
+                    "Checkbox" => BlockType::Checkbox,
+                    "Radio" => BlockType::Radio,
+                    "Modal" => BlockType::Modal,
+                    "Dropdown" => BlockType::Dropdown,
+                    "Tabs" => BlockType::Tabs,
+                    "Accordion" => BlockType::Accordion,
+                    "List" => BlockType::List,
+                    "Table" => BlockType::Table,
+                    "Card" => BlockType::Card,
+                    other => {
+                        if let Some(name) = other.strip_prefix("Custom:") {
+                            BlockType::Custom(name.to_string())
+                        } else {
+                            BlockType::Custom(other.to_string())
+                        }
+                    }
                 };
                 
                 Ok(BlockSchema {
@@ -311,7 +346,55 @@ impl Database {
                 })
             })?;
             for a in apis { project.apis.push(a?); }
-            
+
+            // Load Data Models
+            let mut stmt = conn.prepare("SELECT id, name, fields_json, relations_json, archived FROM models WHERE project_id = ? AND archived = 0")?;
+            let models = stmt.query_map([&project.id], |row| {
+                let fields: Vec<crate::schema::data_model::FieldSchema> =
+                    serde_json::from_str(&row.get::<_, String>(2)?).unwrap_or_default();
+                let relations: Vec<crate::schema::data_model::RelationSchema> =
+                    serde_json::from_str(&row.get::<_, String>(3)?).unwrap_or_default();
+
+                Ok(crate::schema::DataModelSchema {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: None,
+                    fields,
+                    relations,
+                    indexes: Vec::new(),
+                    timestamps: true,
+                    soft_delete: false,
+                    archived: row.get(4)?,
+                })
+            })?;
+            for m in models { project.data_models.push(m?); }
+
+            // Load Logic Flows
+            let mut stmt = conn.prepare("SELECT id, name, description, flow_json, archived FROM logic_flows WHERE project_id = ? AND archived = 0")?;
+            let flows = stmt.query_map([&project.id], |row| {
+                let flow_json: String = row.get(3)?;
+                // Try to deserialize the full flow, fall back to a minimal struct
+                let mut flow: crate::schema::logic_flow::LogicFlowSchema =
+                    serde_json::from_str(&flow_json).unwrap_or_else(|_| {
+                        crate::schema::logic_flow::LogicFlowSchema {
+                            id: row.get(0).unwrap_or_default(),
+                            name: row.get(1).unwrap_or_default(),
+                            description: None,
+                            trigger: crate::schema::logic_flow::TriggerType::Manual,
+                            nodes: Vec::new(),
+                            entry_node_id: None,
+                            context: crate::schema::logic_flow::FlowContext::Frontend,
+                            archived: false,
+                        }
+                    });
+                flow.id = row.get(0)?;
+                flow.name = row.get(1)?;
+                flow.description = row.get(2)?;
+                flow.archived = row.get(4)?;
+                Ok(flow)
+            })?;
+            for f in flows { project.logic_flows.push(f?); }
+
             Ok(Some(project))
         } else {
             Ok(None)
@@ -354,16 +437,64 @@ impl Database {
             )?;
         }
         
+        // Build a map: block_id -> page_id for proper page association
+        let mut block_page_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for page in &project.pages {
+            if let Some(root_id) = &page.root_block_id {
+                // Walk the block tree from root to assign page_id
+                let mut stack = vec![root_id.clone()];
+                while let Some(bid) = stack.pop() {
+                    block_page_map.insert(bid.clone(), page.id.clone());
+                    if let Some(block) = project.blocks.iter().find(|b| b.id == bid) {
+                        for child_id in &block.children {
+                            stack.push(child_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         // Upsert Blocks
         for (idx, block) in project.blocks.iter().enumerate() {
-            let block_type_str = format!("{:?}", block.block_type); 
+            let block_type_str = match &block.block_type {
+                BlockType::Page => "Page",
+                BlockType::Container => "Container",
+                BlockType::Section => "Section",
+                BlockType::Columns => "Columns",
+                BlockType::Column => "Column",
+                BlockType::Flex => "Flex",
+                BlockType::Grid => "Grid",
+                BlockType::Text => "Text",
+                BlockType::Heading => "Heading",
+                BlockType::Paragraph => "Paragraph",
+                BlockType::Link => "Link",
+                BlockType::Image => "Image",
+                BlockType::Video => "Video",
+                BlockType::Icon => "Icon",
+                BlockType::Form => "Form",
+                BlockType::Input => "Input",
+                BlockType::TextArea => "TextArea",
+                BlockType::Select => "Select",
+                BlockType::Checkbox => "Checkbox",
+                BlockType::Radio => "Radio",
+                BlockType::Button => "Button",
+                BlockType::Modal => "Modal",
+                BlockType::Dropdown => "Dropdown",
+                BlockType::Tabs => "Tabs",
+                BlockType::Accordion => "Accordion",
+                BlockType::List => "List",
+                BlockType::Table => "Table",
+                BlockType::Card => "Card",
+                BlockType::Custom(name) => name.as_str(),
+            };
+            let page_id = block_page_map.get(&block.id).cloned();
             conn.execute(
                 "INSERT OR REPLACE INTO blocks (id, project_id, page_id, parent_id, block_type, name, properties_json, styles_json, events_json, archived, block_order)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                  params![
                      block.id,
                      project.id,
-                     None::<String>,
+                     page_id,
                      block.parent_id,
                      block_type_str,
                      block.name,
@@ -378,7 +509,13 @@ impl Database {
         
         // Upsert APIs
         for api in &project.apis {
-            let method_str = format!("{:?}", api.method).to_uppercase();
+            let method_str = match api.method {
+                HttpMethod::Get => "GET",
+                HttpMethod::Post => "POST",
+                HttpMethod::Put => "PUT",
+                HttpMethod::Patch => "PATCH",
+                HttpMethod::Delete => "DELETE",
+            };
             conn.execute(
                 "INSERT OR REPLACE INTO apis (id, project_id, method, path, name, description, logic_flow_id, archived, meta_json)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -391,12 +528,44 @@ impl Database {
                      api.description,
                      api.logic_flow_id,
                      api.archived,
-                     "{}" 
+                     "{}"
                  ]
             )?;
         }
-        
-        
+
+        // Upsert Data Models
+        for model in &project.data_models {
+            conn.execute(
+                "INSERT OR REPLACE INTO models (id, project_id, name, fields_json, relations_json, archived)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                 params![
+                     model.id,
+                     project.id,
+                     model.name,
+                     serde_json::to_string(&model.fields).unwrap(),
+                     serde_json::to_string(&model.relations).unwrap(),
+                     model.archived
+                 ]
+            )?;
+        }
+
+        // Upsert Logic Flows
+        for flow in &project.logic_flows {
+            let flow_json = serde_json::to_string(flow).unwrap();
+            conn.execute(
+                "INSERT OR REPLACE INTO logic_flows (id, project_id, name, description, flow_json, archived)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                 params![
+                     flow.id,
+                     project.id,
+                     flow.name,
+                     flow.description,
+                     flow_json,
+                     flow.archived
+                 ]
+            )?;
+        }
+
         Ok(())
     }
 
@@ -408,6 +577,7 @@ impl Database {
         conn.execute("DELETE FROM pages WHERE project_id = ?", [id])?;
         conn.execute("DELETE FROM apis WHERE project_id = ?", [id])?;
         conn.execute("DELETE FROM models WHERE project_id = ?", [id])?;
+        conn.execute("DELETE FROM logic_flows WHERE project_id = ?", [id])?;
         
         // Delete project
         conn.execute("DELETE FROM projects WHERE id = ?", [id])?;

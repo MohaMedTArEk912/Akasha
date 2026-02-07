@@ -15,6 +15,7 @@ services:
       - ./data:/app/data
       - ./grapes.db:/app/grapes.db
     environment:
+      - GRAPES_HEADLESS=1
       - RUST_LOG=info
       - PORT=3001
     restart: unless-stopped

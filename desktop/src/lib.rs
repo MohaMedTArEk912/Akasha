@@ -8,6 +8,7 @@
 //! - Local storage (SQLite)
 
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::State;
 use tokio::net::TcpListener;
 
@@ -143,9 +144,11 @@ fn update_block_property(
     // Auto-sync to disk if root path is set
     if let Some(root) = &project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
-        let _ = engine.sync_page_to_disk_by_block(&block_id, project);
+        if let Err(e) = engine.sync_page_to_disk_by_block(&block_id, project) {
+            log::error!("Auto-sync failed for block {}: {}", block_id, e);
+        }
     }
-    
+
     Ok(())
 }
 
@@ -159,15 +162,17 @@ fn update_block_style(
 ) -> Result<(), String> {
     let mut state_lock = state.project.lock().map_err(|_| "Lock failed")?;
     let project = state_lock.as_mut().ok_or("No project open")?;
-    
+
     let block = project.find_block_mut(&block_id).ok_or("Block not found")?;
     block.styles.insert(style, crate::schema::block::StyleValue::String(value));
     project.touch();
-    
+
     // Auto-sync to disk if root path is set
     if let Some(root) = &project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
-        let _ = engine.sync_page_to_disk_by_block(&block_id, project);
+        if let Err(e) = engine.sync_page_to_disk_by_block(&block_id, project) {
+            log::error!("Auto-sync failed for block {}: {}", block_id, e);
+        }
     }
     
     Ok(())
@@ -207,7 +212,9 @@ fn add_page(
     // Auto-sync to disk if root path is set
     if let Some(root) = &project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
-        let _ = engine.sync_page_to_disk(&page_clone.id, project);
+        if let Err(e) = engine.sync_page_to_disk(&page_clone.id, project) {
+            log::error!("Auto-sync failed for page {}: {}", page_clone.id, e);
+        }
     }
     
     log::info!("Added page: {}", page_clone.id);
@@ -353,6 +360,64 @@ fn start_dev_server(
     Ok(pid)
 }
 
+/// Install npm dependencies in the project root
+#[tauri::command]
+async fn install_dependencies(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let root = {
+        let project_lock = state.project.lock().map_err(|_| "Lock failed")?;
+        let project = project_lock.as_ref().ok_or("No project open")?;
+        project.root_path.as_ref().ok_or("No root path set")?.clone()
+    };
+
+    log::info!("Installing dependencies in: {}", root);
+
+    // Run npm install with a timeout to avoid hanging forever
+    let mut command = if cfg!(target_os = "windows") {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "npm", "install", "--no-audit", "--no-fund"]);
+        cmd
+    } else {
+        let mut cmd = std::process::Command::new("npm");
+        cmd.arg("install").arg("--no-audit").arg("--no-fund");
+        cmd
+    };
+
+    let mut child = command
+        .current_dir(&root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to run npm install: {}", e))?;
+
+    let start = Instant::now();
+    let timeout = Duration::from_secs(300);
+
+    loop {
+        if let Some(status) = child.try_wait().map_err(|e| format!("Failed to check npm install status: {}", e))? {
+            if status.success() {
+                log::info!("npm install completed successfully");
+                return Ok("Dependencies installed successfully".to_string());
+            }
+
+            log::error!("npm install failed with status: {}", status);
+            return Err(format!("npm install failed with status: {}", status));
+        }
+
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            log::error!("npm install timed out after {} seconds", timeout.as_secs());
+            return Err(format!("npm install timed out after {} seconds", timeout.as_secs()));
+        }
+
+        // Use async sleep to avoid blocking the Tokio runtime
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+
 /// Stop the development server
 #[tauri::command]
 fn stop_dev_server(
@@ -421,10 +486,49 @@ fn parse_http_method(s: &str) -> Result<schema::HttpMethod, String> {
 // TAURI ENTRY POINT
 // ============================================================================
 
+fn backend_bind_addr() -> String {
+    if let Ok(bind) = std::env::var("GRAPES_BIND") {
+        let trimmed = bind.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(3001);
+
+    format!("0.0.0.0:{port}")
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        use tokio::signal::unix::{signal, SignalKind};
+
+        if let Ok(mut sigterm) = signal(SignalKind::terminate()) {
+            sigterm.recv().await;
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {}
+        _ = terminate => {}
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging
-    env_logger::init();
+    let _ = env_logger::try_init();
     
     // Start Embedded Backend API Server (Axum)
     // This provides the REST API that the frontend uses on port 3001
@@ -439,11 +543,11 @@ pub fn run() {
     };
     
     let router = crate::backend::create_router(backend_state);
+    let addr = backend_bind_addr();
     
     // Spawn server in a background task
     tauri::async_runtime::spawn(async move {
-        let addr = "0.0.0.0:3001";
-        match TcpListener::bind(addr).await {
+        match TcpListener::bind(&addr).await {
             Ok(listener) => {
                 log::info!("Backend API server listening on http://{}", addr);
                 if let Err(e) = axum::serve(listener, router).await {
@@ -483,7 +587,32 @@ pub fn run() {
             // Terminal commands
             start_dev_server,
             stop_dev_server,
+            install_dependencies,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+pub fn run_headless() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+    log::info!("Starting headless API server...");
+
+    let backend_state = crate::backend::BackendAppState::new()?;
+    let router = crate::backend::create_router(backend_state);
+
+    let addr = backend_bind_addr();
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async move {
+            let listener = TcpListener::bind(&addr).await?;
+            log::info!("Backend API server listening on http://{}", addr);
+
+            axum::serve(listener, router)
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+
+            Ok(())
+        })
 }

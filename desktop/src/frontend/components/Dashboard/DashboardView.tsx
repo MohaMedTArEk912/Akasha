@@ -7,14 +7,23 @@
 import React, { useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
 import { openProject, deleteProject, createProject } from "../../stores/projectStore";
+import { useToast } from "../../context/ToastContext";
 import IDESettingsModal from "../Modals/IDESettingsModal";
+
+interface ProjectSummary {
+    id: string;
+    name: string;
+    updated_at: string;
+}
 
 const DashboardView: React.FC = () => {
     const { projects, workspacePath, loading } = useProjectStore();
+    const toast = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [projectName, setProjectName] = useState("");
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     const filteredProjects = projects.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -29,7 +38,16 @@ const DashboardView: React.FC = () => {
             setProjectName("");
             setIsCreateModalOpen(false);
         } catch (err) {
-            console.error("Create failed:", err);
+            toast.showToast(`Failed to create project: ${err}`, "error");
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            await deleteProject(id);
+            setConfirmDeleteId(null);
+        } catch (err) {
+            toast.showToast(`Failed to delete project: ${err}`, "error");
         }
     };
 
@@ -96,11 +114,7 @@ const DashboardView: React.FC = () => {
                             project={project}
                             index={idx}
                             onOpen={() => openProject(project.id)}
-                            onDelete={() => {
-                                if (confirm(`Are you sure you want to delete "${project.name}"?`)) {
-                                    deleteProject(project.id);
-                                }
-                            }}
+                            onDelete={() => setConfirmDeleteId(project.id)}
                         />
                     ))}
                 </div>
@@ -129,6 +143,33 @@ const DashboardView: React.FC = () => {
                 isOpen={showSettingsModal}
                 onClose={() => setShowSettingsModal(false)}
             />
+
+            {/* Delete Confirmation */}
+            {confirmDeleteId && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-xl animate-fade-in" onClick={() => setConfirmDeleteId(null)} />
+                    <div className="relative w-full max-w-sm bg-[#0e0e10] border border-white/10 rounded-3xl shadow-2xl p-8 animate-slide-up">
+                        <h3 className="text-lg font-black text-white mb-2">Delete Project?</h3>
+                        <p className="text-sm text-white/50 mb-6">
+                            This action cannot be undone. The project and all its data will be permanently removed.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="flex-1 py-3 rounded-xl border border-white/10 text-white/60 font-bold text-xs uppercase tracking-wider hover:bg-white/5 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleDelete(confirmDeleteId)}
+                                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-xs uppercase tracking-wider hover:bg-red-600 transition-all"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {isCreateModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -190,7 +231,7 @@ const DashboardView: React.FC = () => {
 
 // Project Card Sub-component
 const ProjectCard: React.FC<{
-    project: any;
+    project: ProjectSummary;
     index: number;
     onOpen: () => void;
     onDelete: () => void;

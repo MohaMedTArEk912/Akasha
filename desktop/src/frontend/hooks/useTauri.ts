@@ -29,6 +29,21 @@ export interface ProjectSchema {
     root_path?: string;
 }
 
+export interface InstallStep {
+    target: string;
+    success: boolean;
+    timed_out: boolean;
+    duration_ms: number;
+    stdout: string;
+    stderr: string;
+    status: string;
+}
+
+export interface InstallResult {
+    success: boolean;
+    steps: InstallStep[];
+}
+
 export interface BlockSchema {
     id: string;
     block_type: string;
@@ -335,6 +350,11 @@ export function useApi() {
 
         readFileContent: (path: string) =>
             apiCall<{ content: string; path: string }>('GET', `/api/files/content?path=${encodeURIComponent(path)}`),
+
+        installDependencies: async () => {
+            if (isTauri()) return await invoke<InstallResult>('install_dependencies');
+            return apiCall<InstallResult>('POST', '/api/project/install');
+        },
     };
 }
 

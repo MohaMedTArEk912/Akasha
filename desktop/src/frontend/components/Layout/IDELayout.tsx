@@ -11,12 +11,14 @@
 
 import React, { useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { setActiveTab, closeProject } from "../../stores/projectStore";
+import { setActiveTab, closeProject, installProjectDependencies, clearInstallStatus } from "../../stores/projectStore";
 import LogicCanvas from "../Canvas/LogicCanvas";
 import ApiList from "../Canvas/ApiList";
 import SchemaEditor from "../Editors/SchemaEditor";
 import CodeEditor from "../Canvas/CodeEditor";
 import ProjectSettingsModal from "../Modals/ProjectSettingsModal";
+import ComponentPalette from "../Visual/ComponentPalette";
+import Inspector from "../Visual/Inspector";
 
 interface IDELayoutProps {
     toolbar: React.ReactNode;
@@ -35,7 +37,7 @@ const IDELayout: React.FC<IDELayoutProps> = ({
     canvas,
     terminal
 }) => {
-    const { project, activeTab, editMode, loading } = useProjectStore();
+    const { project, activeTab, editMode, loading, loadingMessage, installLog, installError } = useProjectStore();
 
     // Sidebar state (only for Explorer)
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -145,56 +147,112 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                     />
                 </aside>
 
-                {/* ===== LEFT: Explorer Panel (only shown for explorer) ===== */}
+                {/* ===== LEFT: Conditional Sidebar (Explorer or Component Palette) ===== */}
                 {sidebarOpen && (
-                    <aside className="w-60 bg-[#252526] border-r border-[#1e1e1e] flex flex-col flex-shrink-0">
-                        {/* Panel Header */}
-                        <div className="h-9 px-4 flex items-center border-b border-[#1e1e1e]">
-                            <span className="text-[11px] font-semibold text-[#bbbbbb] uppercase tracking-wider">
-                                Explorer
-                            </span>
-                        </div>
-
-                        {/* Panel Content */}
-                        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                            {fileTree}
-                        </div>
+                    <aside className="bg-[#252526] border-r border-[#1e1e1e] flex flex-col flex-shrink-0">
+                        {editMode === "code" ? (
+                            /* Code Mode: File Explorer */
+                            <div className="w-60 flex flex-col h-full">
+                                <div className="h-9 px-4 flex items-center border-b border-[#1e1e1e]">
+                                    <span className="text-[11px] font-semibold text-[#bbbbbb] uppercase tracking-wider">
+                                        Explorer
+                                    </span>
+                                </div>
+                                <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                                    {fileTree}
+                                </div>
+                            </div>
+                        ) : (
+                            /* Visual Mode: Component Palette */
+                            <ComponentPalette />
+                        )}
                     </aside>
                 )}
 
-                {/* ===== CENTER: Editor Area ===== */}
-                <main className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e]">
-                    {/* Toolbar / Tab Bar */}
-                    <div className="h-9 bg-[#252526] border-b border-[#1e1e1e] flex items-center flex-shrink-0">
-                        {toolbar}
-                    </div>
+                {/* ===== CENTER: Editor Area + Inspector (Visual Mode) ===== */}
+                <div className="flex-1 flex overflow-hidden">
+                    <main className="flex-1 flex flex-col overflow-hidden bg-[#1e1e1e]">
+                        {/* Toolbar / Tab Bar */}
+                        <div className="h-9 bg-[#252526] border-b border-[#1e1e1e] flex items-center flex-shrink-0">
+                            {toolbar}
+                        </div>
 
-                    {/* Editor Content - switches based on activeTab */}
-                    <div className={`flex-1 overflow-auto relative ${terminalOpen ? 'h-[60%]' : ''}`}>
-                        {loading && (
-                            <div className="absolute inset-0 bg-[#1e1e1e]/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0e639c]"></div>
+                        {/* Editor Content - switches based on activeTab */}
+                        <div className={`flex-1 overflow-auto relative ${terminalOpen ? 'h-[60%]' : ''}`}>
+                            {loading && (
+                                <div className="absolute inset-0 bg-[#1e1e1e]/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0e639c]"></div>
+                                </div>
+                            )}
+                            {activeTab === "canvas" && (editMode === "visual" ? canvas : <CodeEditor />)}
+                            {activeTab === "logic" && <LogicCanvas />}
+                            {activeTab === "api" && <ApiList />}
+                            {activeTab === "erd" && <SchemaEditor />}
+                        </div>
+
+                        {/* Terminal Panel (toggleable) */}
+                        {terminalOpen && terminal && (
+                            <div className="h-[35%] border-t border-[#1e1e1e] bg-[#1e1e1e]">
+                                <div className="h-8 bg-[#252526] px-4 flex items-center gap-4 text-xs border-b border-[#1e1e1e]">
+                                    <span className="text-[#cccccc] font-medium">Terminal</span>
+                                </div>
+                                <div className="h-[calc(100%-2rem)] overflow-auto">
+                                    {terminal}
+                                </div>
                             </div>
                         )}
-                        {activeTab === "canvas" && (editMode === "visual" ? canvas : <CodeEditor />)}
-                        {activeTab === "logic" && <LogicCanvas />}
-                        {activeTab === "api" && <ApiList />}
-                        {activeTab === "erd" && <SchemaEditor />}
-                    </div>
+                    </main>
 
-                    {/* Terminal Panel (toggleable) */}
-                    {terminalOpen && terminal && (
-                        <div className="h-[35%] border-t border-[#1e1e1e] bg-[#1e1e1e]">
-                            <div className="h-8 bg-[#252526] px-4 flex items-center gap-4 text-xs border-b border-[#1e1e1e]">
-                                <span className="text-[#cccccc] font-medium">Terminal</span>
-                            </div>
-                            <div className="h-[calc(100%-2rem)] overflow-auto">
-                                {terminal}
+                    {/* Inspector Panel (Visual Mode Only) */}
+                    {editMode === "visual" && activeTab === "canvas" && <Inspector />}
+                </div>
+            </div>
+
+            {/* NPM Install Loading Overlay */}
+            {loadingMessage && (
+                <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center">
+                    <div className="bg-[#1e1e1e] p-8 rounded-xl shadow-2xl border border-[#0e639c]/30 max-w-2xl w-[90%]">
+                        <div className="flex items-center gap-4 mb-4">
+                            {!installError && (
+                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#0e639c] border-t-transparent"></div>
+                            )}
+                            {installError && (
+                                <div className="h-10 w-10 rounded-full border-4 border-red-500 flex items-center justify-center text-red-500 font-bold">!</div>
+                            )}
+                            <div>
+                                <h3 className="text-white text-lg font-semibold">Setting up project...</h3>
+                                <p className="text-[#858585] text-sm">{loadingMessage}</p>
                             </div>
                         </div>
-                    )}
-                </main>
-            </div>
+                        {!installError && (
+                            <div className="w-full bg-[#2d2d2d] rounded-full h-1.5 overflow-hidden">
+                                <div className="h-full bg-[#0e639c] animate-pulse" style={{ width: '70%' }}></div>
+                            </div>
+                        )}
+                        {installLog && (
+                            <pre className="mt-4 max-h-64 overflow-auto text-xs bg-[#111] text-[#d4d4d4] p-3 rounded border border-[#2d2d2d] whitespace-pre-wrap">
+                                {installLog}
+                            </pre>
+                        )}
+                        {installError && (
+                            <div className="mt-4 flex items-center justify-end gap-3">
+                                <button
+                                    onClick={() => clearInstallStatus()}
+                                    className="px-3 py-1.5 text-sm rounded bg-[#2d2d2d] hover:bg-[#3a3a3a] text-white"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    onClick={() => installProjectDependencies()}
+                                    className="px-3 py-1.5 text-sm rounded bg-[#0e639c] hover:bg-[#1177bb] text-white"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* ===== BOTTOM: Status Bar ===== */}
             <footer className="h-6 bg-[#007acc] flex items-center px-3 text-[11px] text-white select-none flex-shrink-0">

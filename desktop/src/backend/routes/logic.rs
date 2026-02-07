@@ -24,8 +24,9 @@ pub async fn create_logic_flow(
     
     let id = uuid::Uuid::new_v4().to_string();
     let context = match payload.context.as_str() {
+        "frontend" => FlowContext::Frontend,
         "backend" => FlowContext::Backend,
-        _ => FlowContext::Frontend,
+        other => return Err(ApiError::BadRequest(format!("Unknown context: '{}'. Must be 'frontend' or 'backend'", other))),
     };
     
     // Default manual trigger for new flows
