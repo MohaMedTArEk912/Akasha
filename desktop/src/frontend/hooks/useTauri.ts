@@ -352,7 +352,6 @@ export function useApi() {
             apiCall<{ content: string; path: string }>('GET', `/api/files/content?path=${encodeURIComponent(path)}`),
 
         installDependencies: async () => {
-            if (isTauri()) return await invoke<InstallResult>('install_dependencies');
             return apiCall<InstallResult>('POST', '/api/project/install');
         },
     };

@@ -4,7 +4,10 @@ use axum::{
     extract::State,
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::process::Command;
+use std::time::Instant;
 
 use crate::backend::state::AppState;
 use crate::backend::error::ApiError;
@@ -189,4 +192,107 @@ pub async fn reset_project(
     
     state.set_project(new_project.clone()).await;
     Ok(Json(new_project))
+}
+
+/// Installation step result
+#[derive(Debug, Serialize)]
+pub struct InstallStep {
+    pub target: String,
+    pub success: bool,
+    pub timed_out: bool,
+    pub duration_ms: u64,
+    pub stdout: String,
+    pub stderr: String,
+    pub status: String,
+}
+
+/// Installation summary
+#[derive(Debug, Serialize)]
+pub struct InstallResult {
+    pub success: bool,
+    pub steps: Vec<InstallStep>,
+}
+
+fn run_npm_install_step(target: &str, path: PathBuf) -> InstallStep {
+    let start = Instant::now();
+
+    if !path.exists() {
+        return InstallStep {
+            target: target.to_string(),
+            success: false,
+            timed_out: false,
+            duration_ms: start.elapsed().as_millis() as u64,
+            stdout: String::new(),
+            stderr: format!("Directory not found: {}", path.display()),
+            status: "failed".into(),
+        };
+    }
+
+    if !path.join("package.json").exists() {
+        return InstallStep {
+            target: target.to_string(),
+            success: true,
+            timed_out: false,
+            duration_ms: start.elapsed().as_millis() as u64,
+            stdout: "Skipped: package.json not found".into(),
+            stderr: String::new(),
+            status: "skipped".into(),
+        };
+    }
+
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", "npm", "install", "--no-audit", "--no-fund"])
+            .current_dir(&path)
+            .output()
+    } else {
+        Command::new("npm")
+            .args(["install", "--no-audit", "--no-fund"])
+            .current_dir(&path)
+            .output()
+    };
+
+    match output {
+        Ok(result) => {
+            let success = result.status.success();
+            InstallStep {
+                target: target.to_string(),
+                success,
+                timed_out: false,
+                duration_ms: start.elapsed().as_millis() as u64,
+                stdout: String::from_utf8_lossy(&result.stdout).to_string(),
+                stderr: String::from_utf8_lossy(&result.stderr).to_string(),
+                status: if success { "success".into() } else { "failed".into() },
+            }
+        }
+        Err(err) => InstallStep {
+            target: target.to_string(),
+            success: false,
+            timed_out: false,
+            duration_ms: start.elapsed().as_millis() as u64,
+            stdout: String::new(),
+            stderr: format!("Failed to run npm install: {}", err),
+            status: "failed".into(),
+        },
+    }
+}
+
+/// Install dependencies for both client and server
+pub async fn install_project_dependencies(
+    State(state): State<AppState>,
+) -> Result<Json<InstallResult>, ApiError> {
+    let project = state.get_project().await
+        .ok_or_else(|| ApiError::NotFound("No project loaded".into()))?;
+
+    let root = project.root_path
+        .ok_or_else(|| ApiError::BadRequest("Project root path not set".into()))?;
+
+    let root_path = PathBuf::from(root);
+    let steps = vec![
+        run_npm_install_step("client", root_path.join("client")),
+        run_npm_install_step("server", root_path.join("server")),
+    ];
+
+    let success = steps.iter().all(|step| step.success);
+    Ok(Json(InstallResult { success, steps }))
 }

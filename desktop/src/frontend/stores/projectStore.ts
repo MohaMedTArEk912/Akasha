@@ -87,6 +87,39 @@ function formatInstallResult(result: InstallResult): string {
     }).join("\n\n");
 }
 
+function getFirstActivePageId(project: ProjectSchema | null | undefined): string | null {
+    return project?.pages.find((page) => !page.archived)?.id ?? null;
+}
+
+function resolveSelectedPageId(project: ProjectSchema, preferredPageId: string | null): string | null {
+    if (preferredPageId && project.pages.some((page) => page.id === preferredPageId && !page.archived)) {
+        return preferredPageId;
+    }
+    return getFirstActivePageId(project);
+}
+
+function normalizePageName(name: string): string {
+    const trimmed = name.trim();
+    return trimmed.length > 0 ? trimmed : "New Page";
+}
+
+function toKebabCase(input: string): string {
+    const kebab = input
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    return kebab.length > 0 ? kebab : "page";
+}
+
+function normalizePagePath(path: string): string {
+    const trimmed = path.trim();
+    if (!trimmed || trimmed === "/") return "/";
+
+    const compact = trimmed.replace(/^\/+|\/+$/g, "");
+    const slug = toKebabCase(compact.replace(/\//g, "-"));
+    return `/${slug}`;
+}
+
 export async function installProjectDependencies(): Promise<boolean> {
     updateState(() => ({
         loadingMessage: "Installing dependencies (client + server)...",
@@ -191,7 +224,7 @@ export async function resetProject(): Promise<void> {
         const project = await api.resetProject();
         updateState(() => ({
             project,
-            selectedPageId: null,
+            selectedPageId: getFirstActivePageId(project),
             selectedBlockId: null
         }));
     } catch (err) {
@@ -217,7 +250,10 @@ export async function createProject(name: string): Promise<void> {
             const projectPath = `${state.workspacePath}/${name}`.replace(/\\/g, '/');
             await api.setProjectRoot(projectPath);
             // Reload project to get updated root_path
-            project = await api.getProject() as ProjectSchema;
+            const refreshedProject = await api.getProject();
+            if (refreshedProject) {
+                project = refreshedProject;
+            }
 
             // AUTO-INSTALL DEPENDENCIES
             await installProjectDependencies();
@@ -225,7 +261,7 @@ export async function createProject(name: string): Promise<void> {
 
         updateState(() => ({
             project,
-            selectedPageId: null,
+            selectedPageId: getFirstActivePageId(project),
             isDashboardActive: false,
             loadingMessage: null
         }));
@@ -254,7 +290,10 @@ export async function openProject(id: string): Promise<void> {
             const projectPath = `${state.workspacePath}/${project.name}`.replace(/\\/g, '/');
             await api.setProjectRoot(projectPath);
             // Reload to get updated root_path
-            project = await api.getProject() as ProjectSchema;
+            const refreshedProject = await api.getProject();
+            if (refreshedProject) {
+                project = refreshedProject;
+            }
         }
 
         // CHECK IF node_modules EXISTS
@@ -275,7 +314,7 @@ export async function openProject(id: string): Promise<void> {
 
         updateState(() => ({
             project,
-            selectedPageId: null,
+            selectedPageId: getFirstActivePageId(project),
             isDashboardActive: false
         }));
     } catch (err) {
@@ -316,7 +355,10 @@ export async function refreshCurrentProject(): Promise<void> {
     try {
         const project = await api.getProject();
         if (project) {
-            updateState(() => ({ project }));
+            updateState(() => ({
+                project,
+                selectedPageId: resolveSelectedPageId(project, state.selectedPageId)
+            }));
         }
     } catch (err) {
         console.error("Failed to refresh project:", err);
@@ -335,6 +377,7 @@ export async function loadProject(): Promise<void> {
         if (project) {
             updateState(() => ({
                 project,
+                selectedPageId: resolveSelectedPageId(project, state.selectedPageId),
                 isDashboardActive: false
             }));
         } else {
@@ -357,7 +400,7 @@ export async function importProject(json: string): Promise<void> {
         const project = await api.importProjectJson(json);
         updateState(() => ({
             project,
-            selectedPageId: null
+            selectedPageId: getFirstActivePageId(project)
         }));
     } catch (err) {
         updateState(() => ({ error: String(err) }));
@@ -445,10 +488,55 @@ export async function archiveBlock(blockId: string): Promise<void> {
  * Add a new page
  */
 export async function addPage(name: string, path: string): Promise<PageSchema> {
-    const page = await api.addPage(name, path);
+    const normalizedName = normalizePageName(name);
+    const normalizedPath = normalizePagePath(path);
+    const page = await api.addPage(normalizedName, normalizedPath);
     await loadProject();
+    updateState(() => ({
+        selectedPageId: page.id,
+        selectedBlockId: null,
+        selectedFilePath: null,
+        activeTab: "canvas",
+    }));
     isDirtyValue = true;
+
+    if (state.editMode === "visual" && state.project?.root_path) {
+        await api.syncToDisk().catch(err =>
+            console.error("Auto-sync failed:", err)
+        );
+    }
+
     return page;
+}
+
+/**
+ * Create a page with automatic naming/path under client/page sync flow.
+ */
+export async function createPage(name: string): Promise<PageSchema> {
+    if (!state.project) {
+        throw new Error("No project loaded");
+    }
+
+    const baseName = normalizePageName(name);
+    const baseSlug = toKebabCase(baseName);
+    const existingPages = state.project.pages.filter((page) => !page.archived);
+    const usedNames = new Set(existingPages.map((page) => page.name.toLowerCase()));
+    const usedPaths = new Set(existingPages.map((page) => page.path.toLowerCase()));
+
+    let candidateName = baseName;
+    let candidatePath = `/${baseSlug}`;
+    let suffix = 2;
+
+    while (
+        usedNames.has(candidateName.toLowerCase()) ||
+        usedPaths.has(candidatePath.toLowerCase())
+    ) {
+        candidateName = `${baseName} ${suffix}`;
+        candidatePath = `/${baseSlug}-${suffix}`;
+        suffix += 1;
+    }
+
+    return addPage(candidateName, candidatePath);
 }
 
 /**

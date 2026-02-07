@@ -27,9 +27,10 @@ impl SyncEngine {
         // --- Client Structure ---
         let client_path = self.root_path.join("client");
         let client_src_path = client_path.join("src");
-        let features_path = client_src_path.join("features");
+        let pages_path = client_path.join("page");
         let public_path = client_path.join("public");
-        fs::create_dir_all(&features_path)?;
+        fs::create_dir_all(&client_src_path)?;
+        fs::create_dir_all(&pages_path)?;
         fs::create_dir_all(&public_path)?;
 
         // --- Server Structure ---
@@ -176,7 +177,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
         // src/App.tsx
         let app_tsx = r#"import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Home from './features/home/Home';
+import Home from '../page/Home';
 
 /**
  * App Component
@@ -286,10 +287,9 @@ server.listen(port, () => {
     pub fn sync_page_to_disk(&self, page_id: &str, project: &ProjectSchema) -> std::io::Result<()> {
         let page = project.find_page(page_id).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Page not found"))?;
         
-        // Map page to feature folder
-        let feature_name = page.name.to_lowercase().replace(" ", "-");
-        let feature_path = self.root_path.join("client/src/features").join(&feature_name);
-        fs::create_dir_all(&feature_path)?;
+        // Map page to dedicated page folder
+        let page_dir = self.root_path.join("client/page");
+        fs::create_dir_all(&page_dir)?;
 
         let mut page_content = format!("// @grapes-page id=\"{}\"\n", page.id);
         page_content.push_str("import React from 'react';\n\n");
@@ -306,9 +306,60 @@ server.listen(port, () => {
 
         page_content.push_str("    </div>\n  );\n}");
         
-        let tsx_path = feature_path.join(format!("{}.tsx", pascal_case(&page.name)));
+        let tsx_path = page_dir.join(format!("{}.tsx", pascal_case(&page.name)));
         fs::write(tsx_path, page_content)?;
+        self.sync_app_routes_to_disk(project)?;
 
+        Ok(())
+    }
+
+    fn sync_app_routes_to_disk(&self, project: &ProjectSchema) -> std::io::Result<()> {
+        let mut imports = String::new();
+        let mut routes = String::new();
+
+        for page in project.pages.iter().filter(|page| !page.archived) {
+            let component_name = pascal_case(&page.name);
+            if component_name.is_empty() {
+                continue;
+            }
+
+            imports.push_str(&format!(
+                "import {} from '../page/{}';\n",
+                component_name, component_name
+            ));
+
+            let route_path = if page.path.trim().is_empty() { "/" } else { page.path.as_str() };
+            routes.push_str(&format!(
+                "          <Route path=\"{}\" element={{<{} />}} />\n",
+                route_path, component_name
+            ));
+        }
+
+        if routes.is_empty() {
+            routes.push_str("          <Route path=\"/\" element={<div className=\"p-8 text-center text-gray-500\">Welcome to Grapes App</div>} />\n");
+        }
+
+        let app_content = format!(
+            r#"import {{ BrowserRouter, Routes, Route }} from 'react-router-dom';
+{imports}
+function App() {{
+  return (
+    <BrowserRouter>
+      <div className="min-h-screen bg-slate-50">
+        <Routes>
+{routes}        </Routes>
+      </div>
+    </BrowserRouter>
+  );
+}}
+
+export default App;
+"#,
+            imports = imports,
+            routes = routes
+        );
+
+        fs::write(self.root_path.join("client/src/App.tsx"), app_content)?;
         Ok(())
     }
 
@@ -378,8 +429,7 @@ server.listen(port, () => {
         for page in &project.pages {
             if page.archived { continue; }
 
-            let feature_name = page.name.to_lowercase().replace(" ", "-");
-            let tsx_path = self.root_path.join("client/src/features").join(&feature_name).join(format!("{}.tsx", pascal_case(&page.name)));
+            let tsx_path = self.root_path.join("client/page").join(format!("{}.tsx", pascal_case(&page.name)));
 
             if tsx_path.exists() {
                 let content = fs::read_to_string(tsx_path)?;

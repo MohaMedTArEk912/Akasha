@@ -19,14 +19,13 @@ impl<'a> FrontendGenerator<'a> {
     pub fn generate(&self) -> GeneratedFrontend {
         let mut files = Vec::new();
         
-        // Generate each page in its own feature folder
+        // Generate each page in client/page folder
         for page in &self.project.pages {
             if !page.archived {
                 let code = self.generate_page(page);
-                let feature_name = page.name.to_lowercase().replace(' ', "-");
                 let pascal_name = crate::generator::pascal_case(&page.name);
                 files.push(GeneratedFile {
-                    path: format!("src/features/{}/{}.tsx", feature_name, pascal_name),
+                    path: format!("page/{}.tsx", pascal_name),
                     content: code,
                 });
             }
@@ -140,10 +139,9 @@ export default function {name}() {{
         for page in &self.project.pages {
             if !page.archived {
                 let p_name = crate::generator::pascal_case(&page.name);
-                let f_name = page.name.to_lowercase().replace(' ', "-");
                 imports.push_str(&format!(
-                    "import {} from './features/{}/{}';\n",
-                    p_name, f_name, p_name
+                    "import {} from '../page/{}';\n",
+                    p_name, p_name
                 ));
                 routes.push_str(&format!(
                     "                <Route path=\"{path}\" element={{<{name} />}} />\n",

@@ -65,13 +65,10 @@ pub async fn get_page_content(
     let root_path = project.root_path.as_ref()
         .ok_or_else(|| ApiError::BadRequest("Project root path not set. Please set it in project settings.".into()))?;
     
-    // Map page to feature folder (logic from sync_engine.rs)
-    let feature_name = page.name.to_lowercase().replace(" ", "-");
-    let feature_path = std::path::PathBuf::from(root_path)
-        .join("client/src/features")
-        .join(&feature_name);
-    
-    let tsx_path = feature_path.join(format!("{}.tsx", crate::generator::pascal_case(&page.name)));
+    // Map page to client/page folder (logic from sync_engine.rs)
+    let tsx_path = std::path::PathBuf::from(root_path)
+        .join("client/page")
+        .join(format!("{}.tsx", crate::generator::pascal_case(&page.name)));
     
     if !tsx_path.exists() {
         return Err(ApiError::NotFound(format!("File not found at {:?}", tsx_path)));

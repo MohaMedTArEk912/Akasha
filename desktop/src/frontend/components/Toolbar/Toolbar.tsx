@@ -7,11 +7,12 @@
 
 import React, { useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { setActiveTab, setEditMode } from "../../stores/projectStore";
+import { createPage, selectPage, setActiveTab, setEditMode } from "../../stores/projectStore";
 
 const Toolbar: React.FC = () => {
     const { project, selectedPageId, activeTab, editMode } = useProjectStore();
     const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+    const pages = project?.pages.filter((page) => !page.archived) ?? [];
 
     // Derive selectedPage from the project's pages array
     const selectedPage = project?.pages.find((p) => p.id === selectedPageId);
@@ -31,6 +32,18 @@ const Toolbar: React.FC = () => {
                 return <span className="text-[#5a67d8]">P</span>;
             default:
                 return <span className="text-[#858585]">F</span>;
+        }
+    };
+
+    const handleCreatePage = async () => {
+        const pageName = window.prompt("Enter new page name:", "New Page");
+        if (!pageName?.trim()) return;
+
+        try {
+            await createPage(pageName);
+        } catch (err) {
+            console.error("Failed to create page:", err);
+            window.alert(`Failed to create page: ${err}`);
         }
     };
 
@@ -80,7 +93,30 @@ const Toolbar: React.FC = () => {
 
             {/* Visual / Code Toggle (only show on canvas view) */}
             {activeTab === "canvas" && (
-                <div className="flex items-center h-full px-2 border-l border-[#1e1e1e]">
+                <div className="flex items-center h-full px-2 border-l border-[#1e1e1e] gap-2">
+                    {editMode === "visual" && (
+                        <>
+                            <select
+                                value={selectedPageId ?? ""}
+                                onChange={(e) => selectPage(e.target.value)}
+                                className="h-7 max-w-[180px] bg-[#1e1e1e] border border-[#3c3c3c] text-[#cccccc] text-xs rounded px-2 focus:outline-none focus:border-[#0e639c]"
+                                title="Select Page"
+                            >
+                                {pages.map((page) => (
+                                    <option key={page.id} value={page.id}>
+                                        {page.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleCreatePage}
+                                className="h-7 px-3 text-xs rounded bg-[#0e639c] text-white hover:bg-[#1177bb] transition-colors"
+                                title="Create Page in client/page"
+                            >
+                                + Page
+                            </button>
+                        </>
+                    )}
                     <div className="flex bg-[#1e1e1e] rounded-md overflow-hidden">
                         <button
                             onClick={() => setEditMode("visual")}

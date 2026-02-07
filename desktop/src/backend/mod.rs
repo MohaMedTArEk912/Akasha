@@ -43,6 +43,7 @@ pub fn create_router(state: BackendAppState) -> Router {
         .route("/api/project/import", post(routes::project::import_project))
         .route("/api/project/export", get(routes::project::export_project))
         .route("/api/project/reset", post(routes::project::reset_project))
+        .route("/api/project/install", post(routes::project::install_project_dependencies))
         .route("/api/project/sync/root", post(routes::project::set_sync_root))
         .route("/api/project/sync/now", post(routes::project::trigger_sync))
         .route("/api/project/sync/from_disk", post(routes::project::sync_disk_to_memory))
