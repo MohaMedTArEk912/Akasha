@@ -11,6 +11,12 @@
 
 import React, { useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
+import { setActiveTab, closeProject } from "../../stores/projectStore";
+import LogicCanvas from "../Canvas/LogicCanvas";
+import ApiList from "../Canvas/ApiList";
+import SchemaEditor from "../Editors/SchemaEditor";
+import CodeEditor from "../Canvas/CodeEditor";
+import ProjectSettingsModal from "../Modals/ProjectSettingsModal";
 
 interface IDELayoutProps {
     toolbar: React.ReactNode;
@@ -29,21 +35,21 @@ const IDELayout: React.FC<IDELayoutProps> = ({
     canvas,
     terminal
 }) => {
-    const { project } = useProjectStore();
+    const { project, activeTab, editMode, loading } = useProjectStore();
 
-    // Sidebar state
+    // Sidebar state (only for Explorer)
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [activeActivity, setActiveActivity] = useState<"explorer" | "search" | "git" | "extensions">("explorer");
     const [terminalOpen, setTerminalOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
-    // Toggle sidebar via activity bar
-    const handleActivityClick = (activity: typeof activeActivity) => {
-        if (activeActivity === activity && sidebarOpen) {
-            setSidebarOpen(false);
-        } else {
-            setActiveActivity(activity);
-            setSidebarOpen(true);
-        }
+    // Toggle explorer sidebar
+    const toggleExplorer = () => {
+        setSidebarOpen(!sidebarOpen);
+    };
+
+    // Handle view tab click (Logic/API/ERD) - switches main content
+    const handleViewTabClick = (tab: "canvas" | "logic" | "api" | "erd") => {
+        setActiveTab(tab);
     };
 
     return (
@@ -64,64 +70,94 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                     <ActivityIcon
                         icon="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
                         label="Explorer"
-                        active={activeActivity === "explorer" && sidebarOpen}
-                        onClick={() => handleActivityClick("explorer")}
+                        active={sidebarOpen}
+                        onClick={toggleExplorer}
                     />
-                    <ActivityIcon
-                        icon="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        label="Search"
-                        active={activeActivity === "search" && sidebarOpen}
-                        onClick={() => handleActivityClick("search")}
-                    />
-                    <ActivityIcon
-                        icon="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                        label="Source Control"
-                        active={activeActivity === "git" && sidebarOpen}
-                        onClick={() => handleActivityClick("git")}
-                    />
-                    <ActivityIcon
-                        icon="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"
-                        label="Extensions"
-                        active={activeActivity === "extensions" && sidebarOpen}
-                        onClick={() => handleActivityClick("extensions")}
-                    />
+                    {/* Logic Tab - Code icon */}
+                    <button
+                        className={`w-12 h-10 flex items-center justify-center relative group transition-colors ${activeTab === "logic" ? "text-white" : "text-[#858585] hover:text-white"
+                            }`}
+                        onClick={() => handleViewTabClick("logic")}
+                        title="Logic"
+                        aria-label="Logic"
+                    >
+                        {activeTab === "logic" && (
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-white" />
+                        )}
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                        </svg>
+                    </button>
 
-                    {/* Spacer pushes settings to bottom */}
+                    {/* API Tab - Globe/Network icon */}
+                    <button
+                        className={`w-12 h-10 flex items-center justify-center relative group transition-colors ${activeTab === "api" ? "text-white" : "text-[#858585] hover:text-white"
+                            }`}
+                        onClick={() => handleViewTabClick("api")}
+                        title="API"
+                        aria-label="API"
+                    >
+                        {activeTab === "api" && (
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-white" />
+                        )}
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        </svg>
+                    </button>
+
+                    {/* ERD / Schema Tab - Database icon */}
+                    <button
+                        className={`w-12 h-10 flex items-center justify-center relative group transition-colors ${activeTab === "erd" ? "text-white" : "text-[#858585] hover:text-white"
+                            }`}
+                        onClick={() => handleViewTabClick("erd")}
+                        title="Schema"
+                        aria-label="Schema"
+                    >
+                        {activeTab === "erd" && (
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-white" />
+                        )}
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                        </svg>
+                    </button>
+
+                    {/* Spacer pushes bottom icons */}
                     <div className="flex-1" />
 
+                    {/* Home Button - returns to Dashboard */}
+                    <button
+                        className="w-12 h-10 flex items-center justify-center relative group transition-colors text-[#858585] hover:text-white"
+                        onClick={closeProject}
+                        title="Return to Dashboard"
+                        aria-label="Return to Dashboard"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                    </button>
+
+                    {/* Settings Button */}
                     <ActivityIcon
                         icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                         label="Settings"
-                        active={false}
-                        onClick={() => { }}
+                        active={settingsOpen}
+                        onClick={() => setSettingsOpen(true)}
                     />
                 </aside>
 
-                {/* ===== LEFT: Explorer Panel ===== */}
+                {/* ===== LEFT: Explorer Panel (only shown for explorer) ===== */}
                 {sidebarOpen && (
                     <aside className="w-60 bg-[#252526] border-r border-[#1e1e1e] flex flex-col flex-shrink-0">
                         {/* Panel Header */}
                         <div className="h-9 px-4 flex items-center border-b border-[#1e1e1e]">
                             <span className="text-[11px] font-semibold text-[#bbbbbb] uppercase tracking-wider">
-                                {activeActivity === "explorer" && "Explorer"}
-                                {activeActivity === "search" && "Search"}
-                                {activeActivity === "git" && "Source Control"}
-                                {activeActivity === "extensions" && "Extensions"}
+                                Explorer
                             </span>
                         </div>
 
                         {/* Panel Content */}
                         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                            {activeActivity === "explorer" && fileTree}
-                            {activeActivity === "search" && (
-                                <div className="p-4 text-xs text-[#808080]">Search functionality</div>
-                            )}
-                            {activeActivity === "git" && (
-                                <div className="p-4 text-xs text-[#808080]">No source control providers</div>
-                            )}
-                            {activeActivity === "extensions" && (
-                                <div className="p-4 text-xs text-[#808080]">Extensions list</div>
-                            )}
+                            {fileTree}
                         </div>
                     </aside>
                 )}
@@ -133,9 +169,17 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                         {toolbar}
                     </div>
 
-                    {/* Editor Content */}
-                    <div className={`flex-1 overflow-auto ${terminalOpen ? 'h-[60%]' : ''}`}>
-                        {canvas}
+                    {/* Editor Content - switches based on activeTab */}
+                    <div className={`flex-1 overflow-auto relative ${terminalOpen ? 'h-[60%]' : ''}`}>
+                        {loading && (
+                            <div className="absolute inset-0 bg-[#1e1e1e]/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0e639c]"></div>
+                            </div>
+                        )}
+                        {activeTab === "canvas" && (editMode === "visual" ? canvas : <CodeEditor />)}
+                        {activeTab === "logic" && <LogicCanvas />}
+                        {activeTab === "api" && <ApiList />}
+                        {activeTab === "erd" && <SchemaEditor />}
                     </div>
 
                     {/* Terminal Panel (toggleable) */}
@@ -172,6 +216,9 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                     </button>
                 </div>
             </footer>
+
+            {/* Settings Modal */}
+            <ProjectSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </div>
     );
 };

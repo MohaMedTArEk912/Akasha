@@ -34,7 +34,7 @@ const DashboardView: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[var(--ide-bg)] flex flex-col p-8 md:p-12 overflow-y-auto selection:bg-indigo-500/30">
+        <div className="min-h-screen bg-[#0a0a0a] flex flex-col p-8 md:p-12 overflow-y-auto selection:bg-indigo-500/30">
             {/* Top Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 animate-fade-in">
                 <div className="space-y-2">

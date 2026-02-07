@@ -7,22 +7,19 @@
 
 import React, { useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { setActiveTab, closeProject } from "../../stores/projectStore";
+import { setActiveTab, setEditMode } from "../../stores/projectStore";
 
 const Toolbar: React.FC = () => {
-    const { project, selectedPageId, activeTab } = useProjectStore();
+    const { project, selectedPageId, activeTab, editMode } = useProjectStore();
     const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
     // Derive selectedPage from the project's pages array
     const selectedPage = project?.pages.find((p) => p.id === selectedPageId);
 
-    // Mock open files for VS Code-like tabs
-    const openTabs = [
-        { id: "canvas", label: selectedPage?.name || "index.tsx", icon: "tsx" },
-        { id: "logic", label: "logic.ts", icon: "ts" },
-        { id: "api", label: "api.ts", icon: "ts" },
-        { id: "erd", label: "schema.prisma", icon: "prisma" },
-    ];
+    // Only show the main canvas tab if a page is selected
+    const openTabs = selectedPage ? [
+        { id: "canvas", label: selectedPage.name, icon: "tsx" },
+    ] : [];
 
     const getFileIcon = (type: string) => {
         switch (type) {
@@ -38,18 +35,7 @@ const Toolbar: React.FC = () => {
     };
 
     return (
-        <div className="h-full flex items-center bg-[#252526] overflow-x-auto">
-            {/* Home / Back Button */}
-            <button
-                onClick={closeProject}
-                className="h-full px-3 flex items-center text-[#858585] hover:text-white hover:bg-[#2d2d2d] transition-colors border-r border-[#1e1e1e]"
-                title="Return to Dashboard"
-            >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                </svg>
-            </button>
-
+        <div className="w-full h-full flex items-center bg-[#252526] overflow-x-auto">
             {/* File Tabs */}
             <div className="flex h-full">
                 {openTabs.map((tab) => (
@@ -92,12 +78,43 @@ const Toolbar: React.FC = () => {
             {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Project name (right side, subtle) */}
-            <div className="px-4 text-xs text-[#858585]">
-                {project?.name || "Untitled"}
-            </div>
+            {/* Visual / Code Toggle (only show on canvas view) */}
+            {activeTab === "canvas" && (
+                <div className="flex items-center h-full px-2 border-l border-[#1e1e1e]">
+                    <div className="flex bg-[#1e1e1e] rounded-md overflow-hidden">
+                        <button
+                            onClick={() => setEditMode("visual")}
+                            className={`px-3 py-1 text-xs flex items-center gap-1.5 transition-colors ${editMode === "visual"
+                                ? "bg-[#0e639c] text-white"
+                                : "text-[#858585] hover:text-white"
+                                }`}
+                            title="Visual Editor"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Visual
+                        </button>
+                        <button
+                            onClick={() => setEditMode("code")}
+                            className={`px-3 py-1 text-xs flex items-center gap-1.5 transition-colors ${editMode === "code"
+                                ? "bg-[#0e639c] text-white"
+                                : "text-[#858585] hover:text-white"
+                                }`}
+                            title="Code Editor"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                            Code
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 export default Toolbar;
+

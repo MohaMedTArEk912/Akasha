@@ -5,6 +5,11 @@
  * When running as a desktop app (Tauri), this can be swapped for the IPC bridge.
  */
 
+import { invoke } from '@tauri-apps/api/core';
+
+// Helper to detect Tauri environment
+const isTauri = () => "isTauri" in window || !!(window as any).__TAURI_INTERNALS__;
+
 // ===== Types =====
 
 export interface ProjectSchema {
@@ -208,7 +213,10 @@ export function useApi() {
         deleteProjectById: (id: string) => apiCall<boolean>('DELETE', `/api/workspace/projects/${id}`),
 
         // Project operations
-        getProject: () => apiCall<ProjectSchema | null>('GET', '/api/project'),
+        getProject: async () => {
+            if (isTauri()) return await invoke<ProjectSchema | null>('get_project');
+            return apiCall<ProjectSchema | null>('GET', '/api/project');
+        },
 
         createProject: (name: string) =>
             apiCall<ProjectSchema>('POST', '/api/project', { name }),
@@ -228,11 +236,15 @@ export function useApi() {
         setProjectRoot: (path: string) =>
             apiCall<boolean>('POST', '/api/project/sync/root', { path }),
 
-        syncToDisk: () =>
-            apiCall<boolean>('POST', '/api/project/sync/now'),
+        syncToDisk: async () => {
+            if (isTauri()) return await invoke('sync_to_disk');
+            return apiCall<boolean>('POST', '/api/project/sync/now');
+        },
 
-        syncDiskToProject: () =>
-            apiCall<boolean>('POST', '/api/project/sync/from_disk'),
+        syncDiskToProject: async () => {
+            if (isTauri()) return await invoke('sync_disk_to_project');
+            return apiCall<boolean>('POST', '/api/project/sync/from_disk');
+        },
 
         // Block operations
         addBlock: (blockType: string, name: string, parentId?: string, pageId?: string) =>

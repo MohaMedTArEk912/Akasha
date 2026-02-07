@@ -126,7 +126,7 @@ export async function resetProject(): Promise<void> {
         const project = await api.resetProject();
         updateState(() => ({
             project,
-            selectedPageId: project.pages.length > 0 ? project.pages[0].id : null,
+            selectedPageId: null,
             selectedBlockId: null
         }));
     } catch (err) {
@@ -157,7 +157,7 @@ export async function createProject(name: string): Promise<void> {
 
         updateState(() => ({
             project,
-            selectedPageId: project.pages.length > 0 ? project.pages[0].id : null,
+            selectedPageId: null,
             isDashboardActive: false
         }));
         await initWorkspace(); // Refresh projects list
@@ -187,7 +187,7 @@ export async function openProject(id: string): Promise<void> {
 
         updateState(() => ({
             project,
-            selectedPageId: project.pages.length > 0 ? project.pages[0].id : null,
+            selectedPageId: null,
             isDashboardActive: false
         }));
     } catch (err) {
@@ -247,7 +247,7 @@ export async function loadProject(): Promise<void> {
         if (project) {
             updateState(() => ({
                 project,
-                selectedPageId: project.pages.length > 0 ? project.pages[0].id : null,
+                selectedPageId: null,
                 isDashboardActive: false
             }));
         } else {
@@ -270,7 +270,7 @@ export async function importProject(json: string): Promise<void> {
         const project = await api.importProjectJson(json);
         updateState(() => ({
             project,
-            selectedPageId: project.pages.length > 0 ? project.pages[0].id : null
+            selectedPageId: null
         }));
     } catch (err) {
         updateState(() => ({ error: String(err) }));
@@ -478,15 +478,22 @@ export function setViewport(viewport: "desktop" | "tablet" | "mobile"): void {
  * Set the edit mode (visual blocks or code)
  */
 export async function setEditMode(mode: "visual" | "code"): Promise<void> {
+    // 1. Optimistic update - switch immediately
+    updateState(() => ({ editMode: mode }));
+
+    // 2. Background sync if entering visual mode
     if (mode === "visual" && state.project?.root_path) {
+        // Don't block the UI, but show loading state
+        updateState(() => ({ loading: true }));
         try {
             await api.syncDiskToProject();
             await loadProject();
         } catch (err) {
             console.error("Failed to sync from disk:", err);
+        } finally {
+            updateState(() => ({ loading: false }));
         }
     }
-    updateState(() => ({ editMode: mode }));
 }
 
 /**
