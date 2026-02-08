@@ -23,6 +23,8 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
     const [projectName, setProjectName] = useState(project?.name || "");
     const [isSaving, setIsSaving] = useState(false);
     const [isDestructiveAction, setIsDestructiveAction] = useState(false);
+    const [deleteFromDisk, setDeleteFromDisk] = useState(false);
+    const [clearDiskOnReset, setClearDiskOnReset] = useState(true);
     const [confirmModal, setConfirmModal] = useState<{
         isOpen: boolean;
         type: "reset" | "delete" | null;
@@ -60,9 +62,10 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
     const handleResetConfirm = async () => {
         setIsDestructiveAction(true);
         try {
-            await resetProject();
+            await resetProject(clearDiskOnReset);
             toast.success("Project reset to initial state");
             setConfirmModal({ isOpen: false, type: null });
+            setClearDiskOnReset(true);
             onClose();
         } catch (err) {
             toast.error(`Failed to reset project: ${err}`);
@@ -75,10 +78,13 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
         if (!project) return;
         setIsDestructiveAction(true);
         try {
-            await deleteProject(project.id);
-            toast.success("Project deleted successfully");
+            await deleteProject(project.id, deleteFromDisk);
+            toast.success(deleteFromDisk
+                ? "Project and files deleted successfully"
+                : "Project deleted from database (files kept on disk)");
             closeProject();
             setConfirmModal({ isOpen: false, type: null });
+            setDeleteFromDisk(false);
             onClose();
         } catch (err) {
             toast.error(`Failed to delete project: ${err}`);
@@ -266,13 +272,22 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
             <ConfirmModal
                 isOpen={confirmModal.isOpen && confirmModal.type === "delete"}
                 title={`Delete "${project?.name}"?`}
-                message="This will permanently remove the project from the database and close the editor. The generated code on disk will NOT be deleted."
+                message="This will permanently remove the project from the database and close the editor."
                 confirmText="Delete Project"
                 variant="danger"
                 onConfirm={handleDeleteConfirm}
-                onCancel={() => setConfirmModal({ isOpen: false, type: null })}
+                onCancel={() => {
+                    setConfirmModal({ isOpen: false, type: null });
+                    setDeleteFromDisk(false);
+                }}
                 isLoading={isDestructiveAction}
+                checkboxConfig={{
+                    label: "Also delete project folder from disk",
+                    checked: deleteFromDisk,
+                    onChange: setDeleteFromDisk,
+                }}
             />
+
         </>
     );
 };

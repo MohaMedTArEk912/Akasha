@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn test_block_builder() {
         let block = BlockSchema::new("btn-1", BlockType::Button, "Submit Button")
-            .with_property("text".into(), Value::String("Click Me".into()))
+            .with_property("text", Value::String("Click Me".into()))
             .with_style("backgroundColor", "#6366f1")
             .with_class("rounded-lg")
             .with_class("px-4");

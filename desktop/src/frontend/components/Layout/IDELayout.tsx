@@ -22,6 +22,7 @@ import ProjectSettingsModal from "../Modals/ProjectSettingsModal";
 import ComponentPalette from "../Visual/ComponentPalette";
 import Inspector from "../Visual/Inspector";
 import WindowControls from "../UI/WindowControls";
+import { SidebarSection, PagesList } from "./SidebarComponents";
 
 interface IDELayoutProps {
     toolbar: React.ReactNode;
@@ -42,26 +43,32 @@ const IDELayout: React.FC<IDELayoutProps> = ({
     const { project, activeTab, editMode, inspectorOpen, loading, loadingMessage, installLog, installError } = useProjectStore();
     const editorSettings = useEditorSettings();
 
-    // Sidebar state (only for Explorer)
+    // Sidebar state
+    type SidebarType = "explorer" | "components" | "logic" | "api" | "erd";
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [activeSidebar, setActiveSidebar] = useState<SidebarType>(editMode === "visual" ? "components" : "explorer");
     const [terminalOpen, setTerminalOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
 
-    // Toggle explorer sidebar
-    const toggleExplorer = () => {
-        setSidebarOpen(!sidebarOpen);
-    };
-
-    // Handle view tab click (Logic/API/ERD) - switches main content
-    const handleViewTabClick = (tab: "canvas" | "logic" | "api" | "erd") => {
-        setActiveTab(tab);
+    // Toggle or switch sidebar
+    const handleActivityClick = (sidebar: SidebarType) => {
+        if (activeSidebar === sidebar) {
+            setSidebarOpen(!sidebarOpen);
+        } else {
+            setActiveSidebar(sidebar);
+            setSidebarOpen(true);
+        }
     };
 
     return (
         <div className="h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
 
-            {/* ===== TOP: Title Bar ===== */}
-            <header className="h-9 bg-[var(--ide-titlebar)] border-b border-[var(--ide-border)] flex items-center justify-between px-4 select-none flex-shrink-0">
+            {/* ===== TOP: Title Bar (Draggable for frameless window) ===== */}
+            <header
+                className="h-9 bg-[var(--ide-titlebar)] border-b border-[var(--ide-border)] flex items-center justify-between px-4 select-none flex-shrink-0"
+                data-tauri-drag-region
+            >
+
                 <span className="text-xs text-[var(--ide-text-secondary)] font-medium">
                     {project?.name || "Untitled"} — Grapes IDE
                 </span>
@@ -107,8 +114,8 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                         <button
                             onClick={() => toggleInspector()}
                             className={`h-6 px-2.5 flex items-center gap-1.5 rounded border transition-all text-[10px] font-bold uppercase tracking-wider ${inspectorOpen
-                                    ? "bg-[var(--ide-accent-subtle)] border-[var(--ide-primary)] text-[var(--ide-primary)] shadow-[0_0_8px_rgba(99,102,241,0.2)]"
-                                    : "bg-transparent border-[var(--ide-border-strong)] text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:border-[var(--ide-text-secondary)]"
+                                ? "bg-[var(--ide-accent-subtle)] border-[var(--ide-primary)] text-[var(--ide-primary)] shadow-[0_0_8px_rgba(99,102,241,0.2)]"
+                                : "bg-transparent border-[var(--ide-border-strong)] text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:border-[var(--ide-text-secondary)]"
                                 }`}
                             title={inspectorOpen ? "Hide Inspector" : "Show Inspector"}
                         >
@@ -131,65 +138,42 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                 <aside className="w-12 bg-[var(--ide-activity)] flex flex-col items-center py-2 flex-shrink-0 border-r border-[var(--ide-border)]">
                     <ActivityIcon
                         icon="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                        label="Explorer"
-                        active={sidebarOpen}
-                        onClick={toggleExplorer}
+                        label="Explorer (Pages & Files)"
+                        active={sidebarOpen && activeSidebar === "explorer"}
+                        onClick={() => handleActivityClick("explorer")}
                     />
-                    {/* Logic Tab - Code icon */}
-                    <button
-                        className={`w-12 h-10 flex items-center justify-center relative group transition-colors ${activeTab === "logic" ? "text-[var(--ide-text)]" : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
-                            }`}
-                        onClick={() => handleViewTabClick("logic")}
-                        onDoubleClick={() => activeTab === "logic" && handleViewTabClick("canvas")}
-                        title="Logic (Double-click to close)"
-                        aria-label="Logic"
-                    >
-                        {activeTab === "logic" && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--ide-primary)]" />
-                        )}
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                        </svg>
-                    </button>
 
-                    {/* API Tab - Globe/Network icon */}
-                    <button
-                        className={`w-12 h-10 flex items-center justify-center relative group transition-colors ${activeTab === "api" ? "text-[var(--ide-text)]" : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
-                            }`}
-                        onClick={() => handleViewTabClick("api")}
-                        onDoubleClick={() => activeTab === "api" && handleViewTabClick("canvas")}
-                        title="API (Double-click to close)"
-                        aria-label="API"
-                    >
-                        {activeTab === "api" && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--ide-primary)]" />
-                        )}
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                        </svg>
-                    </button>
+                    <ActivityIcon
+                        icon="M4 5h16M4 12h16m-7 7h7"
+                        label="Component Palette"
+                        active={sidebarOpen && activeSidebar === "components"}
+                        onClick={() => handleActivityClick("components")}
+                    />
 
-                    {/* ERD / Schema Tab - Database icon */}
-                    <button
-                        className={`w-12 h-10 flex items-center justify-center relative group transition-colors ${activeTab === "erd" ? "text-[var(--ide-text)]" : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
-                            }`}
-                        onClick={() => handleViewTabClick("erd")}
-                        onDoubleClick={() => activeTab === "erd" && handleViewTabClick("canvas")}
-                        title="Schema (Double-click to close)"
-                        aria-label="Schema"
-                    >
-                        {activeTab === "erd" && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--ide-primary)]" />
-                        )}
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                        </svg>
-                    </button>
+                    <ActivityIcon
+                        icon="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                        label="Logic Flows"
+                        active={sidebarOpen && activeSidebar === "logic"}
+                        onClick={() => handleActivityClick("logic")}
+                    />
+
+                    <ActivityIcon
+                        icon="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9"
+                        label="API Endpoints"
+                        active={sidebarOpen && activeSidebar === "api"}
+                        onClick={() => handleActivityClick("api")}
+                    />
+
+                    <ActivityIcon
+                        icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4"
+                        label="Database Schema"
+                        active={sidebarOpen && activeSidebar === "erd"}
+                        onClick={() => handleActivityClick("erd")}
+                    />
 
                     {/* Spacer pushes bottom icons */}
                     <div className="flex-1" />
 
-                    {/* Home Button - returns to Dashboard */}
                     <button
                         className="w-12 h-10 flex items-center justify-center relative group transition-colors text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
                         onClick={closeProject}
@@ -201,7 +185,6 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                         </svg>
                     </button>
 
-                    {/* Settings Button */}
                     <ActivityIcon
                         icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                         label="Settings"
@@ -210,25 +193,67 @@ const IDELayout: React.FC<IDELayoutProps> = ({
                     />
                 </aside>
 
-                {/* ===== LEFT: Conditional Sidebar (Explorer or Component Palette) ===== */}
+                {/* ===== LEFT: Conditional Sidebar Panel ===== */}
                 {sidebarOpen && (
-                    <aside className="bg-[var(--ide-chrome)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0">
-                        {editMode === "code" ? (
-                            /* Code Mode: File Explorer */
-                            <div className="w-60 flex flex-col h-full">
-                                <div className="h-9 px-4 flex items-center border-b border-[var(--ide-border)]">
-                                    <span className="text-[11px] font-semibold text-[var(--ide-text-secondary)] uppercase tracking-wider">
-                                        Explorer
-                                    </span>
+                    <aside className="bg-[var(--ide-chrome)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0 w-64 overflow-hidden">
+                        <div className="h-9 px-4 flex items-center border-b border-[var(--ide-border)] flex-shrink-0">
+                            <span className="text-[10px] font-black text-[var(--ide-text-secondary)] uppercase tracking-[0.2em]">
+                                {activeSidebar}
+                            </span>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                            {activeSidebar === "explorer" && (
+                                <div className="flex flex-col h-full divide-y divide-[var(--ide-border)]/30">
+                                    <SidebarSection title="Visual Pages" defaultExpanded={true}>
+                                        <PagesList />
+                                    </SidebarSection>
+                                    <SidebarSection title="Files" defaultExpanded={true}>
+                                        {fileTree}
+                                    </SidebarSection>
                                 </div>
-                                <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                                    {fileTree}
+                            )}
+                            {activeSidebar === "components" && <ComponentPalette />}
+                            {activeSidebar === "logic" && (
+                                <div className="py-2">
+                                    <button
+                                        onClick={() => setActiveTab("logic")}
+                                        className={`w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors hover:bg-[var(--ide-bg-hover)] ${activeTab === "logic" ? "text-indigo-400 font-bold bg-indigo-500/5" : "text-[var(--ide-text-secondary)]"}`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        Project Logic Flows
+                                    </button>
                                 </div>
-                            </div>
-                        ) : (
-                            /* Visual Mode: Component Palette */
-                            <ComponentPalette />
-                        )}
+                            )}
+                            {activeSidebar === "api" && (
+                                <div className="py-2">
+                                    <button
+                                        onClick={() => setActiveTab("api")}
+                                        className={`w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors hover:bg-[var(--ide-bg-hover)] ${activeTab === "api" ? "text-indigo-400 font-bold bg-indigo-500/5" : "text-[var(--ide-text-secondary)]"}`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9" />
+                                        </svg>
+                                        API Management
+                                    </button>
+                                </div>
+                            )}
+                            {activeSidebar === "erd" && (
+                                <div className="py-2">
+                                    <button
+                                        onClick={() => setActiveTab("erd")}
+                                        className={`w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors hover:bg-[var(--ide-bg-hover)] ${activeTab === "erd" ? "text-indigo-400 font-bold bg-indigo-500/5" : "text-[var(--ide-text-secondary)]"}`}
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7" />
+                                        </svg>
+                                        Database Schema
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </aside>
                 )}
 

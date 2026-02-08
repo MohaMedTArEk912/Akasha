@@ -43,10 +43,14 @@ const WorkspaceSetup: React.FC = () => {
     };
 
     return (
-        <div className="relative min-h-screen bg-[var(--ide-bg)] text-[var(--ide-text)] flex items-center justify-center p-6 selection:bg-indigo-500/30 overflow-hidden">
+        <div className="relative h-screen bg-[var(--ide-bg)] text-[var(--ide-text)] flex flex-col items-center justify-center p-6 selection:bg-indigo-500/30 overflow-hidden">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(99,102,241,0.12),transparent_35%)]" />
 
-            <div className="absolute top-5 right-6 z-20">
+            {/* Draggable Title Bar Area */}
+            <div
+                className="absolute top-0 left-0 h-12 w-full flex items-center justify-end px-4 z-[100] select-none"
+                data-tauri-drag-region
+            >
                 <WindowControls />
             </div>
 

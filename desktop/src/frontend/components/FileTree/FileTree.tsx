@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
 import { useApi, FileEntry } from "../../hooks/useTauri";
-import { refreshCurrentProject, selectFile } from "../../stores/projectStore";
+import { refreshCurrentProject, selectFile, setEditMode, setActiveTab } from "../../stores/projectStore";
 import PromptModal from "../UI/PromptModal";
 import ConfirmModal from "../Modals/ConfirmModal";
 import { useToast } from "../../context/ToastContext";
@@ -9,9 +9,10 @@ import { useToast } from "../../context/ToastContext";
 interface FileTreeItemProps {
     entry: FileEntry;
     depth: number;
-    onRefresh: () => void;
+    onRefresh: () => Promise<void>;
     onFileSelect: (path: string) => void;
     selectedPath: string | null;
+    refreshVersion: number;
 }
 
 const FileTreeItem: React.FC<FileTreeItemProps> = ({
@@ -20,6 +21,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
     onRefresh,
     onFileSelect,
     selectedPath,
+    refreshVersion,
 }) => {
     const [expanded, setExpanded] = useState(false);
     const [children, setChildren] = useState<FileEntry[]>([]);
@@ -35,31 +37,40 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
     const toast = useToast();
     const isSelected = selectedPath === entry.path;
 
-    // Load children when expanded
-    useEffect(() => {
-        if (entry.is_directory && expanded && children.length === 0) {
-            loadChildren();
-        }
-    }, [expanded, entry.is_directory]);
-
-    const loadChildren = async () => {
+    const loadChildren = useCallback(async () => {
         if (!entry.is_directory) return;
+
         setLoading(true);
         try {
             const result = await api.listDirectory(entry.path);
             setChildren(result.entries);
         } catch (err) {
             console.error("Failed to load directory:", err);
+            setChildren([]);
         } finally {
             setLoading(false);
         }
-    };
+    }, [entry.is_directory, entry.path, api]);
+
+    // Load children when expanded for the first time.
+    useEffect(() => {
+        if (entry.is_directory && expanded && children.length === 0) {
+            loadChildren();
+        }
+    }, [expanded, entry.is_directory, children.length, loadChildren]);
+
+    // Reload expanded directories whenever the root refreshes.
+    useEffect(() => {
+        if (entry.is_directory && expanded) {
+            loadChildren();
+        }
+    }, [refreshVersion, entry.is_directory, expanded, loadChildren]);
 
     const handleClick = () => {
         if (entry.is_directory) {
             setExpanded(!expanded);
             if (!expanded && children.length === 0) {
-                loadChildren();
+                void loadChildren();
             }
         } else {
             onFileSelect(entry.path);
@@ -101,7 +112,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
                 await api.createFolder(newPath);
                 toast.success(`Folder "${name}" created`);
             }
-            onRefresh();
+            await onRefresh();
         } catch (err) {
             const resource = createModalType === "file" ? "file" : "folder";
             toast.error(`Failed to create ${resource}: ${err}`);
@@ -126,7 +137,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
             await api.renameFile(entry.path, newPath);
             setIsRenaming(false);
             toast.success(`Renamed to "${newName}"`);
-            onRefresh();
+            await onRefresh();
         } catch (err) {
             toast.error(`Failed to rename: ${err}`);
             setIsRenaming(false);
@@ -144,7 +155,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
             await api.deleteFile(entry.path);
             toast.success(`${entry.is_directory ? "Folder" : "File"} "${entry.name}" deleted`);
             setDeleteConfirmOpen(false);
-            onRefresh();
+            await onRefresh();
         } catch (err) {
             toast.error(`Failed to delete: ${err}`);
         } finally {
@@ -152,76 +163,42 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
         }
     };
 
-    const getFileIcon = (): string => {
-        if (entry.is_directory) {
-            return expanded
-                ? "M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"
-                : "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z";
-        }
-
-        // File icons based on extension
-        switch (entry.extension?.toLowerCase()) {
-            case "ts":
-            case "tsx":
-                return "M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4";
-            case "js":
-            case "jsx":
-                return "M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25";
-            case "json":
-                return "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4";
-            case "css":
-            case "scss":
-                return "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01";
-            case "html":
-                return "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4";
-            case "md":
-                return "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
-            case "rs":
-                return "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z";
-            default:
-                return "M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z";
-        }
-    };
-
     return (
         <div className="select-none">
             <div
-                className={`group flex items-center gap-1.5 px-2 py-1 cursor-pointer text-[13px] transition-colors ${isSelected
-                    ? "bg-[var(--ide-text)]/10 text-[var(--ide-text)]"
-                    : "text-[var(--ide-text-muted)] hover:bg-[var(--ide-text)]/5 hover:text-[var(--ide-text)]"
+                className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors group relative ${isSelected ? "bg-indigo-500/10 text-indigo-400" : "text-[var(--ide-text-secondary)] hover:bg-[var(--ide-bg-hover)]"
                     }`}
-                style={{ paddingLeft: `${depth * 16 + 8}px` }}
+                style={{ paddingLeft: `${depth * 12 + 8}px` }}
                 onClick={handleClick}
                 onContextMenu={handleContextMenu}
             >
-                {/* Expand/Collapse Arrow */}
-                <div className="w-4 flex items-center justify-center flex-shrink-0">
-                    {entry.is_directory && (
-                        <svg
-                            className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                        </svg>
-                    )}
-                </div>
+                {entry.is_directory ? (
+                    <svg
+                        className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                    </svg>
+                ) : (
+                    <div className="w-3.5" />
+                )}
 
                 {/* Icon */}
-                <svg
-                    className={`w-4 h-4 flex-shrink-0 ${entry.is_directory ? "text-[var(--ide-text-muted)]" : "text-[var(--ide-text-muted)]"}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={getFileIcon()} />
+                <svg className={`w-4 h-4 ${isSelected ? "text-indigo-400" : "text-[var(--ide-text-muted)]"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {entry.is_directory ? (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    )}
                 </svg>
 
                 {/* Name */}
                 {isRenaming ? (
                     <input
-                        type="text"
+                        autoFocus
+                        className="flex-1 bg-indigo-500/10 border-none outline-none text-[12px] h-5 px-1 py-0"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         onBlur={submitRename}
@@ -229,61 +206,56 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
                             if (e.key === "Enter") submitRename();
                             if (e.key === "Escape") setIsRenaming(false);
                         }}
-                        autoFocus
-                        className="flex-1 bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded px-1 py-0.5 text-[13px] text-[var(--ide-text)] outline-none"
                         onClick={(e) => e.stopPropagation()}
                     />
                 ) : (
-                    <span className={`truncate ${isSelected ? "font-medium" : ""}`}>
-                        {entry.name}
-                    </span>
-                )}
-
-                {/* Loading indicator */}
-                {loading && (
-                    <div className="w-3 h-3 border border-t-transparent border-[var(--ide-text-muted)] rounded-full animate-spin" />
+                    <span className="text-[12px] truncate">{entry.name}</span>
                 )}
             </div>
 
-            {/* Children */}
+            {/* Nested scope */}
             {entry.is_directory && expanded && (
-                <div>
-                    {children.map((child) => (
-                        <FileTreeItem
-                            key={child.path}
-                            entry={child}
-                            depth={depth + 1}
-                            onRefresh={() => {
-                                loadChildren();
-                                onRefresh();
-                            }}
-                            onFileSelect={onFileSelect}
-                            selectedPath={selectedPath}
-                        />
-                    ))}
+                <div className="flex flex-col">
+                    {loading && children.length === 0 ? (
+                        <div className="py-1 text-[11px] text-[var(--ide-text-muted)] italic" style={{ paddingLeft: `${(depth + 1) * 12 + 24}px` }}>
+                            Loading...
+                        </div>
+                    ) : (
+                        children.map((child) => (
+                            <FileTreeItem
+                                key={child.path}
+                                entry={child}
+                                depth={depth + 1}
+                                onRefresh={onRefresh}
+                                onFileSelect={onFileSelect}
+                                selectedPath={selectedPath}
+                                refreshVersion={refreshVersion}
+                            />
+                        ))
+                    )}
                 </div>
             )}
 
             {/* Context Menu */}
             {contextMenu && (
                 <>
-                    <div className="fixed inset-0 z-[99]" onClick={closeContextMenu} />
+                    <div className="fixed inset-0 z-40" onClick={closeContextMenu} />
                     <div
-                        className="fixed z-[100] bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg shadow-xl py-1 min-w-[160px]"
-                        style={{ left: contextMenu.x, top: contextMenu.y }}
+                        className="fixed z-50 bg-[var(--ide-panel)] border border-[var(--ide-border)] rounded shadow-xl py-1 min-w-[160px]"
+                        style={{ top: contextMenu.y, left: contextMenu.x }}
                     >
                         <button
                             onClick={handleNewFile}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--ide-text)] hover:bg-[var(--ide-text)]/10 transition-colors"
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--ide-text)] hover:bg-[var(--ide-bg-hover)] transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4v16m8-8H4" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             New File
                         </button>
                         <button
                             onClick={handleNewFolder}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--ide-text)] hover:bg-[var(--ide-text)]/10 transition-colors"
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--ide-text)] hover:bg-[var(--ide-bg-hover)] transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
@@ -293,7 +265,7 @@ const FileTreeItem: React.FC<FileTreeItemProps> = ({
                         <div className="h-px bg-[var(--ide-border)] my-1" />
                         <button
                             onClick={handleRename}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--ide-text)] hover:bg-[var(--ide-text)]/10 transition-colors"
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-[var(--ide-text)] hover:bg-[var(--ide-bg-hover)] transition-colors"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -355,6 +327,7 @@ const FileTree: React.FC = () => {
     const [entries, setEntries] = useState<FileEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [refreshVersion, setRefreshVersion] = useState(0);
 
     const api = useApi();
 
@@ -366,13 +339,14 @@ const FileTree: React.FC = () => {
         try {
             const result = await api.listDirectory();
             setEntries(result.entries);
+            setRefreshVersion((prev) => prev + 1);
         } catch (err) {
             console.error("Failed to load file tree:", err);
             setError(String(err));
         } finally {
             setLoading(false);
         }
-    }, [project?.root_path]);
+    }, [project?.root_path, api]);
 
     useEffect(() => {
         loadRootDirectory();
@@ -380,6 +354,8 @@ const FileTree: React.FC = () => {
 
     const handleFileSelect = (path: string) => {
         selectFile(path);
+        setEditMode("code");
+        setActiveTab("canvas");
     };
 
     if (!project) {
@@ -488,6 +464,7 @@ const FileTree: React.FC = () => {
                             onRefresh={loadRootDirectory}
                             onFileSelect={handleFileSelect}
                             selectedPath={selectedFilePath}
+                            refreshVersion={refreshVersion}
                         />
                     ))
                 )}

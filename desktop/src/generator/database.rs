@@ -148,7 +148,7 @@ pub struct GeneratedFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{FieldSchema, FieldType};
+    use crate::schema::data_model::{FieldSchema, FieldType};
 
     #[test]
     fn test_generate_prisma_schema() {

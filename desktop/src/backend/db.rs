@@ -137,6 +137,9 @@ impl Database {
             [],
         )?;
 
+        // Migration: add classes_json column to blocks (ignore error if exists)
+        let _ = conn.execute("ALTER TABLE blocks ADD COLUMN classes_json TEXT DEFAULT '[]'", []);
+
         Ok(())
     }
     
@@ -257,7 +260,7 @@ impl Database {
             for p in pages { project.pages.push(p?); }
             
             // Load blocks
-            let mut stmt = conn.prepare("SELECT * FROM blocks WHERE project_id = ? AND archived = 0 ORDER BY block_order")?;
+            let mut stmt = conn.prepare("SELECT id, project_id, page_id, parent_id, block_type, name, properties_json, styles_json, events_json, archived, block_order, classes_json FROM blocks WHERE project_id = ? AND archived = 0 ORDER BY block_order")?;
             let blocks = stmt.query_map([&project.id], |row| {
                 let block_type_str: String = row.get(4)?;
                 let block_type = match block_type_str.as_str() {
@@ -297,11 +300,13 @@ impl Database {
                         }
                     }
                 };
-                
+
+                let classes_json: String = row.get::<_, String>(11).unwrap_or_else(|_| "[]".to_string());
+
                 Ok(BlockSchema {
                     id: row.get(0)?,
                     parent_id: row.get(3)?,
-                    block_type, 
+                    block_type,
                     name: row.get(5)?,
                     properties: serde_json::from_str(&row.get::<_, String>(6)?).unwrap_or_default(),
                     styles: serde_json::from_str(&row.get::<_, String>(7)?).unwrap_or_default(),
@@ -310,12 +315,23 @@ impl Database {
                     order: row.get(10)?,
                     children: Vec::new(),
                     responsive_styles: std::collections::HashMap::new(),
-                    classes: Vec::new(),
+                    classes: serde_json::from_str(&classes_json).unwrap_or_default(),
                     physical_path: None,
                     version_hash: None,
                 })
             })?;
             for b in blocks { project.blocks.push(b?); }
+
+            // Reconstruct children arrays from parent_id relationships
+            let id_parent_pairs: Vec<(String, Option<String>)> = project.blocks.iter()
+                .map(|b| (b.id.clone(), b.parent_id.clone()))
+                .collect();
+            for block in &mut project.blocks {
+                block.children = id_parent_pairs.iter()
+                    .filter(|(_, pid)| pid.as_deref() == Some(&block.id))
+                    .map(|(id, _)| id.clone())
+                    .collect();
+            }
             
             // Load APIs
             let mut stmt = conn.prepare("SELECT * FROM apis WHERE project_id = ? AND archived = 0")?;
@@ -489,8 +505,8 @@ impl Database {
             };
             let page_id = block_page_map.get(&block.id).cloned();
             conn.execute(
-                "INSERT OR REPLACE INTO blocks (id, project_id, page_id, parent_id, block_type, name, properties_json, styles_json, events_json, archived, block_order)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                "INSERT OR REPLACE INTO blocks (id, project_id, page_id, parent_id, block_type, name, properties_json, styles_json, events_json, archived, block_order, classes_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                  params![
                      block.id,
                      project.id,
@@ -502,7 +518,8 @@ impl Database {
                      serde_json::to_string(&block.styles).unwrap(),
                      serde_json::to_string(&block.events).unwrap(),
                      block.archived,
-                     idx as i32
+                     idx as i32,
+                     serde_json::to_string(&block.classes).unwrap()
                  ]
             )?;
         }

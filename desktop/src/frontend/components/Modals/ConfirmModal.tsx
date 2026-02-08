@@ -11,7 +11,14 @@ interface ConfirmModalProps {
     onConfirm: () => void;
     onCancel: () => void;
     isLoading?: boolean;
+    /** Optional checkbox configuration */
+    checkboxConfig?: {
+        label: string;
+        checked: boolean;
+        onChange: (checked: boolean) => void;
+    };
 }
+
 
 /**
  * A premium confirmation modal component with rich visual design.
@@ -27,7 +34,9 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     onConfirm,
     onCancel,
     isLoading = false,
+    checkboxConfig,
 }) => {
+
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -114,12 +123,28 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                     </div>
 
                     {/* Text */}
-                    <div className="text-center mb-8">
+                    <div className="text-center mb-6">
                         <h3 className="text-2xl font-bold text-[var(--ide-text)] mb-3 tracking-tight">{title}</h3>
                         <p className="text-base text-[var(--ide-text-secondary)] leading-relaxed max-w-sm mx-auto">{message}</p>
                     </div>
 
+                    {/* Optional Checkbox */}
+                    {checkboxConfig && (
+                        <label className="flex items-center justify-center gap-3 mb-6 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={checkboxConfig.checked}
+                                onChange={(e) => checkboxConfig.onChange(e.target.checked)}
+                                className="w-5 h-5 rounded-md border-2 border-[var(--ide-border-strong)] bg-[var(--ide-bg-elevated)] checked:bg-red-500 checked:border-red-500 focus:ring-2 focus:ring-red-500/30 transition-all cursor-pointer"
+                            />
+                            <span className="text-sm text-[var(--ide-text-secondary)] group-hover:text-[var(--ide-text)] transition-colors">
+                                {checkboxConfig.label}
+                            </span>
+                        </label>
+                    )}
+
                     {/* Actions */}
+
                     <div className="flex gap-4">
                         <button
                             onClick={onCancel}

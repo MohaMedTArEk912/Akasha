@@ -201,20 +201,20 @@ mod tests {
     #[test]
     fn test_build_file_tree() {
         let mut project = ProjectSchema::new("proj-1", "Test App");
-        project.add_page(PageSchema::new("page-2", "About", "/about"));
-        project.add_api(ApiSchema::new("api-1", HttpMethod::Get, "/users", "Get Users"));
-        
+        project.add_page(PageSchema::new("page-extra", "Dashboard", "/dashboard"));
+        project.add_api(ApiSchema::new("api-extra", HttpMethod::Get, "/health", "Health Check"));
+
         let tree = build_file_tree(&project);
-        
+
         assert_eq!(tree.name, "Test App");
         assert_eq!(tree.children.len(), 5); // pages, components, api, models, flows
-        
-        // Pages folder should have 2 pages (Home + About)
+
+        // Pages folder should have 4 pages (Home + About + Contact defaults + Dashboard)
         let pages = tree.children.iter().find(|c| c.name == "Pages").unwrap();
-        assert_eq!(pages.children.len(), 2);
-        
-        // API folder should have 1 endpoint
+        assert_eq!(pages.children.len(), 4);
+
+        // API folder should have 6 endpoints (5 defaults + Health Check)
         let api = tree.children.iter().find(|c| c.name == "API").unwrap();
-        assert_eq!(api.children.len(), 1);
+        assert_eq!(api.children.len(), 6);
     }
 }

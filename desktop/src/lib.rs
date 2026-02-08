@@ -9,7 +9,7 @@
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::{Manager, State};
+use tauri::State;
 use tokio::net::TcpListener;
 
 // Module declarations
@@ -563,12 +563,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            if let Some(window) = app.get_webview_window("main") {
-                if let Err(err) = window.set_fullscreen(true) {
-                    log::error!("Failed to set fullscreen on startup: {}", err);
-                }
-            }
+        .setup(|_app| {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -28,7 +28,8 @@ type InspectorTab = "properties" | "styles" | "events";
 type GlobalTab = "layers" | "pages" | "assets";
 
 const Inspector: React.FC = () => {
-    const { selectedBlockId, project, selectedPageId } = useProjectStore();
+    const { selectedBlockId, project } = useProjectStore();
+
     const [activeTab, setActiveTab] = useState<InspectorTab>("properties");
     const [globalTab, setGlobalTab] = useState<GlobalTab>("layers");
     const toast = useToast();

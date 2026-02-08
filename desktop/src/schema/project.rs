@@ -7,9 +7,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    BlockSchema, ApiSchema, DataModelSchema, LogicFlowSchema, 
+    BlockSchema, BlockType, ApiSchema, HttpMethod, DataModelSchema, LogicFlowSchema,
     VariableSchema, PageSchema
 };
+use super::data_model::{FieldSchema, FieldType, DefaultValue};
 
 /// The master project schema - contains the entire project state
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,37 +201,173 @@ impl ProjectSchema {
     /// Current schema version
     pub const CURRENT_VERSION: &'static str = "1.0.0";
     
-    /// Create a new empty project
-    /// 
+    /// Create a new project with default content
+    ///
     /// # Arguments
     /// * `id` - Unique project identifier
     /// * `name` - Project name
-    /// 
+    ///
     /// # Returns
-    /// A new ProjectSchema with default settings and an initial home page
+    /// A new ProjectSchema with default pages (Home, About, Contact),
+    /// starter blocks, a User data model, and CRUD API endpoints
     pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
         let id_str = id.into();
+        let name_str = name.into();
         let now = Utc::now();
-        
-        // Create default home page
-        let home_page = PageSchema::new(
-            format!("{}-home", &id_str),
-            "Home",
-            "/"
-        );
-        
+
+        // ===== Pages =====
+        let home_page_id = format!("{}-home", &id_str);
+        let about_page_id = format!("{}-about", &id_str);
+        let contact_page_id = format!("{}-contact", &id_str);
+
+        let home_root_id = format!("{}-home-root", &id_str);
+        let about_root_id = format!("{}-about-root", &id_str);
+        let contact_root_id = format!("{}-contact-root", &id_str);
+
+        let mut home_page = PageSchema::new(&home_page_id, "Home", "/");
+        home_page.root_block_id = Some(home_root_id.clone());
+
+        let mut about_page = PageSchema::new(&about_page_id, "About", "/about");
+        about_page.root_block_id = Some(about_root_id.clone());
+
+        let mut contact_page = PageSchema::new(&contact_page_id, "Contact", "/contact");
+        contact_page.root_block_id = Some(contact_root_id.clone());
+
+        // ===== Home Page Blocks =====
+        let header_id = format!("{}-header", &id_str);
+        let header_title_id = format!("{}-header-title", &id_str);
+        let hero_id = format!("{}-hero", &id_str);
+        let hero_heading_id = format!("{}-hero-heading", &id_str);
+        let hero_text_id = format!("{}-hero-text", &id_str);
+        let hero_btn_id = format!("{}-hero-btn", &id_str);
+        let footer_id = format!("{}-footer", &id_str);
+        let footer_text_id = format!("{}-footer-text", &id_str);
+
+        let mut home_root = BlockSchema::new(&home_root_id, BlockType::Container, "Page Root");
+        home_root.children = vec![header_id.clone(), hero_id.clone(), footer_id.clone()];
+        home_root.order = 0;
+
+        let mut header = BlockSchema::new(&header_id, BlockType::Section, "Header");
+        header.parent_id = Some(home_root_id.clone());
+        header.children = vec![header_title_id.clone()];
+        header.order = 0;
+        header.classes = ["bg-white", "shadow-sm", "py-4", "px-6"].iter().map(|s| s.to_string()).collect();
+
+        let mut header_title = BlockSchema::new(&header_title_id, BlockType::Heading, "Site Title");
+        header_title.parent_id = Some(header_id.clone());
+        header_title.order = 0;
+        header_title.classes = ["text-xl", "font-bold", "text-indigo-600"].iter().map(|s| s.to_string()).collect();
+        header_title.properties.insert("text".into(), serde_json::Value::String(name_str.clone()));
+
+        let mut hero = BlockSchema::new(&hero_id, BlockType::Section, "Hero");
+        hero.parent_id = Some(home_root_id.clone());
+        hero.children = vec![hero_heading_id.clone(), hero_text_id.clone(), hero_btn_id.clone()];
+        hero.order = 1;
+        hero.classes = ["py-20", "px-6", "text-center"].iter().map(|s| s.to_string()).collect();
+
+        let mut hero_heading = BlockSchema::new(&hero_heading_id, BlockType::Heading, "Hero Title");
+        hero_heading.parent_id = Some(hero_id.clone());
+        hero_heading.order = 0;
+        hero_heading.classes = ["text-4xl", "font-bold", "text-gray-900", "mb-4"].iter().map(|s| s.to_string()).collect();
+        hero_heading.properties.insert("text".into(), serde_json::Value::String(format!("Welcome to {}", &name_str)));
+
+        let mut hero_text = BlockSchema::new(&hero_text_id, BlockType::Paragraph, "Hero Description");
+        hero_text.parent_id = Some(hero_id.clone());
+        hero_text.order = 1;
+        hero_text.classes = ["text-lg", "text-gray-600", "mb-8"].iter().map(|s| s.to_string()).collect();
+        hero_text.properties.insert("text".into(), serde_json::Value::String("Build something amazing with your new project.".into()));
+
+        let mut hero_btn = BlockSchema::new(&hero_btn_id, BlockType::Button, "Get Started");
+        hero_btn.parent_id = Some(hero_id.clone());
+        hero_btn.order = 2;
+        hero_btn.classes = ["bg-indigo-600", "text-white", "px-6", "py-3", "rounded-lg"].iter().map(|s| s.to_string()).collect();
+        hero_btn.properties.insert("text".into(), serde_json::Value::String("Get Started".into()));
+
+        let mut footer = BlockSchema::new(&footer_id, BlockType::Section, "Footer");
+        footer.parent_id = Some(home_root_id.clone());
+        footer.children = vec![footer_text_id.clone()];
+        footer.order = 2;
+        footer.classes = ["py-8", "px-6", "text-center", "bg-gray-50", "border-t"].iter().map(|s| s.to_string()).collect();
+
+        let mut footer_text = BlockSchema::new(&footer_text_id, BlockType::Paragraph, "Copyright");
+        footer_text.parent_id = Some(footer_id.clone());
+        footer_text.order = 0;
+        footer_text.classes = ["text-sm", "text-gray-500"].iter().map(|s| s.to_string()).collect();
+        footer_text.properties.insert("text".into(), serde_json::Value::String(format!("\u{00A9} 2025 {}. All rights reserved.", &name_str)));
+
+        // ===== About Page Blocks =====
+        let about_heading_id = format!("{}-about-heading", &id_str);
+        let about_text_id = format!("{}-about-text", &id_str);
+
+        let mut about_root = BlockSchema::new(&about_root_id, BlockType::Container, "Page Root");
+        about_root.children = vec![about_heading_id.clone(), about_text_id.clone()];
+        about_root.order = 0;
+
+        let mut about_heading = BlockSchema::new(&about_heading_id, BlockType::Heading, "About Title");
+        about_heading.parent_id = Some(about_root_id.clone());
+        about_heading.order = 0;
+        about_heading.classes = ["text-3xl", "font-bold", "text-gray-900", "mb-4", "px-6", "pt-10"].iter().map(|s| s.to_string()).collect();
+        about_heading.properties.insert("text".into(), serde_json::Value::String("About Us".into()));
+
+        let mut about_text = BlockSchema::new(&about_text_id, BlockType::Paragraph, "About Description");
+        about_text.parent_id = Some(about_root_id.clone());
+        about_text.order = 1;
+        about_text.classes = ["text-lg", "text-gray-600", "px-6"].iter().map(|s| s.to_string()).collect();
+        about_text.properties.insert("text".into(), serde_json::Value::String("Learn more about our project and what we do.".into()));
+
+        // ===== Contact Page Blocks =====
+        let contact_heading_id = format!("{}-contact-heading", &id_str);
+        let contact_text_id = format!("{}-contact-text", &id_str);
+
+        let mut contact_root = BlockSchema::new(&contact_root_id, BlockType::Container, "Page Root");
+        contact_root.children = vec![contact_heading_id.clone(), contact_text_id.clone()];
+        contact_root.order = 0;
+
+        let mut contact_heading = BlockSchema::new(&contact_heading_id, BlockType::Heading, "Contact Title");
+        contact_heading.parent_id = Some(contact_root_id.clone());
+        contact_heading.order = 0;
+        contact_heading.classes = ["text-3xl", "font-bold", "text-gray-900", "mb-4", "px-6", "pt-10"].iter().map(|s| s.to_string()).collect();
+        contact_heading.properties.insert("text".into(), serde_json::Value::String("Contact Us".into()));
+
+        let mut contact_text = BlockSchema::new(&contact_text_id, BlockType::Paragraph, "Contact Description");
+        contact_text.parent_id = Some(contact_root_id.clone());
+        contact_text.order = 1;
+        contact_text.classes = ["text-lg", "text-gray-600", "px-6"].iter().map(|s| s.to_string()).collect();
+        contact_text.properties.insert("text".into(), serde_json::Value::String("Get in touch with us. We would love to hear from you.".into()));
+
+        // ===== Default Data Model: User =====
+        let user_model_id = format!("{}-model-user", &id_str);
+        let user_model = DataModelSchema::new(&user_model_id, "User")
+            .with_field(FieldSchema::new(format!("{}-field-email", &id_str), "email", FieldType::Email).unique())
+            .with_field(FieldSchema::new(format!("{}-field-name", &id_str), "name", FieldType::String))
+            .with_field(FieldSchema::new(format!("{}-field-role", &id_str), "role", FieldType::String)
+                .with_default(DefaultValue::Static { value: "user".into() }));
+
+        // ===== Default API Endpoints =====
+        let api_list = ApiSchema::new(format!("{}-api-list-users", &id_str), HttpMethod::Get, "/api/users", "List Users");
+        let api_create = ApiSchema::new(format!("{}-api-create-user", &id_str), HttpMethod::Post, "/api/users", "Create User");
+        let api_get = ApiSchema::new(format!("{}-api-get-user", &id_str), HttpMethod::Get, "/api/users/:id", "Get User");
+        let api_update = ApiSchema::new(format!("{}-api-update-user", &id_str), HttpMethod::Put, "/api/users/:id", "Update User");
+        let api_delete = ApiSchema::new(format!("{}-api-delete-user", &id_str), HttpMethod::Delete, "/api/users/:id", "Delete User");
+
         Self {
             version: Self::CURRENT_VERSION.into(),
             id: id_str,
-            name: name.into(),
+            name: name_str,
             description: None,
             created_at: now,
             updated_at: now,
-            blocks: Vec::new(),
-            pages: vec![home_page],
-            apis: Vec::new(),
+            blocks: vec![
+                home_root, header, header_title,
+                hero, hero_heading, hero_text, hero_btn,
+                footer, footer_text,
+                about_root, about_heading, about_text,
+                contact_root, contact_heading, contact_text,
+            ],
+            pages: vec![home_page, about_page, contact_page],
+            apis: vec![api_list, api_create, api_get, api_update, api_delete],
             logic_flows: Vec::new(),
-            data_models: Vec::new(),
+            data_models: vec![user_model],
             variables: Vec::new(),
             settings: ProjectSettings::default(),
             root_path: None,
@@ -379,9 +516,18 @@ mod tests {
         assert_eq!(project.id, "proj-1");
         assert_eq!(project.name, "My App");
         assert_eq!(project.version, ProjectSchema::CURRENT_VERSION);
-        // Should have default home page
-        assert_eq!(project.pages.len(), 1);
+        // Should have 3 default pages
+        assert_eq!(project.pages.len(), 3);
         assert_eq!(project.pages[0].path, "/");
+        assert_eq!(project.pages[1].path, "/about");
+        assert_eq!(project.pages[2].path, "/contact");
+        // Should have default blocks
+        assert_eq!(project.blocks.len(), 15);
+        // Should have default User data model
+        assert_eq!(project.data_models.len(), 1);
+        assert_eq!(project.data_models[0].name, "User");
+        // Should have 5 CRUD API endpoints
+        assert_eq!(project.apis.len(), 5);
     }
     
     #[test]

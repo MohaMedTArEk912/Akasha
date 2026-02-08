@@ -219,11 +219,12 @@ export async function renameProject(name: string): Promise<void> {
 
 /**
  * Reset the current project to initial state
+ * @param clearDiskFiles - If true, clears all files in the project folder before resetting
  */
-export async function resetProject(): Promise<void> {
+export async function resetProject(clearDiskFiles?: boolean): Promise<void> {
     updateState(() => ({ loading: true, error: null }));
     try {
-        const project = await api.resetProject();
+        const project = await api.resetProject(clearDiskFiles);
         updateState(() => ({
             project,
             selectedPageId: getFirstActivePageId(project),
@@ -236,6 +237,7 @@ export async function resetProject(): Promise<void> {
         updateState(() => ({ loading: false }));
     }
 }
+
 
 /**
  * Create a new project in the workspace
@@ -337,11 +339,13 @@ export async function openProject(id: string): Promise<void> {
 
 /**
  * Delete a project
+ * @param deleteFromDisk - If true, also deletes the project folder from disk
  */
-export async function deleteProject(id: string): Promise<void> {
-    await api.deleteProjectById(id);
+export async function deleteProject(id: string, deleteFromDisk?: boolean): Promise<void> {
+    await api.deleteProjectById(id, deleteFromDisk);
     await initWorkspace();
 }
+
 
 /**
  * Return to dashboard

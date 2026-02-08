@@ -59,11 +59,37 @@ pub async fn load_project(
     Ok(Json(project))
 }
 
+/// Delete project request
+#[derive(Debug, Deserialize)]
+pub struct DeleteProjectRequest {
+    pub delete_from_disk: Option<bool>,
+}
+
 /// Delete project
 pub async fn delete_project(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    body: Option<Json<DeleteProjectRequest>>,
 ) -> Result<Json<bool>, ApiError> {
+    // Get project info before deleting
+    let project = state.get_project_by_id(&id).await;
+    
+    // Delete from disk if requested and project has root_path
+    if let Some(Json(req)) = body {
+        if req.delete_from_disk.unwrap_or(false) {
+            if let Some(proj) = &project {
+                if let Some(root_path) = &proj.root_path {
+                    let path = std::path::PathBuf::from(root_path);
+                    if path.exists() {
+                        std::fs::remove_dir_all(&path).map_err(|e| {
+                            ApiError::Internal(format!("Failed to delete project folder: {}", e))
+                        })?;
+                    }
+                }
+            }
+        }
+    }
+    
     let success = state.delete_project(&id).await;
     Ok(Json(success))
 }

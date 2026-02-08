@@ -162,12 +162,48 @@ pub async fn rename_project(
     Ok(Json(project))
 }
 
+/// Reset project request
+#[derive(Debug, Deserialize)]
+pub struct ResetProjectRequest {
+    pub clear_disk_files: Option<bool>,
+}
+
 /// Reset current project
 pub async fn reset_project(
     State(state): State<AppState>,
+    body: Option<Json<ResetProjectRequest>>,
 ) -> Result<Json<ProjectSchema>, ApiError> {
     let current = state.get_project().await
         .ok_or_else(|| ApiError::NotFound("No project loaded".into()))?;
+    
+    // Optionally clear disk files before resetting
+    let should_clear_disk = body.map(|b| b.0.clear_disk_files.unwrap_or(false)).unwrap_or(false);
+    
+    if should_clear_disk {
+        if let Some(root_path) = &current.root_path {
+            let path = std::path::PathBuf::from(root_path);
+            if path.exists() {
+                // Remove all contents but keep the root folder
+                for entry in std::fs::read_dir(&path).map_err(|e| {
+                    ApiError::Internal(format!("Failed to read project folder: {}", e))
+                })? {
+                    let entry = entry.map_err(|e| {
+                        ApiError::Internal(format!("Failed to read directory entry: {}", e))
+                    })?;
+                    let entry_path = entry.path();
+                    if entry_path.is_dir() {
+                        std::fs::remove_dir_all(&entry_path).map_err(|e| {
+                            ApiError::Internal(format!("Failed to delete subfolder: {}", e))
+                        })?;
+                    } else {
+                        std::fs::remove_file(&entry_path).map_err(|e| {
+                            ApiError::Internal(format!("Failed to delete file: {}", e))
+                        })?;
+                    }
+                }
+            }
+        }
+    }
     
     // Create a fresh project with same ID and name
     let mut new_project = ProjectSchema::new(current.id, current.name);
@@ -179,11 +215,11 @@ pub async fn reset_project(
     if let Some(root) = &new_project.root_path {
         let engine = crate::generator::sync_engine::SyncEngine::new(root);
         
-        // Re-init structure (clears config)
+        // Re-init structure (creates fresh boilerplate)
         engine.init_project_structure(&new_project)
             .map_err(|e| ApiError::Internal(format!("Sync reset error: {}", e)))?;
             
-        // Sync the default Home page (clears existing code)
+        // Sync the default Home page
         for page in &new_project.pages {
             engine.sync_page_to_disk(&page.id, &new_project)
                 .map_err(|e| ApiError::Internal(format!("Sync page reset error: {}", e)))?;

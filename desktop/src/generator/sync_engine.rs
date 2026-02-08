@@ -187,7 +187,7 @@ import Home from '../page/Home';
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen">
         <Routes>
           <Route path="/" element={<Home />} />
         </Routes>

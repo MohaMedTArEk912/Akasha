@@ -225,7 +225,9 @@ export function useApi() {
 
         loadProjectById: (id: string) => apiCall<ProjectSchema>('GET', `/api/workspace/projects/${id}`),
 
-        deleteProjectById: (id: string) => apiCall<boolean>('DELETE', `/api/workspace/projects/${id}`),
+        deleteProjectById: (id: string, deleteFromDisk?: boolean) =>
+            apiCall<boolean>('DELETE', `/api/workspace/projects/${id}`, deleteFromDisk ? { delete_from_disk: true } : undefined),
+
 
         // Project operations
         getProject: async () => {
@@ -239,8 +241,9 @@ export function useApi() {
         renameProject: (name: string) =>
             apiCall<ProjectSchema>('PATCH', '/api/project', { name }),
 
-        resetProject: () =>
-            apiCall<ProjectSchema>('POST', '/api/project/reset'),
+        resetProject: (clearDiskFiles?: boolean) =>
+            apiCall<ProjectSchema>('POST', '/api/project/reset', clearDiskFiles ? { clear_disk_files: true } : undefined),
+
 
         importProjectJson: (json: string) =>
             apiCall<ProjectSchema>('POST', '/api/project/import', { json }),

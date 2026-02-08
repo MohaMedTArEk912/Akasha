@@ -30,12 +30,16 @@ impl AppState {
         })
     }
 
-    /// Get current project from DB (returns the most recently updated project)
+    /// Get current project from DB (returns the most recently updated project, fully loaded)
     pub async fn get_project(&self) -> Option<ProjectSchema> {
-        self.db.get_all_projects()
+        let projects = self.db.get_all_projects()
             .map_err(|e| log::error!("Failed to load projects: {}", e))
-            .ok()
-            .and_then(|vals| vals.first().cloned())
+            .ok()?;
+        let first = projects.first()?;
+        self.db.get_project_by_id(&first.id).unwrap_or_else(|e| {
+            log::error!("Failed to load full project {}: {}", first.id, e);
+            None
+        })
     }
 
     /// Get project by ID
