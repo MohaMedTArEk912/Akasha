@@ -875,7 +875,7 @@ export default App;
         // Regex for basic prop extraction from the first tag in the block
         // Matches <tag className="...">Content</tag>
         let prop_re =
-            regex::Regex::new(r#"<([a-z0-9]+)\s+className="([^"]*)"\s*>(.*?)</\1>"#).unwrap();
+            regex::Regex::new(r#"<([a-z0-9]+)[^>]*\bclassName="([^"]*)"\b[^>]*>([^<]*)</[a-z0-9]+>"#).unwrap();
 
         for cap in block_re.captures_iter(file_content) {
             let id = cap[1].to_string();
