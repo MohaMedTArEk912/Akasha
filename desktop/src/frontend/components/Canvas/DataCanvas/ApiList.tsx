@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { addApi, archiveApi, addLogicFlow, setActiveTab, updateEndpoint } from "../../../stores/projectStore";
+import { addApi, archiveApi, addLogicFlow, setActivePage, updateEndpoint } from "../../../stores/projectStore";
 import { useProjectStore } from "../../../hooks/useProjectStore";
 import PromptModal from "../../UI/PromptModal";
 import { useToast } from "../../../context/ToastContext";
@@ -483,8 +483,8 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
                                 try {
                                     const flow = await addLogicFlow(`${api.name}_handler`, "backend");
                                     await updateEndpoint(api.id, { logic_flow_id: flow.id });
-                                    toast.success("Logic flow created and linked — switching to Logic tab");
-                                    setActiveTab("logic");
+                                    toast.success("Logic flow created and linked — switching to Use Cases");
+                                    setActivePage("usecases");
                                 } catch (err) {
                                     toast.error(`Failed to create logic flow: ${err}`);
                                 }

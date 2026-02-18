@@ -242,6 +242,12 @@ export interface GitStatus {
     total_commits: number;
 }
 
+export interface DiagramEntry {
+    name: string;
+    path: string;
+    last_modified?: number;
+}
+
 // ===== API Functions (all via Tauri IPC) =====
 
 /**
@@ -489,6 +495,22 @@ export function useApi() {
 
         gitGetFileContent: (filePath: string, revision: string) =>
             invoke<string>("ipc_git_get_file_content", { filePath, revision }),
+
+        // ─── Diagrams ───────────────────────────────────
+        listDiagrams: () =>
+            invoke<DiagramEntry[]>('ipc_list_diagrams'),
+
+        createDiagram: (name: string) =>
+            invoke<DiagramEntry>('ipc_create_diagram', { name }),
+
+        readDiagram: (name: string) =>
+            invoke<string>('ipc_read_diagram', { name }),
+
+        saveDiagram: (name: string, content: string) =>
+            invoke<boolean>('ipc_save_diagram', { name, content }),
+
+        deleteDiagram: (name: string) =>
+            invoke<boolean>('ipc_delete_diagram', { name }),
     };
 }
 

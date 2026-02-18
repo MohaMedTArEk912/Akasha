@@ -17,7 +17,7 @@ interface ProjectState {
     selectedBlockId: string | null;
     selectedPageId: string | null;
     selectedComponentId: string | null;
-    activeTab: "canvas" | "logic" | "api" | "erd" | "variables";
+    activePage: "dashboard" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
     viewport: "desktop" | "tablet" | "mobile";
     editMode: "visual" | "code";
     inspectorOpen: boolean;
@@ -52,7 +52,7 @@ const initialState: ProjectState = {
     selectedBlockId: null,
     selectedPageId: null,
     selectedComponentId: null,
-    activeTab: "canvas",
+    activePage: "ui",
     viewport: "desktop",
     editMode: "visual",
     inspectorOpen: true,
@@ -306,6 +306,7 @@ export async function createProject(name: string): Promise<void> {
             project,
             selectedPageId: getFirstActivePageId(project),
             isDashboardActive: false,
+            activePage: "dashboard",
             loadingMessage: null,
             openPageIds: allActivePageIds(project),
         }));
@@ -345,6 +346,7 @@ export async function openProject(id: string): Promise<void> {
             project,
             selectedPageId: getFirstActivePageId(project),
             isDashboardActive: false,
+            activePage: "dashboard",
             openPageIds: allActivePageIds(project),
         }));
 
@@ -487,7 +489,7 @@ export function selectComponent(componentId: string | null): void {
         selectedComponentId: componentId,
         selectedPageId: null, // Deselect page
         selectedBlockId: null, // Deselect any page block
-        activeTab: "canvas",
+        activePage: "ui",
         isDashboardActive: false
     }));
 }
@@ -498,7 +500,7 @@ export function selectComponent(componentId: string | null): void {
 export function closeComponentEditor(): void {
     updateState(() => ({
         selectedComponentId: null,
-        activeTab: "canvas",
+        activePage: "ui",
         isDashboardActive: true
     }));
 }
@@ -706,7 +708,7 @@ export async function addPage(name: string, path: string): Promise<PageSchema> {
         selectedPageId: page.id,
         selectedBlockId: null,
         selectedFilePath: null,
-        activeTab: "canvas",
+        activePage: "ui",
         openPageIds: open,
     }));
     isDirtyValue = true;
@@ -1061,6 +1063,7 @@ export function selectFile(path: string | null): void {
         selectedPageId: null,
         selectedBlockId: null,
         diffView: null,
+        activePage: path ? "code" as const : state.activePage,
         editMode: path ? "code" : state.editMode
     }));
 }
@@ -1077,7 +1080,7 @@ export function openDiffView(data: {
     updateState(() => ({
         diffView: data,
         editMode: "code",
-        activeTab: "canvas" as const,
+        activePage: "code" as const,
         selectedFilePath: null,
         selectedPageId: null,
         selectedBlockId: null,
@@ -1092,10 +1095,27 @@ export function closeDiffView(): void {
 }
 
 /**
- * Switch the active tab
+ * Switch the active feature page
+ */
+export type FeaturePage = "dashboard" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+
+export function setActivePage(page: FeaturePage): void {
+    const editMode: "visual" | "code" = page === "code" ? "code" : "visual";
+    updateState(() => ({ activePage: page, editMode }));
+}
+
+/**
+ * Legacy alias — maps old tab names to new feature pages
  */
 export function setActiveTab(tab: "canvas" | "logic" | "api" | "erd" | "variables"): void {
-    updateState(() => ({ activeTab: tab }));
+    const pageMap: Record<string, FeaturePage> = {
+        canvas: "ui",
+        logic: "usecases",
+        api: "apis",
+        erd: "database",
+        variables: "database",
+    };
+    setActivePage(pageMap[tab] || "ui");
 }
 
 /**
@@ -1331,7 +1351,7 @@ export function getBlockChildren(parentId: string): BlockSchema[] {
         .filter((child): child is BlockSchema => Boolean(child));
 
     const missingChildren = allChildren
-        .filter(child => !parent.children.includes(child.id))
+        .filter(child => !(parent.children || []).includes(child.id))
         .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
 
     return [...orderedFromParent, ...missingChildren];
@@ -1355,4 +1375,19 @@ export function toggleTerminal(open?: boolean): void {
     updateState((prev) => ({
         terminalOpen: open ?? !prev.terminalOpen
     }));
+}
+
+/**
+ * Create a new diagram
+ */
+export async function createDiagram(name: string): Promise<void> {
+    await api.createDiagram(name);
+    // No need to reload project, just return. The caller should reload the list.
+}
+
+/**
+ * Delete a diagram
+ */
+export async function deleteDiagram(name: string): Promise<void> {
+    await api.deleteDiagram(name);
 }

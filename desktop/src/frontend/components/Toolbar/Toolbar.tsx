@@ -34,7 +34,7 @@ interface ContextMenuState {
 }
 
 const Toolbar: React.FC = () => {
-    const { project, selectedPageId, activeTab, editMode, openPageIds } = useProjectStore();
+    const { project, selectedPageId, openPageIds } = useProjectStore();
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [ctx, setCtx] = useState<ContextMenuState | null>(null);
     const ctxRef = useRef<HTMLDivElement>(null);
@@ -86,69 +86,59 @@ const Toolbar: React.FC = () => {
     return (
         <>
             <div className="w-full h-full flex items-center bg-[var(--ide-chrome)]">
-                {/* ── Page tabs (visual mode) ── */}
-                {activeTab === "canvas" && editMode === "visual" && (
-                    <div className="flex items-center h-full overflow-x-auto scrollbar-none">
-                        {openPages.map(page => {
-                            const active = page.id === selectedPageId;
-                            return (
-                                <div
-                                    key={page.id}
+                {/* ── Page tabs ── */}
+                <div className="flex items-center h-full overflow-x-auto scrollbar-none">
+                    {openPages.map(page => {
+                        const active = page.id === selectedPageId;
+                        return (
+                            <div
+                                key={page.id}
+                                className={[
+                                    "group h-full flex items-center gap-1.5 pl-3 pr-1 text-xs font-medium border-r border-[var(--ide-border)] transition-colors whitespace-nowrap select-none cursor-pointer",
+                                    active
+                                        ? "bg-[var(--ide-bg)] text-[var(--ide-text)] border-b-2 border-b-[var(--ide-primary)]"
+                                        : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-elevated)]",
+                                ].join(" ")}
+                                onClick={() => selectPage(page.id)}
+                                onMouseDown={(e) => handleMiddleClick(e, page.id)}
+                                onContextMenu={(e) => handleContextMenu(e, page.id)}
+                            >
+                                <PageIcon className="w-3.5 h-3.5 opacity-50 shrink-0" />
+                                <span className="max-w-[120px] truncate">{page.name}</span>
+
+                                {/* Close button */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        closePageTab(page.id);
+                                    }}
                                     className={[
-                                        "group h-full flex items-center gap-1.5 pl-3 pr-1 text-xs font-medium border-r border-[var(--ide-border)] transition-colors whitespace-nowrap select-none cursor-pointer",
+                                        "w-5 h-5 ml-1 rounded flex items-center justify-center transition-all shrink-0",
                                         active
-                                            ? "bg-[var(--ide-bg)] text-[var(--ide-text)] border-b-2 border-b-[var(--ide-primary)]"
-                                            : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-elevated)]",
+                                            ? "opacity-60 hover:opacity-100 hover:bg-[var(--ide-text)]/10"
+                                            : "opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-[var(--ide-text)]/10",
                                     ].join(" ")}
-                                    onClick={() => selectPage(page.id)}
-                                    onMouseDown={(e) => handleMiddleClick(e, page.id)}
-                                    onContextMenu={(e) => handleContextMenu(e, page.id)}
+                                    title="Close"
                                 >
-                                    <PageIcon className="w-3.5 h-3.5 opacity-50 shrink-0" />
-                                    <span className="max-w-[120px] truncate">{page.name}</span>
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        );
+                    })}
 
-                                    {/* Close button */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            closePageTab(page.id);
-                                        }}
-                                        className={[
-                                            "w-5 h-5 ml-1 rounded flex items-center justify-center transition-all shrink-0",
-                                            active
-                                                ? "opacity-60 hover:opacity-100 hover:bg-[var(--ide-text)]/10"
-                                                : "opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-[var(--ide-text)]/10",
-                                        ].join(" ")}
-                                        title="Close"
-                                    >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            );
-                        })}
-
-                        {/* Add page button */}
-                        <button
-                            onClick={handleCreate}
-                            className="h-full w-9 flex items-center justify-center text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-elevated)] transition-colors border-r border-[var(--ide-border)] shrink-0"
-                            title="New Page"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                            </svg>
-                        </button>
-
-
-                    </div>
-                )}
-
-                {/* Non-canvas tab labels */}
-                {activeTab === "logic" && <StaticTab label="Logic" />}
-                {activeTab === "api" && <StaticTab label="API" />}
-                {activeTab === "erd" && <StaticTab label="Schema" />}
-                {activeTab === "canvas" && editMode === "code" && <StaticTab label="Code" />}
+                    {/* Add page button */}
+                    <button
+                        onClick={handleCreate}
+                        className="h-full w-9 flex items-center justify-center text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-elevated)] transition-colors border-r border-[var(--ide-border)] shrink-0"
+                        title="New Page"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             {/* ── Context menu ── */}
@@ -184,12 +174,6 @@ const Toolbar: React.FC = () => {
 
 /* ═══════════════════  Helpers  ═════════════════════ */
 
-const StaticTab: React.FC<{ label: string }> = ({ label }) => (
-    <div className="h-full px-4 flex items-center text-xs font-medium text-[var(--ide-text)] bg-[var(--ide-bg)] border-r border-[var(--ide-border)] border-b-2 border-b-[var(--ide-primary)]">
-        {label}
-    </div>
-);
-
 const CtxItem: React.FC<{
     label: string;
     shortcut?: string;
@@ -197,11 +181,10 @@ const CtxItem: React.FC<{
     onClick: () => void;
 }> = ({ label, shortcut, disabled, onClick }) => (
     <button
-        className={`w-full px-3 py-1.5 text-left flex items-center justify-between ${
-            disabled
-                ? "text-[var(--ide-text-muted)] cursor-default"
-                : "text-[var(--ide-text)] hover:bg-[var(--ide-primary)]/10"
-        }`}
+        className={`w-full px-3 py-1.5 text-left flex items-center justify-between ${disabled
+            ? "text-[var(--ide-text-muted)] cursor-default"
+            : "text-[var(--ide-text)] hover:bg-[var(--ide-primary)]/10"
+            }`}
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
     >

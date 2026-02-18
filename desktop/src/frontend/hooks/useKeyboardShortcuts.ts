@@ -18,13 +18,14 @@ import {
     generateFrontend,
     generateBackend,
     generateDatabase,
-    setActiveTab,
+    setActivePage,
     archiveBlock,
     selectBlock,
 } from "../stores/projectStore";
+import type { FeaturePage } from "../stores/projectStore";
 import { useProjectStore } from "./useProjectStore";
 
-const TABS = ["canvas", "logic", "api", "erd", "variables"] as const;
+const PAGES: FeaturePage[] = ["ui", "usecases", "apis", "database", "diagrams", "code", "git"];
 
 export function useKeyboardShortcuts() {
     const { selectedBlockId, project } = useProjectStore();
@@ -60,12 +61,19 @@ export function useKeyboardShortcuts() {
                 return;
             }
 
-            // Ctrl+1..5 — Switch tabs
-            if (ctrl && e.key >= "1" && e.key <= "5") {
+            // Ctrl+0 — Dashboard
+            if (ctrl && e.key === "0") {
+                e.preventDefault();
+                setActivePage("dashboard");
+                return;
+            }
+
+            // Ctrl+1..7 — Switch feature pages
+            if (ctrl && e.key >= "1" && e.key <= "7") {
                 e.preventDefault();
                 const idx = parseInt(e.key) - 1;
-                if (idx < TABS.length) {
-                    setActiveTab(TABS[idx]);
+                if (idx < PAGES.length) {
+                    setActivePage(PAGES[idx]);
                 }
                 return;
             }

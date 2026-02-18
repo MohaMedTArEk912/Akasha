@@ -164,6 +164,12 @@ pub fn run() {
             commands::ipc::ipc_delete_file,
             commands::ipc::ipc_read_file_content,
             commands::ipc::ipc_write_file_content,
+            // ─── Diagrams ───────────────────────────────────
+            commands::ipc::ipc_list_diagrams,
+            commands::ipc::ipc_create_diagram,
+            commands::ipc::ipc_read_diagram,
+            commands::ipc::ipc_save_diagram,
+            commands::ipc::ipc_delete_diagram,
             // ─── Git Version Control ────────────────────────
             commands::ipc::ipc_git_history,
             commands::ipc::ipc_git_restore,

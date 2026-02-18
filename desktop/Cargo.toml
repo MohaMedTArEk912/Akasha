@@ -54,6 +54,7 @@ git2 = { version = "0.19", features = ["vendored-libgit2"] }
 
 # Utilities
 zip = "0.6"
+sanitize-filename = "0.5"
 regex = "1"
 rfd = "0.15"
 notify = "6.1"

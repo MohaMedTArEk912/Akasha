@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useProjectStore } from "../../hooks/useProjectStore";
 import { useApi, FileEntry, GitStatus } from "../../hooks/useTauri";
-import { refreshCurrentProject, selectFile, setEditMode, setActiveTab } from "../../stores/projectStore";
+import { refreshCurrentProject, selectFile, setActivePage } from "../../stores/projectStore";
 import ConfirmModal from "../Modals/ConfirmModal";
 import { useToast } from "../../context/ToastContext";
 
@@ -528,7 +528,7 @@ const FileTree: React.FC = () => {
 
     useEffect(() => {
         loadRootDirectory();
-    }, [loadRootDirectory, refreshVersion]); // Re-load when refreshVersion changes
+    }, [loadRootDirectory]); // loadRootDirectory itself changes when project/showHiddenFiles change
 
     useEffect(() => {
         fetchGitStatus();
@@ -536,8 +536,8 @@ const FileTree: React.FC = () => {
 
     const handleFileSelect = (path: string) => {
         selectFile(path);
-        setEditMode("code");
-        setActiveTab("canvas");
+        // If we're not already on the code page, navigate there
+        setActivePage("code");
     };
 
     if (!project) {

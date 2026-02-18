@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
 import {
     selectPage,
-    setActiveTab,
-    setEditMode,
+    setActivePage,
     createPage,
     updatePage,
     archivePage
@@ -89,8 +88,7 @@ export const PagesList: React.FC = () => {
      */
     const handlePageClick = (id: string) => {
         selectPage(id);
-        setActiveTab("canvas");
-        void setEditMode("visual").catch(console.error);
+        setActivePage("ui");
     };
 
     /**
@@ -168,16 +166,16 @@ export const PagesList: React.FC = () => {
                         <div
                             key={page.id}
                             className={`group w-full flex items-center gap-2.5 px-4 py-2 transition-all cursor-pointer ${selectedPageId === page.id
-                                    ? "bg-indigo-500/10 border-r-2 border-indigo-500"
-                                    : "hover:bg-[var(--ide-text)]/5"
+                                ? "bg-indigo-500/10 border-r-2 border-indigo-500"
+                                : "hover:bg-[var(--ide-text)]/5"
                                 }`}
                             onClick={() => handlePageClick(page.id)}
                         >
                             {/* Page Icon */}
                             <svg
                                 className={`w-4 h-4 shrink-0 ${selectedPageId === page.id
-                                        ? "text-indigo-500"
-                                        : "text-[var(--ide-text-muted)] group-hover:text-[var(--ide-text)]"
+                                    ? "text-indigo-500"
+                                    : "text-[var(--ide-text-muted)] group-hover:text-[var(--ide-text)]"
                                     }`}
                                 fill="none"
                                 stroke="currentColor"
@@ -211,8 +209,8 @@ export const PagesList: React.FC = () => {
                                     <>
                                         <div
                                             className={`text-[13px] font-semibold truncate ${selectedPageId === page.id
-                                                    ? "text-indigo-400"
-                                                    : "text-[var(--ide-text-muted)] group-hover:text-[var(--ide-text)]"
+                                                ? "text-indigo-400"
+                                                : "text-[var(--ide-text-muted)] group-hover:text-[var(--ide-text)]"
                                                 }`}
                                         >
                                             {page.name}

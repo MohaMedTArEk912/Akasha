@@ -782,6 +782,65 @@ pub async fn ipc_generate_openapi(
 }
 
 // ============================================================================
+// DIAGRAMS
+// ============================================================================
+
+#[tauri::command]
+pub async fn ipc_list_diagrams(
+    state: State<'_, BackendAppState>,
+) -> Result<serde_json::Value, String> {
+    let ax = axum::extract::State(state.inner().clone());
+    let json = routes::diagrams::list_diagrams(ax).await.map_err(map_err)?;
+    serde_json::to_value(json.0).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn ipc_create_diagram(
+    state: State<'_, BackendAppState>,
+    name: String,
+) -> Result<serde_json::Value, String> {
+    let ax = axum::extract::State(state.inner().clone());
+    let body = axum::Json(routes::diagrams::CreateDiagramRequest { name });
+    let json = routes::diagrams::create_diagram(ax, body).await.map_err(map_err)?;
+    serde_json::to_value(json.0).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn ipc_read_diagram(
+    state: State<'_, BackendAppState>,
+    name: String,
+) -> Result<String, String> {
+    let ax = axum::extract::State(state.inner().clone());
+    let path = axum::extract::Path(name);
+    let json = routes::diagrams::read_diagram(ax, path).await.map_err(map_err)?;
+    Ok(json.0)
+}
+
+#[tauri::command]
+pub async fn ipc_save_diagram(
+    state: State<'_, BackendAppState>,
+    name: String,
+    content: String,
+) -> Result<bool, String> {
+    let ax = axum::extract::State(state.inner().clone());
+    let path = axum::extract::Path(name);
+    let body = axum::Json(routes::diagrams::SaveDiagramRequest { content });
+    let json = routes::diagrams::save_diagram(ax, path, body).await.map_err(map_err)?;
+    Ok(json.0)
+}
+
+#[tauri::command]
+pub async fn ipc_delete_diagram(
+    state: State<'_, BackendAppState>,
+    name: String,
+) -> Result<bool, String> {
+    let ax = axum::extract::State(state.inner().clone());
+    let path = axum::extract::Path(name);
+    let json = routes::diagrams::delete_diagram(ax, path).await.map_err(map_err)?;
+    Ok(json.0)
+}
+
+// ============================================================================
 // FILE SYSTEM
 // ============================================================================
 
