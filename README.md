@@ -2,13 +2,13 @@
 
 **From zero to deployed SaaS — visually build & export production-ready full-stack applications.**
 
-A native desktop IDE that lets you design pages, model data, define APIs, author logic flows, and generate a complete, deployable codebase — all without leaving the app.
+A web-based platform that lets you design pages, model data, define APIs, author logic flows, and generate a complete, deployable codebase — all from your browser.
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)
 ![React](https://img.shields.io/badge/React-18-61dafb.svg)
+![Node](https://img.shields.io/badge/Node-18+-green.svg)
 
 ---
 
@@ -81,7 +81,6 @@ Akasha generates a **complete, production-grade codebase** you can `npm install 
 
 ### Prerequisites
 
-- **Rust** ≥ 1.75
 - **Node.js** ≥ 18
 - **npm**
 
@@ -92,10 +91,10 @@ Akasha generates a **complete, production-grade codebase** you can `npm install 
 git clone https://github.com/MohaMedTArEk912/akasha.git
 cd akasha
 
-# Install JS dependencies
+# Install dependencies (Client & Server)
 npm run install:all
 
-# Development mode (hot-reload frontend + Rust rebuild)
+# Development mode (concurrently runs client & server)
 npm run dev
 
 # — or — production build
@@ -108,77 +107,30 @@ npm run build
 
 ```
 akasha/
-├── desktop/                      # Tauri desktop application
+├── client/                      # React Frontend (Vite)
 │   ├── src/
-│   │   ├── main.rs              # Rust entry point
-│   │   ├── lib.rs               # Tauri plugin setup + Axum server boot
-│   │   │
-│   │   ├── backend/             # Embedded REST API (Axum)
-│   │   │   ├── mod.rs           # Router composition (46 routes)
-│   │   │   ├── db.rs            # SQLite layer (7 tables)
-│   │   │   ├── state.rs         # Shared app state (Arc<Mutex>)
-│   │   │   ├── error.rs         # AppError → HTTP mapping
-│   │   │   └── routes/
-│   │   │       ├── workspace.rs # Workspace CRUD + folder picker
-│   │   │       ├── project.rs   # Project lifecycle + sync + settings
-│   │   │       ├── blocks.rs    # Block CRUD + move + bindings + events
-│   │   │       ├── pages.rs     # Page CRUD + disk content read
-│   │   │       ├── models.rs    # Data model + field + relation CRUD
-│   │   │       ├── endpoints.rs # API endpoint CRUD
-│   │   │       ├── logic.rs     # Logic flow CRUD
-│   │   │       ├── variables.rs # Variable CRUD
-│   │   │       ├── generate.rs  # Code-gen triggers + ZIP + OpenAPI
-│   │   │       └── files.rs     # VFS file/folder operations
-│   │   │
-│   │   ├── schema/              # Rust type definitions
-│   │   │   ├── project.rs       # ProjectSchema, ProjectSettings
-│   │   │   ├── block.rs         # BlockSchema, DataBinding
-│   │   │   ├── data_model.rs    # DataModel, Field, Relation
-│   │   │   ├── api.rs           # ApiSchema, DataShape
-│   │   │   ├── logic_flow.rs    # LogicFlow, LogicNode
-│   │   │   ├── variable.rs      # Variable
-│   │   │   └── common.rs        # FieldType, HttpMethod enums
-│   │   │
-│   │   ├── generator/           # Code generation engines
-│   │   │   ├── frontend.rs      # React + Tailwind + Auth + Hooks
-│   │   │   ├── backend.rs       # NestJS + Prisma + JWT + RBAC + Tests
-│   │   │   ├── database.rs      # Prisma schema from data models
-│   │   │   ├── logic_compiler.rs# Logic-flow → TypeScript compiler
-│   │   │   ├── openapi.rs       # OpenAPI 3.0 spec generator
-│   │   │   └── sync_engine.rs   # Memory ↔ disk synchronization
-│   │   │
-│   │   ├── commands/            # Tauri IPC commands
-│   │   ├── storage/             # Persistence helpers
-│   │   └── vfs/                 # Virtual file system
-│   │
-│   ├── src/frontend/            # React / TypeScript UI
-│   │   ├── App.tsx              # Root component + keyboard shortcuts
-│   │   ├── components/
-│   │   │   ├── Canvas/          # Visual editor, code editor, API list
-│   │   │   ├── Dashboard/       # Project dashboard
-│   │   │   ├── Editors/         # Property & style editors
-│   │   │   ├── FileTree/        # IDE-quality file explorer
-│   │   │   ├── Inspector/       # Block inspector + events + bindings
-│   │   │   ├── Layout/          # IDE layout shell + sidebar
-│   │   │   ├── Modals/          # Dialog windows
-│   │   │   ├── Terminal/        # Embedded terminal
-│   │   │   ├── Toolbar/         # Top toolbar
-│   │   │   ├── UI/              # Shared primitives
-│   │   │   └── Visual/          # Visual design panels
-│   │   ├── context/             # ThemeContext, ToastContext
-│   │   ├── hooks/               # useTauri, useProjectStore,
-│   │   │                        #   useEditorSettings, useKeyboardShortcuts
-│   │   └── stores/              # projectStore, editorSettingsStore
-│   │
-│   ├── Cargo.toml
-│   ├── tauri.conf.json
-│   ├── vite.config.ts
+│   │   ├── components/          # UI Components & Visual Editors
+│   │   ├── context/             # Global State
+│   │   ├── hooks/               # Custom Hooks
+│   │   ├── stores/              # Zustand Stores
+│   │   ├── App.tsx              # Root Component
+│   │   └── main.tsx             # Entry Point
+│   ├── index.html
+│   ├── package.json
 │   ├── tailwind.config.js
-│   └── package.json
+│   └── vite.config.ts
 │
-├── docker-compose.yml           # Headless API mode
-├── Dockerfile                   # Multi-stage build
-├── package.json                 # Root dev/build scripts
+├── server/                      # Express Backend API
+│   ├── src/
+│   │   ├── routes/              # API Endpoints
+│   │   ├── services/            # Business Logic
+│   │   ├── utils/               # Helpers
+│   │   └── server.ts            # Entry Point
+│   ├── prisma/                  # Database Schema & Migrations
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── package.json                 # Root orchestration scripts
 └── README.md
 ```
 
@@ -363,41 +315,39 @@ npm run preview        # Vite preview server
 
 ## 📊 Technology Stack
 
-### IDE (what you run)
+### Application (what you run)
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Desktop shell | Tauri | 2.0 |
-| Backend API | Axum + Tokio | 0.7 / 1 |
-| Database | rusqlite (bundled SQLite) | 0.32 |
-| Frontend | React + TypeScript | 18 / 5.3 |
-| Styling | Tailwind CSS | 3.3 |
-| Bundler | Vite | 5 |
-| Code editor | Monaco Editor | 4.7 |
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18 + TypeScript + Tailwind CSS |
+| **Backend** | Node.js + Express |
+| **Database** | SQLite (via Prisma ORM) |
+| **Bundler** | Vite 5 |
+| **Editor** | Monaco Editor |
 
 ### Generated output (what you export)
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18 + TypeScript + Tailwind CSS |
-| Backend | NestJS + TypeScript |
-| ORM | Prisma |
-| Database | PostgreSQL |
-| Auth | JWT (passport-jwt) + bcrypt |
-| RBAC | Custom `RolesGuard` + `@Roles()` decorator |
-| Tests | Jest + supertest (e2e) |
-| API docs | OpenAPI 3.0 / Swagger |
+| **Frontend** | React 18 + TypeScript + Tailwind CSS |
+| **Backend** | NestJS + TypeScript |
+| **ORM** | Prisma |
+| **Database** | PostgreSQL |
+| **Auth** | JWT (passport-jwt) + bcrypt |
+| **RBAC** | Custom `RolesGuard` + `@Roles()` decorator |
+| **Tests** | Jest + supertest (e2e) |
+| **API docs** | OpenAPI 3.0 / Swagger |
 
 ---
 
 ## 🔧 Configuration
 
-### Tauri (`desktop/tauri.conf.json`)
-- **Window** – 1400 × 900, min 1024 × 768, resizable
-- **Title** – "Akasha — Visual Full-Stack SaaS Builder"
+### Server
+- **Port**: 3001 (API)
+- **Database**: `server/prisma/dev.db` (SQLite)
 
-### Rust Backend (`desktop/Cargo.toml`)
-- Axum 0.7, Tokio (full), rusqlite 0.32 (bundled), serde/serde_json, uuid, chrono, zip, regex, rfd (native dialogs), notify (file watcher)
+### Client
+- **Port**: 5173 (Vite Dev Server)
 
 ---
 
@@ -413,14 +363,7 @@ Runs the Axum API server without the desktop UI:
 
 ---
 
-## 🔒 Security
 
-- **Local-first** – All data stored in a local SQLite file; nothing leaves your machine
-- **Tauri sandbox** – Native webview security boundary
-- **IPC bridge** – Type-safe Rust ↔ JavaScript communication
-- **CORS** – Restricted to `localhost` origins in development
-
----
 
 ## 🚀 Production Build
 
