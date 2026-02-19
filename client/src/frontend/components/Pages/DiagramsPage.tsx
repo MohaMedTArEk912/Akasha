@@ -5,13 +5,187 @@
  * - Sidebar to list/create/delete diagrams
  * - Embeds draw.io editor as an iframe
  * - Handles saving/loading via backend API
+ * - Uses custom modals instead of native browser dialogs
  */
 
 import React, { useRef, useState, useCallback, useEffect } from "react";
 import useApi, { DiagramEntry, AnalysisResult } from "../../hooks/useApi";
 import AnalysisPanel from "../Akasha/AnalysisPanel";
+import { useToast } from "../../context/ToastContext";
 
 const DRAWIO_SRC = "/src/drawio/index.html";
+
+/* ─── Inline Modal Components ─────────────────────────── */
+
+/** Text input modal (replaces prompt) */
+const InputModal: React.FC<{
+    isOpen: boolean;
+    title: string;
+    placeholder?: string;
+    confirmText?: string;
+    onConfirm: (value: string) => void;
+    onCancel: () => void;
+}> = ({ isOpen, title, placeholder, confirmText = "Create", onConfirm, onCancel }) => {
+    const [value, setValue] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            setValue("");
+            setTimeout(() => inputRef.current?.focus(), 100);
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (value.trim()) onConfirm(value.trim());
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+            <div
+                className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl overflow-hidden"
+                style={{ animation: "scaleUp 0.2s ease-out" }}
+            >
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-[var(--ide-text)]">{title}</h3>
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        placeholder={placeholder || "Enter name..."}
+                        className="w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-xl px-4 py-3 text-sm text-[var(--ide-text)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all placeholder:text-[var(--ide-text-muted)]"
+                        required
+                    />
+                    <div className="flex gap-3 pt-1">
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={!value.trim()}
+                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs uppercase tracking-wider transition-all disabled:opacity-40"
+                        >
+                            {confirmText}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+/** Confirm/delete modal (replaces confirm) */
+const ConfirmDeleteModal: React.FC<{
+    isOpen: boolean;
+    name: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+}> = ({ isOpen, name, onConfirm, onCancel }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+            <div
+                className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl p-6 space-y-4"
+                style={{ animation: "scaleUp 0.2s ease-out" }}
+            >
+                <h3 className="text-lg font-bold text-[var(--ide-text)]">Delete Diagram?</h3>
+                <p className="text-sm text-[var(--ide-text-secondary)]">
+                    Are you sure you want to delete <strong className="text-[var(--ide-text)]">"{name}"</strong>? This action cannot be undone.
+                </p>
+                <div className="flex gap-3 pt-1">
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={onConfirm}
+                        className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-xs uppercase tracking-wider transition-all"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/** Discard changes modal (replaces confirm for unsaved changes) */
+const DiscardModal: React.FC<{
+    isOpen: boolean;
+    onDiscard: () => void;
+    onCancel: () => void;
+}> = ({ isOpen, onDiscard, onCancel }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+            <div
+                className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl p-6 space-y-4"
+                style={{ animation: "scaleUp 0.2s ease-out" }}
+            >
+                <h3 className="text-lg font-bold text-[var(--ide-text)]">Unsaved Changes</h3>
+                <p className="text-sm text-[var(--ide-text-secondary)]">
+                    You have unsaved changes. Do you want to discard them?
+                </p>
+                <div className="flex gap-3 pt-1">
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all"
+                    >
+                        Keep Editing
+                    </button>
+                    <button
+                        onClick={onDiscard}
+                        className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs uppercase tracking-wider transition-all"
+                    >
+                        Discard
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/** Toast notification (replaces alert for errors) */
+const Toast: React.FC<{ message: string | null; type?: "error" | "success"; onDismiss: () => void }> = ({ message, type = "error", onDismiss }) => {
+    useEffect(() => {
+        if (message) {
+            const t = setTimeout(onDismiss, 5000);
+            return () => clearTimeout(t);
+        }
+    }, [message, onDismiss]);
+
+    if (!message) return null;
+
+    return (
+        <div className={`fixed bottom-6 right-6 z-[300] max-w-sm px-5 py-3 rounded-xl shadow-2xl border text-sm font-medium flex items-center gap-3
+            ${type === "error"
+                ? "bg-red-500/10 border-red-500/30 text-red-400"
+                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+            }`}
+            style={{ animation: "slideUp 0.3s ease-out" }}
+        >
+            <span className="flex-1">{message}</span>
+            <button onClick={onDismiss} className="opacity-60 hover:opacity-100 transition-opacity">✕</button>
+        </div>
+    );
+};
+
+/* ─── Main Component ──────────────────────────────────── */
 
 const DiagramsPage: React.FC = () => {
     const api = useApi();
@@ -23,11 +197,23 @@ const DiagramsPage: React.FC = () => {
     const [loadingList, setLoadingList] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
 
-    // ─── Akasha analysis state ──────────────────────
+    // Akasha analysis state
     const [showAnalysis, setShowAnalysis] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [analysisLoading, setAnalysisLoading] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+    // Modal states
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+    const [discardCallback, setDiscardCallback] = useState<(() => void) | null>(null);
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [toastType, setToastType] = useState<"error" | "success">("error");
+
+    const showToast = (msg: string, type: "error" | "success" = "error") => {
+        setToastMessage(msg);
+        setToastType(type);
+    };
 
     // Initial load of diagrams
     useEffect(() => {
@@ -46,48 +232,54 @@ const DiagramsPage: React.FC = () => {
         }
     };
 
-    const handleCreate = async () => {
-        const name = prompt("Enter diagram name:");
-        if (!name) return;
-
+    const handleCreate = async (name: string) => {
         try {
             await api.createDiagram(name);
             await loadDiagrams();
-            selectDiagram(name);
+            // Use the filename with .drawio extension for selection
+            const fileName = name.endsWith('.drawio') ? name : `${name}.drawio`;
+            selectDiagram(fileName);
+            setShowCreateModal(false);
+            showToast(`Created "${fileName}"`, "success");
         } catch (err) {
-            alert(`Failed to create diagram: ${err}`);
+            showToast(`Failed to create diagram: ${err}`);
         }
     };
 
-    const handleDelete = async (name: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
-
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return;
         try {
-            await api.deleteDiagram(name);
-            if (selectedDiagram === name) {
+            await api.deleteDiagram(deleteTarget);
+            if (selectedDiagram === deleteTarget) {
                 setSelectedDiagram(null);
                 setLoaded(false);
             }
             await loadDiagrams();
+            showToast(`Deleted "${deleteTarget}"`, "success");
         } catch (err) {
-            alert(`Failed to delete diagram: ${err}`);
+            showToast(`Failed to delete diagram: ${err}`);
+        } finally {
+            setDeleteTarget(null);
         }
     };
 
     const selectDiagram = async (name: string) => {
         if (isDirty) {
-            if (!confirm("You have unsaved changes. Discard them?")) return;
+            // Show discard modal and store the pending action
+            setDiscardCallback(() => () => doSelectDiagram(name));
+            return;
         }
+        doSelectDiagram(name);
+    };
 
+    const doSelectDiagram = async (name: string) => {
         setSelectedDiagram(name);
         setLoaded(false);
         setIsDirty(false);
+        setError(null);
 
         try {
             const content = await api.readDiagram(name);
-            // If iframe is already loaded, send load event immediately
-            // Otherwise, we wait for 'init' message (handled in useEffect below)
             if (iframeRef.current && iframeRef.current.contentWindow) {
                 loadContentIntoFrame(content);
             }
@@ -105,7 +297,7 @@ const DiagramsPage: React.FC = () => {
         setLoaded(true);
     };
 
-    // ─── Akasha analysis handler ────────────────────
+    // Akasha analysis handler
     const handleAnalyze = async () => {
         if (!selectedDiagram) return;
         setAnalysisLoading(true);
@@ -121,7 +313,7 @@ const DiagramsPage: React.FC = () => {
     };
 
     const handleIframeLoad = useCallback(() => {
-        // Iframe DOM loaded, but draw.io might still be initializing
+        // Iframe DOM loaded, draw.io may still be initializing
     }, []);
 
     const handleIframeError = useCallback(() => {
@@ -138,13 +330,11 @@ const DiagramsPage: React.FC = () => {
 
                 if (msg.event === "init") {
                     console.log("[Diagrams] draw.io editor initialized");
-                    // If we have a selected diagram, reload its content now that editor is ready
                     if (selectedDiagram) {
                         const content = await api.readDiagram(selectedDiagram);
                         loadContentIntoFrame(content);
                     }
                 } else if (msg.event === "save") {
-                    // User clicked save or autosave triggered
                     if (selectedDiagram && msg.xml) {
                         console.log("[Diagrams] Saving", selectedDiagram);
                         await api.saveDiagram(selectedDiagram, msg.xml);
@@ -169,7 +359,7 @@ const DiagramsPage: React.FC = () => {
         };
         window.addEventListener("message", handler);
         return () => window.removeEventListener("message", handler);
-    }, [selectedDiagram, api]); // dependencies vital for save logic
+    }, [selectedDiagram, api]);
 
     return (
         <div className="flex flex-1 overflow-hidden h-full bg-[var(--ide-bg)]">
@@ -179,7 +369,7 @@ const DiagramsPage: React.FC = () => {
                     <span>Diagrams</span>
                     <div className="flex-1" />
                     <button
-                        onClick={handleCreate}
+                        onClick={() => setShowCreateModal(true)}
                         className="text-[var(--ide-text-secondary)] hover:text-[var(--ide-primary)] transition-colors"
                         title="New Diagram"
                     >
@@ -211,7 +401,10 @@ const DiagramsPage: React.FC = () => {
                             <span className="truncate flex-1">{d.name}</span>
 
                             <button
-                                onClick={(e) => handleDelete(d.name, e)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteTarget(d.name);
+                                }}
                                 className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
                                 title="Delete"
                             >
@@ -310,6 +503,51 @@ const DiagramsPage: React.FC = () => {
                     />
                 )}
             </div>
+
+            {/* ─── Modals ─────────────────────────────────── */}
+            <InputModal
+                isOpen={showCreateModal}
+                title="New Diagram"
+                placeholder="e.g. system-architecture"
+                confirmText="Create"
+                onConfirm={handleCreate}
+                onCancel={() => setShowCreateModal(false)}
+            />
+
+            <ConfirmDeleteModal
+                isOpen={!!deleteTarget}
+                name={deleteTarget || ""}
+                onConfirm={handleDeleteConfirm}
+                onCancel={() => setDeleteTarget(null)}
+            />
+
+            <DiscardModal
+                isOpen={!!discardCallback}
+                onDiscard={() => {
+                    const cb = discardCallback;
+                    setDiscardCallback(null);
+                    cb?.();
+                }}
+                onCancel={() => setDiscardCallback(null)}
+            />
+
+            <Toast
+                message={toastMessage}
+                type={toastType}
+                onDismiss={() => setToastMessage(null)}
+            />
+
+            {/* Scoped animations */}
+            <style>{`
+                @keyframes scaleUp {
+                    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                @keyframes slideUp {
+                    from { opacity: 0; transform: translateY(12px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </div>
     );
 };

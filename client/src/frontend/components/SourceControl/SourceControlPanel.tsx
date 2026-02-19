@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useApi, GitCommitInfo, GitStatus } from "../../hooks/useApi";
 import { openDiffView } from "../../stores/projectStore";
+import { useToast } from "../../context/ToastContext";
 
 
 function timeAgo(ts: number): string {
@@ -95,6 +96,7 @@ function getFileIcon(filename: string) {
 /* ─── Main Component ─────────────────────────────────────────────────── */
 const SourceControlPanel: React.FC = () => {
     const api = useApi();
+    const toast = useToast();
     const apiRef = useRef(api);
     apiRef.current = api;
 
@@ -236,7 +238,7 @@ const SourceControlPanel: React.FC = () => {
             await refresh();
         } catch (err) {
             console.error("Failed to discard changes:", err);
-            alert("Failed to discard changes: " + String(err));
+            toast.error("Failed to discard changes: " + String(err));
         }
     };
 

@@ -29,7 +29,7 @@ const DashboardView: React.FC = () => {
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
     const filteredProjects = useMemo(
-        () => projects.filter((project) => project.name.toLowerCase().includes(searchQuery.toLowerCase())),
+        () => (projects || []).filter((project) => project.name.toLowerCase().includes(searchQuery.toLowerCase())),
         [projects, searchQuery]
     );
 

@@ -10,8 +10,12 @@ const prisma = new PrismaClient();
 // Helper to get project root
 async function getProjectRoot(projectId: string) {
     const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project || !project.rootPath) throw new Error('Project root not found');
-    return project.rootPath;
+    if (!project) throw new Error('Project not found');
+    if (project.rootPath) return project.rootPath;
+    // Fallback: create a directory under server/projects/<projectId>
+    const fallbackRoot = path.join(process.cwd(), 'projects', projectId);
+    await fs.ensureDir(fallbackRoot);
+    return fallbackRoot;
 }
 
 // GET /api/diagrams - List diagrams
@@ -23,7 +27,14 @@ router.get('/', async (req, res) => {
             return;
         }
 
-        const root = await getProjectRoot(projectId);
+        let root: string;
+        try {
+            root = await getProjectRoot(projectId);
+        } catch {
+            // Project doesn't exist — return empty list
+            res.json([]);
+            return;
+        }
         const diagramsDir = path.join(root, 'diagrams');
 
         if (!fs.existsSync(diagramsDir)) {
@@ -73,7 +84,12 @@ router.get('/:name', async (req, res) => {
         if (!projectId || typeof projectId !== 'string') throw new Error('Project ID required');
 
         const root = await getProjectRoot(projectId);
-        const filePath = path.join(root, 'diagrams', name);
+        let filePath = path.join(root, 'diagrams', name);
+
+        // Try with .drawio extension if exact name not found
+        if (!fs.existsSync(filePath) && !name.endsWith('.drawio')) {
+            filePath = path.join(root, 'diagrams', `${name}.drawio`);
+        }
 
         if (!fs.existsSync(filePath)) {
             res.status(404).json({ error: 'File not found' });
@@ -83,7 +99,39 @@ router.get('/:name', async (req, res) => {
         const content = await fs.readFile(filePath, 'utf-8');
         res.send(content);
     } catch (error) {
-        res.status(500).json({ error: 'Failed' });
+        console.error('Error reading diagram:', error);
+        res.status(500).json({ error: 'Failed to read diagram' });
+    }
+});
+
+// DELETE /api/diagrams/:name - Delete a diagram
+router.delete('/:name', async (req, res) => {
+    try {
+        const { projectId } = req.query;
+        const { name } = req.params;
+        if (!projectId || typeof projectId !== 'string') {
+            res.status(400).json({ error: 'Project ID required' });
+            return;
+        }
+
+        const root = await getProjectRoot(projectId);
+        let filePath = path.join(root, 'diagrams', name);
+
+        // Try with .drawio extension if exact name not found
+        if (!fs.existsSync(filePath) && !name.endsWith('.drawio')) {
+            filePath = path.join(root, 'diagrams', `${name}.drawio`);
+        }
+
+        if (!fs.existsSync(filePath)) {
+            res.status(404).json({ error: 'File not found' });
+            return;
+        }
+
+        await fs.remove(filePath);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting diagram:', error);
+        res.status(500).json({ error: 'Failed to delete diagram' });
     }
 });
 

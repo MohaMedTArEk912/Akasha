@@ -19,9 +19,16 @@ router.get('/', async (req, res) => {
         res.json({
             workspace_path: 'Cloud Workspace', // Placeholder
             projects: projects.map(p => ({
-                ...p,
-                blocks: [], // Don't load blocks for summary list
-                pages: [],  // Don't load full pages
+                id: p.id,
+                name: p.name,
+                description: p.description || '',
+                created_at: p.createdAt.toISOString(),
+                updated_at: p.updatedAt.toISOString(),
+                root_path: p.rootPath || '',
+                version: '1.0.0',
+                settings: JSON.parse(p.settings || '{}'),
+                blocks: [],
+                pages: [],
                 apis: [],
                 logic_flows: [],
                 data_models: [],

@@ -311,7 +311,11 @@ export const httpApi = {
         const res = await client.post('/diagrams', { projectId: activeProjectId, name, content });
         return res.data.success;
     },
-    deleteDiagram: async (_name: string) => true,
+    deleteDiagram: async (name: string) => {
+        if (!activeProjectId) throw new Error("No active project");
+        const res = await client.delete(`/diagrams/${name}`, { params: { projectId: activeProjectId } });
+        return res.data.success;
+    },
     analyzeDiagram: async (_name: string) => ({ graph: { nodes: [], edges: [] }, issues: [], stats: { total_nodes: 0, total_edges: 0, unknown_type_count: 0, issue_count: 0 } }),
     analyzeDiagramRaw: async (_xml: string) => ({ graph: { nodes: [], edges: [] }, issues: [], stats: { total_nodes: 0, total_edges: 0, unknown_type_count: 0, issue_count: 0 } }),
 };

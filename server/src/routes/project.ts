@@ -6,6 +6,49 @@ import { randomUUID } from 'crypto';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Transform Prisma project to client-expected snake_case format
+function toProjectSchema(p: any, pages: any[] = [], blocks: any[] = []) {
+    return {
+        id: p.id,
+        name: p.name,
+        description: p.description || '',
+        created_at: (p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt)).toISOString(),
+        updated_at: (p.updatedAt instanceof Date ? p.updatedAt : new Date(p.updatedAt)).toISOString(),
+        root_path: p.rootPath || '',
+        version: '1.0.0',
+        settings: typeof p.settings === 'string' ? JSON.parse(p.settings || '{}') : (p.settings || {}),
+        blocks: blocks.map((b: any) => ({
+            id: b.id,
+            block_type: b.blockType,
+            name: b.name,
+            properties: typeof b.properties === 'string' ? JSON.parse(b.properties || '{}') : (b.properties || {}),
+            styles: typeof b.styles === 'string' ? JSON.parse(b.styles || '{}') : (b.styles || {}),
+            responsive_styles: typeof b.responsiveStyles === 'string' ? JSON.parse(b.responsiveStyles || '{}') : (b.responsiveStyles || {}),
+            classes: typeof b.classes === 'string' ? JSON.parse(b.classes || '[]') : (b.classes || []),
+            events: typeof b.events === 'string' ? JSON.parse(b.events || '{}') : (b.events || {}),
+            bindings: typeof b.bindings === 'string' ? JSON.parse(b.bindings || '{}') : (b.bindings || {}),
+            children: typeof b.children === 'string' ? JSON.parse(b.children || '[]') : (b.children || []),
+            parent_id: b.parentId || null,
+            page_id: b.pageId || null,
+            order: b.order || 0,
+            archived: b.archived || false,
+        })),
+        pages: (pages || []).map((pg: any) => ({
+            id: pg.id,
+            name: pg.name,
+            path: pg.path,
+            is_dynamic: pg.isDynamic || false,
+            meta: typeof pg.meta === 'string' ? JSON.parse(pg.meta || '{}') : (pg.meta || {}),
+            archived: pg.archived || false,
+        })),
+        apis: [],
+        logic_flows: [],
+        data_models: [],
+        variables: [],
+        components: [],
+    };
+}
+
 // GET /api/project - List all projects
 router.get('/', async (req, res) => {
     try {
@@ -27,20 +70,14 @@ router.get('/:id', async (req, res) => {
             where: { id },
             include: {
                 pages: true,
-                blocks: {
-                    where: { pageId: null } // Only load root blocks or all? 
-                    // Rust backend loads *everything* for the project usually.
-                    // For now, let's load key relations.
-                    // If project is huge, strictly loading needed parts is better.
-                    // But Akasha expects full project schema often.
-                }
+                blocks: true
             }
         });
 
         if (!project) {
             return res.status(404).json({ error: 'Project not found' });
         }
-        res.json(project);
+        res.json(toProjectSchema(project, project.pages, project.blocks));
     } catch (error) {
         console.error('Error getting project:', error);
         res.status(500).json({ error: 'Failed to get project' });
@@ -62,7 +99,7 @@ router.post('/', async (req, res) => {
         });
 
         // Create default page (Home)
-        await prisma.page.create({
+        const homePage = await prisma.page.create({
             data: {
                 id: randomUUID(), // Public ID
                 projectId: project.id,
@@ -72,7 +109,7 @@ router.post('/', async (req, res) => {
             }
         });
 
-        res.json(project);
+        res.json(toProjectSchema(project, [homePage], []));
     } catch (error) {
         console.error('Error creating project:', error);
         res.status(500).json({ error: 'Failed to create project' });
@@ -91,9 +128,10 @@ router.put('/:id', async (req, res) => {
                 name,
                 description,
                 ...(settings && { settings: JSON.stringify(settings) })
-            }
+            },
+            include: { pages: true, blocks: true }
         });
-        res.json(project);
+        res.json(toProjectSchema(project, project.pages, project.blocks));
     } catch (error) {
         console.error('Error updating project:', error);
         res.status(500).json({ error: 'Failed to update project' });
