@@ -58,54 +58,46 @@ const DashboardView: React.FC = () => {
     const ambientBackground =
         theme === "light"
             ? "radial-gradient(circle at 14% -8%, rgba(148, 163, 184, 0.34), transparent 40%), radial-gradient(circle at 86% 10%, rgba(99, 102, 241, 0.14), transparent 34%), linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0))"
-            : "radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.18), transparent 35%)";
+            : "radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.05), transparent 40%)";
 
     return (
-        <div className="relative h-screen bg-[var(--ide-bg)] text-[var(--ide-text)] flex flex-col overflow-hidden selection:bg-indigo-500/30">
+        <div className="relative h-full w-full bg-[#050508] text-white flex flex-col overflow-hidden selection:bg-indigo-500/30">
             <div className="pointer-events-none absolute inset-0" style={{ background: ambientBackground }} />
 
-            {/* Draggable Title Bar Area */}
-            <div
-                className="h-10 w-full flex-shrink-0 flex items-center justify-end px-4 z-[100] select-none"
-                data-tauri-drag-region
-            >
-
-            </div>
-
-            <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-10 lg:p-12 pt-2 md:pt-4">
+            <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-10 lg:p-12 pt-6 custom-scrollbar">
                 <div className="max-w-[1600px] mx-auto space-y-8">
                     {/* Top Header */}
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 animate-fade-in group">
                         <div className="space-y-2">
-                            <h1 className="text-4xl md:text-5xl font-black tracking-tighter uppercase italic flex items-center gap-3">
-                                Projects <span className="text-indigo-500">.</span>
+                            <h1 className="text-4xl md:text-5xl font-black tracking-[-0.04em] uppercase italic flex items-center gap-3 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                                PROJECTS <span className="text-indigo-500">.</span>
                             </h1>
-                            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--ide-text-muted)]">
-                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                                <span>Workspace</span>
-                                <span className="text-[var(--ide-border-strong)]">/</span>
-                                <span className="text-[var(--ide-text-secondary)] truncate max-w-[200px] sm:max-w-xs md:max-w-md">
-                                    {workspacePath || "Not configured"}
+                            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                                <span>WORKSPACE</span>
+                                <span className="text-white/20">/</span>
+                                <span className="text-white/70 truncate max-w-[200px] sm:max-w-xs md:max-w-md drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                                    {workspacePath ? "CLOUD WORKSPACE" : "LOCAL WORKSPACE"}
                                 </span>
                             </div>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                            <div className="flex items-center gap-3">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                            <div className="flex items-center gap-4">
                                 <button
                                     onClick={() => setShowSettingsModal(true)}
-                                    className="h-11 w-11 flex items-center justify-center rounded-xl text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] transition-all border border-[var(--ide-border)] hover:border-[var(--ide-border-strong)] hover:bg-[var(--ide-bg-elevated)]"
+                                    className="h-10 w-10 flex items-center justify-center rounded-xl text-white/40 hover:text-white transition-all border border-white/5 hover:border-white/20 hover:bg-white/5"
                                     title="IDE Settings"
                                 >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                         <circle cx="12" cy="12" r="3" strokeWidth="2" />
                                     </svg>
                                 </button>
 
-                                <div className="relative flex-1 sm:flex-initial group/search">
-                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                        <svg className="w-4 h-4 text-[var(--ide-text-muted)] group-focus-within/search:text-[var(--ide-text-secondary)] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div className="relative flex-1 sm:flex-initial group/search bg-[#111116] border border-white/5 rounded-2xl flex items-center transition-all hover:border-white/10 focus-within:ring-2 focus-within:ring-[#0ea5e9]/30 focus-within:border-[#0ea5e9]/50 w-full sm:w-56 md:w-64">
+                                    <div className="pl-4 pr-3 flex items-center pointer-events-none">
+                                        <svg className="w-4 h-4 text-white/30 group-focus-within/search:text-[#0ea5e9] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                         </svg>
                                     </div>
@@ -114,21 +106,21 @@ const DashboardView: React.FC = () => {
                                         placeholder="Search..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl pl-11 pr-4 h-11 text-sm text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/40 transition-all w-full sm:w-48 md:w-64"
+                                        className="bg-transparent h-10 w-full text-xs text-white placeholder:text-white/20 focus:outline-none"
                                     />
                                 </div>
                             </div>
 
                             <button
                                 onClick={() => setIsCreateModalOpen(true)}
-                                className="btn-modern-primary !h-11 !px-8 whitespace-nowrap shadow-lg shadow-indigo-500/10"
+                                className="h-10 px-6 rounded-xl bg-[#0ea5e9] hover:bg-[#0284c7] text-[#050508] font-bold text-xs transition-all shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] flex items-center justify-center gap-2 whitespace-nowrap"
                             >
                                 New Project
                             </button>
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-[var(--ide-text-muted)] font-semibold">
+                    <div className="flex items-center justify-between text-[11px] text-white/30 font-bold tracking-widest uppercase">
                         <span>{filteredProjects.length} project{filteredProjects.length === 1 ? "" : "s"}</span>
                     </div>
 
@@ -267,29 +259,30 @@ const ProjectCard: React.FC<{
     onOpen: () => void;
     onDelete: () => void;
 }> = ({ project, index, onOpen, onDelete }) => {
-    const cardBackground = "linear-gradient(165deg, var(--ide-bg-elevated) 0%, var(--ide-bg-panel) 100%)";
-
     return (
         <div
-            className="group border border-[var(--ide-border)] rounded-3xl p-7 hover:border-[var(--ide-border-strong)] hover:shadow-[var(--ide-shadow-sm)] transition-all duration-300 flex flex-col h-64 relative overflow-hidden cursor-pointer"
-            style={{ animationDelay: `${index * 40}ms`, background: cardBackground }}
+            className="group bg-[#111116] border border-white/[0.03] rounded-3xl p-6 hover:border-white/10 transition-all duration-300 flex flex-col h-64 relative overflow-hidden cursor-pointer shadow-lg hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
+            style={{ animationDelay: `${index * 40}ms` }}
             onClick={onOpen}
         >
-            <div className="absolute -top-14 -right-14 w-44 h-44 bg-indigo-500/10 blur-[80px] rounded-full group-hover:bg-indigo-500/20 transition-all duration-500" />
+            <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-indigo-500/[0.02] to-transparent pointer-events-none" />
+
+            {/* Glowing orb on hover */}
+            <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full group-hover:bg-[#0ea5e9]/20 transition-all duration-700" />
 
             <div className="relative z-10 flex-1">
-                <div className="w-14 h-14 rounded-2xl bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] flex items-center justify-center mb-5 group-hover:scale-105 transition-transform duration-300">
-                    <svg className="w-7 h-7 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center mb-6 group-hover:border-white/10 group-hover:bg-white/[0.04] transition-all duration-300 shadow-inner">
+                    <svg className="w-5 h-5 text-indigo-400 group-hover:text-[#0ea5e9] transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                 </div>
-                <h3 className="text-2xl font-black text-[var(--ide-text)] mb-2 leading-tight tracking-tight">{project.name}</h3>
+                <h3 className="text-xl font-black text-white mb-2 leading-tight tracking-tight drop-shadow-sm">{project.name}</h3>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[var(--ide-text-muted)] font-black uppercase tracking-widest bg-[var(--ide-bg-panel)] px-2 py-1 rounded-md border border-[var(--ide-border)]">
+                    <span className="text-[9px] text-white/30 font-black uppercase tracking-widest bg-white/5 px-2 py-1 rounded border border-white/5">
                         {new Date(project.updated_at).toLocaleDateString()}
                     </span>
-                    <span className="w-1 h-1 rounded-full bg-[var(--ide-border-strong)]" />
-                    <span className="text-[10px] text-[var(--ide-text-muted)] font-black uppercase tracking-widest">
+                    <span className="w-1 h-1 rounded-full bg-white/10" />
+                    <span className="text-[9px] text-white/30 font-black uppercase tracking-widest">
                         IDE v0.1.0
                     </span>
                 </div>

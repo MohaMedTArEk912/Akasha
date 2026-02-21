@@ -100,45 +100,64 @@ const IDELayout: React.FC = () => {
 
             {/* ===== TOP: Title Bar ===== */}
             <header
-                className="h-9 bg-[var(--ide-titlebar)] border-b border-[var(--ide-border)] flex items-center justify-between px-4 select-none flex-shrink-0"
+                className="h-10 bg-[#050508] border-b border-white/[0.04] flex items-center justify-between px-4 select-none flex-shrink-0 relative overflow-hidden"
                 data-tauri-drag-region
             >
+                {/* Background glow effects */}
+                <div className="absolute top-0 left-1/4 w-1/4 h-full bg-indigo-500-[0.02] blur-xl pointer-events-none" />
+                <div className="absolute top-0 right-1/3 w-1/6 h-full bg-purple-500-[0.02] blur-xl pointer-events-none" />
+
+                {/* Subtle gradient line at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
+                    background: "linear-gradient(90deg, transparent 0%, rgba(99,102,241,0.15) 50%, transparent 100%)"
+                }} />
+
                 {/* Left: App name */}
-                <div className="flex items-center gap-3" data-tauri-drag-region>
-                    <Logo size={24} />
-                    <div className="flex flex-col leading-none" data-tauri-drag-region>
-                        <span className="text-xs font-bold tracking-wider text-[var(--ide-text)]" data-tauri-drag-region>
-                            AKASHA
+                <div className="flex items-center gap-3 relative z-10" data-tauri-drag-region>
+                    <div className="relative group flex items-center justify-center">
+                        <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />
+                    </div>
+                    <span className="text-[11px] font-black tracking-[0.2em] text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]" data-tauri-drag-region>
+                        AKASHA
+                    </span>
+                    <div className="w-[1px] h-3.5 bg-white/[0.08]" />
+                    <div className="px-2 py-0.5 rounded-md bg-white/[0.02] border border-white/[0.04] flex items-center">
+                        <span className="text-[9px] font-semibold text-white/50 tracking-wider uppercase" data-tauri-drag-region>
+                            {project?.name || ""}
                         </span>
                     </div>
-                    <span className="text-[10px] text-[var(--ide-text-secondary)] opacity-50" data-tauri-drag-region>
-                        |
-                    </span>
-                    <span className="text-[10px] text-[var(--ide-text-secondary)]" data-tauri-drag-region>
-                        {project?.name || ""}
-                    </span>
                 </div>
 
                 {/* Center: Feature Page Name */}
-                <div className="flex-1 text-center" data-tauri-drag-region>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--ide-text-secondary)]" data-tauri-drag-region>
-                        {FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard"}
-                    </span>
+                <div className="flex-1 flex justify-center items-center relative z-10" data-tauri-drag-region>
+                    <div className="px-4 py-1 rounded-full bg-white/[0.02] border border-white/[0.03] flex items-center gap-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-indigo-100/70" data-tauri-drag-region>
+                            {FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard"}
+                        </span>
+                    </div>
                 </div>
 
-
+                {/* Right: Empty space for balance */}
+                <div className="flex items-center gap-3 opacity-0 pointer-events-none" aria-hidden="true">
+                    {/* Mirroring left side width roughly for true center alignment */}
+                    <div className="w-20"></div>
+                </div>
             </header>
 
             {/* ===== MAIN CONTENT AREA ===== */}
             <div className="flex-1 flex overflow-hidden">
 
                 {/* ===== LEFT: Feature Navigation Rail ===== */}
-                <aside className="w-14 bg-[var(--ide-activity)] flex flex-col items-center py-2 flex-shrink-0 border-r border-[var(--ide-border)]">
+                <aside className="w-14 bg-[#0c0c14] flex flex-col items-center py-3 flex-shrink-0 border-r border-white/[0.06] relative">
+                    {/* Subtle gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/[0.03] to-transparent pointer-events-none" />
 
-                    {/* Home (Dashboard) Button - Now Main Nav */}
+                    {/* Home (Dashboard) */}
                     <NavRailIcon
                         icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                        label="Project Dashboard"
+                        label="Dashboard"
                         active={activePage === "dashboard"}
                         onClick={() => setActivePage("dashboard")}
                     />
@@ -267,17 +286,22 @@ interface NavRailIconProps {
 
 const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick }) => (
     <button
-        className={`w-14 h-12 flex items-center justify-center relative group transition-colors ${active ? "text-[var(--ide-text)]" : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
+        className={`w-10 h-10 mx-auto my-0.5 flex items-center justify-center relative group rounded-xl transition-all duration-300 ${active
+            ? "text-indigo-400 bg-indigo-500/15"
+            : "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
             }`}
         onClick={onClick}
         title={label}
         aria-label={label}
     >
-        {/* Active indicator bar */}
+        {/* Active glow */}
         {active && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--ide-primary)]" />
+            <>
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-5 bg-indigo-400 rounded-r-full" />
+                <div className="absolute inset-0 rounded-xl bg-indigo-500/10 blur-md" />
+            </>
         )}
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-[18px] h-[18px] relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={icon} />
         </svg>
     </button>

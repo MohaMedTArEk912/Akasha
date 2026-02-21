@@ -14,6 +14,7 @@ interface ModalProps {
     children: React.ReactNode;
     size?: "sm" | "md" | "lg" | "xl";
     showCloseButton?: boolean;
+    className?: string;
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -22,7 +23,8 @@ const Modal: React.FC<ModalProps> = ({
     title,
     children,
     size = "md",
-    showCloseButton = true
+    showCloseButton = true,
+    className = ""
 }) => {
     const sizeClasses = {
         sm: "max-w-sm",
@@ -67,30 +69,32 @@ const Modal: React.FC<ModalProps> = ({
             {/* Modal Container */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
                 <div
-                    className={`w-full ${sizeClasses[size]} bg-[var(--ide-bg-panel)] rounded-[2.5rem] shadow-[var(--ide-shadow)] border border-[var(--ide-border-strong)] pointer-events-auto animate-slide-up overflow-hidden`}
+                    className={`w-full ${sizeClasses[size]} ${className || 'bg-[var(--ide-bg-panel)] shadow-[var(--ide-shadow)] border-[var(--ide-border-strong)]'} rounded-[2.5rem] border pointer-events-auto animate-slide-up overflow-hidden`}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-10 pt-10 pb-6">
-                        <h2 className="text-2xl font-black text-[var(--ide-text)] tracking-tight italic uppercase">
-                            {title}
-                            <span className="text-indigo-500 ml-1">.</span>
-                        </h2>
-                        {showCloseButton && (
-                            <button
-                                className="w-10 h-10 rounded-2xl flex items-center justify-center text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-elevated)] transition-all"
-                                onClick={onClose}
-                                aria-label="Close modal"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        )}
-                    </div>
+                    {/* Header: Only render if title is provided */}
+                    {title && (
+                        <div className="relative z-20 flex items-center justify-between px-10 pt-8 pb-4">
+                            <h2 className="text-2xl font-black text-white tracking-tight italic uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
+                                {title}
+                                <span className="text-indigo-500 ml-1">.</span>
+                            </h2>
+                            {showCloseButton && (
+                                <button
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-all z-20"
+                                    onClick={onClose}
+                                    aria-label="Close modal"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     {/* Content */}
-                    <div className="px-10 pb-10">{children}</div>
+                    <div className={className ? "" : "px-10 pb-10"}>{children}</div>
                 </div>
             </div>
         </>,
