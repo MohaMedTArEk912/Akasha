@@ -7,7 +7,7 @@
 import React, { useState } from "react";
 import { setWorkspace } from "../../stores/projectStore";
 import { useApi } from "../../hooks/useApi";
-import WindowControls from "../UI/WindowControls";
+
 import { useToast } from "../../context/ToastContext";
 
 const WorkspaceSetup: React.FC = () => {
@@ -51,7 +51,7 @@ const WorkspaceSetup: React.FC = () => {
                 className="absolute top-0 left-0 h-12 w-full flex items-center justify-end px-4 z-[100] select-none"
                 data-tauri-drag-region
             >
-                <WindowControls />
+
             </div>
 
             <div className="relative z-10 max-w-xl w-full">

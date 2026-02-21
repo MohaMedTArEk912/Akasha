@@ -11,7 +11,7 @@ import "./index.css";
 import IDELayout from "./components/Layout/IDELayout";
 import DashboardView from "./components/Dashboard/DashboardView";
 import WorkspaceSetup from "./components/Dashboard/WorkspaceSetup";
-import ErrorBoundary from "./components/UI/ErrorBoundary";
+import ErrorBoundary from './components/Shared/ErrorBoundary';
 
 // Stores
 import { initWorkspace } from "./stores/projectStore";

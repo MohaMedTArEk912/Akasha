@@ -9,8 +9,8 @@
 
 import React from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import CodeEditor from "../Canvas/CodeEditor/CodeEditor";
-import DiffViewer from "../Canvas/CodeEditor/DiffViewer";
+import CodeEditor from "../CodeEditor/CodeEditor";
+import DiffViewer from "../CodeEditor/DiffViewer";
 import EditorTabs from "../Layout/EditorTabs";
 import FileTree from "../FileTree/FileTree";
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { useTheme } from "../../context/ThemeContext";
-import Modal from "../UI/Modal";
+import Modal from "../Shared/Modal";
 
 interface IDESettingsModalProps {
     isOpen: boolean;

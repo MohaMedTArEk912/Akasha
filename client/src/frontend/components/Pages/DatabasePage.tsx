@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from "react";
-import ERDCanvas from "../Canvas/DataCanvas/ERDCanvas";
+import ERDCanvas from "../DataCanvas/ERDCanvas";
 import VariablesPanel from "../Editors/VariablesPanel";
 
 type DatabaseTab = "schema" | "variables";
@@ -37,8 +37,8 @@ const TabButton: React.FC<{ label: string; active: boolean; onClick: () => void 
     <button
         onClick={onClick}
         className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${active
-                ? "bg-[var(--ide-bg)] text-[var(--ide-text)] border border-[var(--ide-border)]"
-                : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-hover)]"
+            ? "bg-[var(--ide-bg)] text-[var(--ide-text)] border border-[var(--ide-border)]"
+            : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-bg-hover)]"
             }`}
     >
         {label}

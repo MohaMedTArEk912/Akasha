@@ -2,8 +2,7 @@
 import axios from 'axios';
 import {
     ProjectSchema, BlockSchema, PageSchema, LogicFlowSchema, DataModelSchema, VariableSchema,
-    ApiSchema, GitCommitInfo, GitStatus, FileEntry, DiagramEntry, ProjectSettings, InstallResult,
-    LogicNode, TriggerType, DataShape, AnalysisResult, FieldSchema, RelationSchema
+    ApiSchema, GitCommitInfo, GitStatus, FileEntry, ProjectSettings, FieldSchema, RelationSchema
 } from '../types/api';
 
 const API_BASE_URL = 'http://localhost:3001/api';
@@ -211,7 +210,7 @@ export const httpApi = {
         const res = await client.post('/variables', { projectId: activeProjectId, ...data });
         return res.data;
     },
-    updateVariable: async (id: string, updates: any) => {
+    updateVariable: async (_id: string, _updates: any) => {
         // We only implemented create/delete in backend variables.ts for now
         // But let's assume we might add update later or use create to overwrite?
         // Actually, schema supports update. I should add PUT to variables.ts if needed.

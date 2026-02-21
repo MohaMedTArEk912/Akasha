@@ -10,7 +10,7 @@ import { openProject, deleteProject, createProject } from "../../stores/projectS
 import { useToast } from "../../context/ToastContext";
 import { useTheme } from "../../context/ThemeContext";
 import IDESettingsModal from "../Modals/IDESettingsModal";
-import WindowControls from "../UI/WindowControls";
+
 
 interface ProjectSummary {
     id: string;
@@ -69,7 +69,7 @@ const DashboardView: React.FC = () => {
                 className="h-10 w-full flex-shrink-0 flex items-center justify-end px-4 z-[100] select-none"
                 data-tauri-drag-region
             >
-                <WindowControls />
+
             </div>
 
             <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-10 lg:p-12 pt-2 md:pt-4">

@@ -22,6 +22,7 @@ interface ProjectState {
     viewport: "desktop" | "tablet" | "mobile";
     editMode: "visual" | "code";
     inspectorOpen: boolean;
+    exportModalOpen: boolean;
     selectedFilePath: string | null;
     terminalOpen: boolean;
 
@@ -57,6 +58,7 @@ const initialState: ProjectState = {
     viewport: "desktop",
     editMode: "visual",
     inspectorOpen: true,
+    exportModalOpen: false,
     workspacePath: null,
     projects: [],
     isDashboardActive: true,
@@ -1115,6 +1117,13 @@ export function toggleInspector(): void {
  */
 export function setInspectorOpen(open: boolean): void {
     updateState(() => ({ inspectorOpen: open }));
+}
+
+/**
+ * Set export modal visibility explicitly.
+ */
+export function setExportModalOpen(open: boolean): void {
+    updateState(() => ({ exportModalOpen: open }));
 }
 
 /**

@@ -14,7 +14,7 @@ import {
     closePageTab,
     closeOtherPageTabs,
 } from "../../stores/projectStore";
-import PromptModal from "../UI/PromptModal";
+import PromptModal from "../Shared/PromptModal";
 import { useToast } from "../../context/ToastContext";
 
 /* ─── Page icon ─────────────────────────────────────── */

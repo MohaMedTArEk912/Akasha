@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { renameProject, resetProject, deleteProject, closeProject } from "../../stores/projectStore";
+import { renameProject, resetProject, deleteProject, closeProject, setExportModalOpen } from "../../stores/projectStore";
 import { useToast } from "../../context/ToastContext";
 import ConfirmModal from "./ConfirmModal";
 
@@ -148,6 +148,30 @@ const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({ isOpen, onC
                                 placeholder="Enter project name..."
                                 className="w-full bg-[var(--ide-bg-sidebar)] border border-[var(--ide-border)] rounded-lg px-4 py-2.5 text-sm text-[var(--ide-text)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all placeholder:text-[var(--ide-text-muted)]/40"
                             />
+                        </div>
+
+                        {/* Export Code */}
+                        <div className="space-y-3 pt-2 border-t border-[var(--ide-border)]">
+                            <div className="flex items-center gap-2">
+                                <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                </svg>
+                                <h4 className="text-xs font-bold text-[var(--ide-text)] uppercase tracking-wide">Developer Tools</h4>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        onClose();
+                                        setExportModalOpen(true);
+                                    }}
+                                    className="flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all text-indigo-400 text-xs font-semibold"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                    </svg>
+                                    Export to React
+                                </button>
+                            </div>
                         </div>
 
                         {/* Danger Zone */}

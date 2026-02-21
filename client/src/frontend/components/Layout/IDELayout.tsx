@@ -21,9 +21,9 @@ import { useEditorSettings } from "../../hooks/useEditorSettings";
 import * as EditorSettingsStore from "../../stores/editorSettingsStore";
 
 import ProjectSettingsModal from "../Modals/ProjectSettingsModal";
-import WindowControls from "../UI/WindowControls";
+
 import Terminal from "../Terminal/Terminal";
-import { Logo } from "../UI/Logo";
+import { Logo } from "../Shared/Logo";
 
 // Feature Pages
 import UIDesignPage from "../Pages/UIDesignPage";
@@ -84,6 +84,19 @@ const IDELayout: React.FC = () => {
         }
     };
 
+    /* When the UI Design page is active, give it full viewport control
+       — it has its own TopActionBar, sidebars, and canvas. */
+    if (activePage === "ui") {
+        return (
+            <div className="h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
+                <div className="flex-1 overflow-hidden">
+                    {renderPage()}
+                </div>
+                <ProjectSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+            </div>
+        );
+    }
+
     return (
         <div className="h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
 
@@ -115,8 +128,7 @@ const IDELayout: React.FC = () => {
                     </span>
                 </div>
 
-                {/* Right: Window Controls */}
-                <WindowControls />
+
             </header>
 
             {/* ===== MAIN CONTENT AREA ===== */}
@@ -223,7 +235,7 @@ const IDELayout: React.FC = () => {
                 <div className="flex items-center gap-4">
                     <span className="font-medium">{project?.name || "No Project"}</span>
                     <span className="opacity-60">|</span>
-                    <span className="opacity-90 capitalize">{activePage === "ui" ? "UI Design" : activePage}</span>
+                    <span className="opacity-90 capitalize">{activePage}</span>
                 </div>
 
                 {/* Right side */}
