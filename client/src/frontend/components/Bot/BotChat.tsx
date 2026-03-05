@@ -5,6 +5,8 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import StructuredAiResponseCard from "../Shared/StructuredAiResponse";
+import { normalizeAiResponse, type StructuredAiResponse } from "../../utils/aiResponse";
 
 interface BotChatProps {
     onClose: () => void;
@@ -17,6 +19,7 @@ interface BotChatProps {
 interface ChatMessage {
     role: "user" | "ai";
     content: string;
+    structured?: StructuredAiResponse;
 }
 
 const API_BASE = "http://localhost:3001/api/ai";
@@ -77,7 +80,8 @@ const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName, anch
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to get response");
 
-            setMessages(prev => [...prev, { role: "ai", content: data.reply }]);
+            const structured = normalizeAiResponse(data);
+            setMessages(prev => [...prev, { role: "ai", content: structured.answer_markdown, structured }]);
         } catch (err: any) {
             setMessages(prev => [...prev, { role: "ai", content: `⚠️ ${err.message || "Connection failed"}` }]);
         } finally {
@@ -148,8 +152,12 @@ const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName, anch
                             <div className={`max-w-[85%] px-3.5 py-2.5 rounded-xl text-[13px] leading-relaxed ${msg.role === "user"
                                     ? "bg-indigo-500 text-white rounded-tr-none"
                                     : "bg-white/[0.04] text-white/85 border border-white/5 rounded-tl-none"
-                                }`} style={{ whiteSpace: "pre-wrap" }}>
-                                {msg.content}
+                                }`} style={{ whiteSpace: msg.role === "user" ? "pre-wrap" : "normal" }}>
+                                {msg.role === "ai" && msg.structured ? (
+                                    <StructuredAiResponseCard response={msg.structured} compact />
+                                ) : (
+                                    msg.content
+                                )}
                             </div>
                         </div>
                     ))}

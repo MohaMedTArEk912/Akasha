@@ -420,38 +420,127 @@ select.input-modern {
     border-color: var(--ide-accent);
 }
 
-/* Animations */
+/* ============================================
+   GLOBAL ANIMATION SYSTEM
+   ============================================ */
+
+/* — Keyframes — */
 @keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-
-.animate-slide-up {
-    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-
+@keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-16px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInRight {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.93); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes scaleInBounce {
+    0%   { opacity: 0; transform: scale(0.9); }
+    70%  { transform: scale(1.02); }
+    100% { opacity: 1; transform: scale(1); }
+}
+@keyframes glowPulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 0.8; }
+}
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+}
+@keyframes spinSlow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
 }
 
-.animate-fade-in {
-    animation: fadeIn 0.3s ease-in-out forwards;
+/* — Easing — */
+:root {
+    --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Layout Classes */
+/* — Animation Utility Classes — */
+.animate-slide-up    { animation: slideUp      0.45s var(--ease-spring) both; }
+.animate-slide-down  { animation: slideDown    0.4s  var(--ease-spring) both; }
+.animate-slide-left  { animation: slideInLeft  0.4s  var(--ease-spring) both; }
+.animate-slide-right { animation: slideInRight 0.4s  var(--ease-spring) both; }
+.animate-fade-in     { animation: fadeIn       0.35s ease-out both; }
+.animate-scale-in    { animation: scaleIn      0.35s var(--ease-spring) both; }
+.animate-scale-bounce{ animation: scaleInBounce 0.5s var(--ease-bounce) both; }
+.animate-glow        { animation: glowPulse    3s    ease-in-out infinite; }
+.animate-float       { animation: float        3s    ease-in-out infinite; }
+.animate-spin-slow   { animation: spinSlow     8s    linear infinite; }
+
+/* Stagger delay helpers — use with any animation class */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.30s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.40s; }
+
+/* Hover micro-interactions */
+.hover-lift {
+    transition: transform 0.25s var(--ease-smooth), box-shadow 0.25s var(--ease-smooth);
+}
+.hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.hover-glow {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.hover-glow:hover {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.hover-scale {
+    transition: transform 0.2s var(--ease-smooth);
+}
+.hover-scale:hover {
+    transform: scale(1.03);
+}
+
+/* Active press effect for buttons */
+.press-effect {
+    transition: transform 0.1s ease;
+}
+.press-effect:active {
+    transform: scale(0.97);
+}
+
+/* Smooth page transitions */
+.page-enter {
+    animation: slideUp 0.5s var(--ease-spring) both;
+}
+
+/* ============================================
+   LAYOUT CLASSES
+   ============================================ */
+
 .ide-section-header {
     @apply h-8 px-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--ide-text-muted)] border-b border-[var(--ide-border)];
 }
@@ -459,3 +548,4 @@ select.input-modern {
 .panel-transition {
     @apply transition-all duration-300 ease-out;
 }
+

@@ -27,6 +27,7 @@ import { Logo } from "../Shared/Logo";
 
 // Feature Pages
 import UIDesignPage from "../Pages/UIDesignPage";
+import UIIdeationPage from "../Pages/UIIdeationPage";
 import UseCasesPage from "../Pages/UseCasesPage";
 import APIsPage from "../Pages/APIsPage";
 import DatabasePage from "../Pages/DatabasePage";
@@ -48,6 +49,7 @@ const FEATURE_PAGES: FeaturePageDef[] = [
     { id: "dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
     { id: "idea", label: "Project Idea", icon: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" },
     { id: "ui", label: "UI Design", icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" },
+    { id: "builder", label: "UI Builder", icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" },
     { id: "usecases", label: "Use Cases", icon: "M13 10V3L4 14h7v7l9-11h-7z" },
     { id: "apis", label: "APIs", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" },
     { id: "database", label: "Database", icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" },
@@ -74,7 +76,8 @@ const IDELayout: React.FC = () => {
         switch (activePage) {
             case "dashboard": return <ProjectDashboard />;
             case "idea": return <IdeaPage />;
-            case "ui": return <UIDesignPage />;
+            case "ui": return <UIIdeationPage />;
+            case "builder": return <UIDesignPage />;
             case "usecases": return <UseCasesPage />;
             case "apis": return <APIsPage />;
             case "database": return <DatabasePage />;
@@ -85,9 +88,9 @@ const IDELayout: React.FC = () => {
         }
     };
 
-    /* When the UI Design page is active, give it full viewport control
+    /* When the UI Builder page is active, give it full viewport control
        — it has its own TopActionBar, sidebars, and canvas. */
-    if (activePage === "ui") {
+    if (activePage === "builder") {
         return (
             <div className="h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
                 <div className="flex-1 overflow-hidden">
@@ -255,29 +258,6 @@ const IDELayout: React.FC = () => {
                 </div>
             )}
 
-            {/* ===== BOTTOM: Status Bar (hidden on code page — CodeEditor has its own) ===== */}
-            {activePage !== "code" && activePage !== "git" && activePage !== "dashboard" && (
-                <footer className="h-6 bg-[var(--ide-statusbar)] flex items-center px-3 text-[11px] text-white select-none flex-shrink-0">
-                    {/* Left side */}
-                    <div className="flex items-center gap-4">
-                        <span className="font-medium">{project?.name || "No Project"}</span>
-                        <span className="opacity-60">|</span>
-                        <span className="opacity-90 capitalize">{activePage}</span>
-                    </div>
-
-                    {/* Right side */}
-                    <div className="ml-auto flex items-center gap-4">
-                        <span className="opacity-90">UTF-8</span>
-                        <span className="opacity-90">LF</span>
-                        <button
-                            onClick={() => toggleTerminal()}
-                            className="hover:bg-white/20 px-2 py-0.5 rounded transition-colors"
-                        >
-                            {terminalOpen ? "Hide Terminal" : "Terminal"}
-                        </button>
-                    </div>
-                </footer>
-            )}
 
             {/* Settings Modal */}
             <ProjectSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
@@ -295,7 +275,7 @@ interface NavRailIconProps {
 
 const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick }) => (
     <button
-        className={`w-10 h-10 mx-auto my-0.5 flex items-center justify-center relative group rounded-xl transition-all duration-300 ${active
+        className={`w-10 h-10 mx-auto my-0.5 flex items-center justify-center relative group rounded-xl transition-all duration-300 press-effect ${active
             ? "text-indigo-400 bg-indigo-500/15"
             : "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
             }`}

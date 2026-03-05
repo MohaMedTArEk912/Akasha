@@ -16,9 +16,9 @@ const DatabasePage: React.FC = () => {
     const [tab, setTab] = useState<DatabaseTab>("schema");
 
     return (
-        <div className="flex flex-col flex-1 overflow-hidden h-full">
+        <div className="flex flex-col flex-1 overflow-hidden h-full page-enter">
             {/* Tab Bar */}
-            <div className="h-9 bg-[var(--ide-chrome)] border-b border-[var(--ide-border)] flex items-center px-2 gap-1 flex-shrink-0">
+            <div className="h-9 bg-[var(--ide-chrome)] border-b border-[var(--ide-border)] flex items-center px-2 gap-1 flex-shrink-0 animate-slide-down">
                 <TabButton label="Schema" active={tab === "schema"} onClick={() => setTab("schema")} />
                 <TabButton label="Variables" active={tab === "variables"} onClick={() => setTab("variables")} />
             </div>

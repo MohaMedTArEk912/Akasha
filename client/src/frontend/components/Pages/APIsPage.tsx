@@ -210,7 +210,7 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; wid
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <div className="relative bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl" style={{ maxWidth: width, width: "90%", maxHeight: "80vh" }} onClick={e => e.stopPropagation()}>
+            <div className="relative bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-scale-in" style={{ maxWidth: width, width: "90%", maxHeight: "80vh" }} onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--ide-border)]">
                     <h3 className="text-sm font-bold text-[var(--ide-text)]">{title}</h3>
                     <button onClick={onClose} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
@@ -434,9 +434,9 @@ const APIsPage: React.FC = () => {
     }, [response]);
 
     return (
-        <div className="flex flex-1 overflow-hidden h-full bg-[var(--ide-bg)]">
+        <div className="flex flex-1 overflow-hidden h-full bg-[var(--ide-bg)] page-enter">
             {/* ─── Left Sidebar ─────────────────── */}
-            <div className="w-72 bg-[var(--ide-bg-sidebar)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0">
+            <div className="w-72 bg-[var(--ide-bg-sidebar)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0 animate-slide-left">
                 {/* Sidebar Tabs */}
                 <div className="flex border-b border-[var(--ide-border)] shrink-0">
                     <button onClick={() => setSidebarTab("collections")}
@@ -524,7 +524,7 @@ const APIsPage: React.FC = () => {
             {/* ─── Main Content ─────────────────── */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* URL Bar */}
-                <div className="shrink-0 px-4 py-3 bg-[var(--ide-chrome)] border-b border-[var(--ide-border)]">
+                <div className="shrink-0 px-4 py-3 bg-[var(--ide-chrome)] border-b border-[var(--ide-border)] animate-slide-down">
                     <div className="flex items-center gap-2">
                         <select value={method} onChange={e => setMethod(e.target.value)}
                             className={`bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg text-sm font-mono font-bold px-3 py-2.5 focus:outline-none focus:border-indigo-500/50 transition-all cursor-pointer ${METHOD_COLORS[method] || "text-gray-400"}`}

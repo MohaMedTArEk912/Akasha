@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import Modal from "../Shared/Modal";
 import { useToast } from "../../context/ToastContext";
+import StructuredAiResponseCard from "../Shared/StructuredAiResponse";
+import { normalizeAiResponse, type StructuredAiResponse } from "../../utils/aiResponse";
 
 interface AIChatModalProps {
     isOpen: boolean;
@@ -10,6 +12,7 @@ interface AIChatModalProps {
 interface ChatMessage {
     role: "user" | "ai";
     content: string;
+    structured?: StructuredAiResponse;
 }
 
 const API_BASE = "http://localhost:3001/api/ai";
@@ -91,7 +94,8 @@ const AIChatModal: React.FC<AIChatModalProps> = ({ isOpen, onClose }) => {
 
             if (!res.ok) throw new Error(data.error || "Failed to get response");
 
-            setMessages(prev => [...prev, { role: "ai", content: data.reply }]);
+            const structured = normalizeAiResponse(data);
+            setMessages(prev => [...prev, { role: "ai", content: structured.answer_markdown, structured }]);
         } catch (err: any) {
             toast.showToast(`AI Chat Error: ${err.message}`, "error");
             setMessages(prev => [...prev, { role: "ai", content: "⚠️ Connection to model failed." }]);
@@ -129,7 +133,11 @@ const AIChatModal: React.FC<AIChatModalProps> = ({ isOpen, onClose }) => {
                                 ? "bg-indigo-500 text-white rounded-tr-none shadow-md"
                                 : "bg-[#161822] text-white border border-white/5 rounded-tl-none"
                                 }`}>
-                                {msg.content}
+                                {msg.role === "ai" && msg.structured ? (
+                                    <StructuredAiResponseCard response={msg.structured} compact />
+                                ) : (
+                                    msg.content
+                                )}
                             </div>
                         </div>
                     ))}

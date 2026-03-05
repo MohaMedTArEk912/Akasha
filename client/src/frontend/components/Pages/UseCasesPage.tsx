@@ -433,9 +433,9 @@ const UseCasesPage: React.FC = () => {
     const selectCls = "bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--ide-text)] focus:outline-none focus:border-indigo-500/50 transition-all cursor-pointer";
 
     return (
-        <div className="flex flex-col flex-1 overflow-hidden h-full bg-[var(--ide-bg)]">
+        <div className="flex flex-col flex-1 overflow-hidden h-full bg-[var(--ide-bg)] page-enter">
             {/* ─── Header ─────────────────────────────── */}
-            <div className="shrink-0 px-6 py-4 border-b border-[var(--ide-border)] bg-[var(--ide-chrome)]">
+            <div className="shrink-0 px-6 py-4 border-b border-[var(--ide-border)] bg-[var(--ide-chrome)] animate-slide-down">
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
@@ -587,7 +587,7 @@ const UseCaseCard: React.FC<{
     return (
         <div
             onClick={onEdit}
-            className="group relative bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] rounded-2xl p-5 cursor-pointer hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200"
+            className="group relative bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] rounded-2xl p-5 cursor-pointer hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200 hover-lift hover-glow animate-scale-in"
             style={{ animation: "uc-scaleUp 0.25s ease-out" }}
         >
             {/* Top row: badges */}

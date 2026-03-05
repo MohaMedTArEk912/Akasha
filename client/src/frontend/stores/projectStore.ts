@@ -18,7 +18,7 @@ interface ProjectState {
     selectedBlockId: string | null;
     selectedPageId: string | null;
     selectedComponentId: string | null;
-    activePage: "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+    activePage: "dashboard" | "idea" | "ui" | "builder" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
     viewport: "desktop" | "tablet" | "mobile";
     editMode: "visual" | "code";
     inspectorOpen: boolean;
@@ -1042,7 +1042,7 @@ export function closeDiffView(): void {
 /**
  * Switch the active feature page
  */
-export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+export type FeaturePage = "dashboard" | "idea" | "ui" | "builder" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";
