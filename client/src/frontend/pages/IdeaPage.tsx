@@ -57,7 +57,6 @@ const IdeaPage: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<"idea" | "workshop">("idea");
-    const isWorkshopTab = activeTab === "workshop";
 
     useEffect(() => {
         if (project) {
@@ -66,7 +65,6 @@ const IdeaPage: React.FC = () => {
     }, [project]);
 
     const ideaWordCount = useMemo(() => idea.trim().split(/\s+/).filter(Boolean).length, [idea]);
-    const ideaCharCount = useMemo(() => idea.trim().length, [idea]);
 
     const headingMatches = useMemo(() => {
         const matches = Array.from(idea.matchAll(/^##\s+(.+)$/gm));
@@ -363,13 +361,35 @@ const IdeaPage: React.FC = () => {
                                             ) : (
                                                 <>
                                                     {idea && (
-                                                        <button
-                                                            onClick={() => setActiveTab("workshop")}
-                                                            className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all flex items-center gap-2"
-                                                        >
-                                                            <span className="text-sm">✨</span>
-                                                            Improve
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const blob = new Blob([`# ${project.name} Idea\n\n${idea}`], { type: "text/markdown" });
+                                                                    const url = URL.createObjectURL(blob);
+                                                                    const a = document.createElement("a");
+                                                                    a.href = url;
+                                                                    a.download = `${project.name.replace(/\s+/g, "_").toLowerCase()}_idea.md`;
+                                                                    document.body.appendChild(a);
+                                                                    a.click();
+                                                                    document.body.removeChild(a);
+                                                                    URL.revokeObjectURL(url);
+                                                                }}
+                                                                className="px-3 py-2 text-xs font-bold rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all flex items-center gap-2"
+                                                                title="Download as Markdown"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                                </svg>
+                                                                Download
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setActiveTab("workshop")}
+                                                                className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all flex items-center gap-2"
+                                                            >
+                                                                <span className="text-sm">✨</span>
+                                                                Improve
+                                                            </button>
+                                                        </>
                                                     )}
                                                     <button
                                                         onClick={() => setIsEditing(true)}
