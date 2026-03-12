@@ -2,61 +2,42 @@
  * IdeaPage — View and edit the project idea/description
  */
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
+import { generateStructuredIdea } from "../stores/projectStore";
+import { useToast } from "../context/ToastContext";
 import axios from "axios";
 import IdeaWorkshop from "./IdeaWorkshop";
 
 const API_BASE = "http://localhost:3001/api";
 
-const IDEA_TAB_BLOCKS = [
-    {
-        id: "problem",
-        label: "Problem",
-        content:
-            "## Problem\n- What pain point exists?\n- Who is affected?\n- Why current solutions are insufficient?",
-    },
-    {
-        id: "users",
-        label: "Users",
-        content:
-            "## Target Users\n- Primary users:\n- Secondary users:\n- Context and constraints:",
-    },
-    {
-        id: "value",
-        label: "Value",
-        content:
-            "## Value Proposition\n- Core value:\n- Differentiation:\n- Expected outcomes:",
-    },
-    {
-        id: "mvp",
-        label: "MVP Scope",
-        content:
-            "## MVP Scope\n- Must-have features:\n- Nice-to-have features:\n- Out of scope:",
-    },
-    {
-        id: "constraints",
-        label: "Constraints",
-        content:
-            "## Constraints\n- Timeline:\n- Budget/team:\n- Technical/security limits:",
-    },
-];
-
-const IDEA_QUALITY_CHECKS = [
-    { id: "problem", label: "Problem defined", regex: /(problem|pain|issue|challenge)/i },
-    { id: "users", label: "Users identified", regex: /(user|audience|customer|persona)/i },
-    { id: "value", label: "Value proposition", regex: /(value|benefit|outcome|advantage)/i },
-    { id: "scope", label: "Scope included", regex: /(feature|scope|mvp|must-have)/i },
-    { id: "constraints", label: "Constraints noted", regex: /(constraint|budget|timeline|risk|limitation)/i },
-];
-
 const IdeaPage: React.FC = () => {
     const { project } = useProjectStore();
+    const { error: showToastError } = useToast();
     const [idea, setIdea] = useState("");
-    const [isEditing, setIsEditing] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [saved, setSaved] = useState(false);
-    const [activeTab, setActiveTab] = useState<"idea" | "workshop">("idea");
+    const [activeTab, setActiveTab] = useState<"workspace" | "document">("workspace");
+    const [generatingPlan, setGeneratingPlan] = useState(false);
+
+    useEffect(() => {
+        if (project && activeTab === "workspace") {
+            // Set initial tab based on whether idea details exist
+            if (project.settings?.ideaDetails) {
+                setActiveTab("document");
+            }
+        }
+    }, [project, activeTab]);
+
+    const handleGeneratePlan = async () => {
+        setGeneratingPlan(true);
+        try {
+            await generateStructuredIdea();
+        } catch (err) {
+            console.error("Failed to generate structured plan:", err);
+            showToastError("Failed to generate plan. The AI returned invalid data. Please try again.");
+        } finally {
+            setGeneratingPlan(false);
+        }
+    };
 
     useEffect(() => {
         if (project) {
@@ -64,73 +45,23 @@ const IdeaPage: React.FC = () => {
         }
     }, [project]);
 
-    const ideaWordCount = useMemo(() => idea.trim().split(/\s+/).filter(Boolean).length, [idea]);
 
-    const headingMatches = useMemo(() => {
-        const matches = Array.from(idea.matchAll(/^##\s+(.+)$/gm));
-        return matches.map((match) => match[1]?.trim()).filter(Boolean) as string[];
-    }, [idea]);
-
-    const qualityChecks = useMemo(
-        () => IDEA_QUALITY_CHECKS.map((check) => ({ ...check, done: check.regex.test(idea) })),
-        [idea]
-    );
-
-    const ideaHealthScore = useMemo(() => {
-        const checkRatio = qualityChecks.length > 0
-            ? qualityChecks.filter((check) => check.done).length / qualityChecks.length
-            : 0;
-        const lengthBonus = ideaWordCount >= 160 ? 0.2 : ideaWordCount >= 80 ? 0.1 : 0;
-        return Math.min(100, Math.round((checkRatio + lengthBonus) * 100));
-    }, [ideaWordCount, qualityChecks]);
-
-    const extractedHighlights = useMemo(() => {
-        const lines = idea
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line.startsWith("-") || line.startsWith("*"))
-            .map((line) => line.replace(/^[-*]\s*/, "").trim())
-            .filter(Boolean);
-        return lines.slice(0, 6);
-    }, [idea]);
-
-    const handleInsertBlock = (content: string) => {
-        setIdea((prev) => {
-            const trimmed = prev.trimEnd();
-            if (!trimmed) return content;
-            return `${trimmed}\n\n${content}`;
-        });
-        setIsEditing(true);
-    };
-
-    const handleSave = async () => {
-        if (!project) return;
-        setSaving(true);
-        try {
-            await axios.put(`${API_BASE}/project/${project.id}/idea`, { idea });
-            setSaved(true);
-            setIsEditing(false);
-            setTimeout(() => setSaved(false), 2000);
-        } catch (err) {
-            console.error("Failed to save idea:", err);
-        } finally {
-            setSaving(false);
-        }
-    };
 
     const handleWorkshopRefined = async (refinedIdea: string) => {
         if (!project) return;
         setIdea(refinedIdea);
-        setActiveTab("idea");
-        setSaving(true);
+        setActiveTab("document");
         try {
             await axios.put(`${API_BASE}/project/${project.id}/idea`, { idea: refinedIdea });
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
+            
+            // Generate the structured plan immediately since they hit finalize
+            setGeneratingPlan(true);
+            await generateStructuredIdea(refinedIdea);
+            setGeneratingPlan(false);
         } catch (err) {
-            console.error("Failed to save refined idea:", err);
-        } finally {
-            setSaving(false);
+            console.error("Failed to save refined idea or generate plan:", err);
+            showToastError("Failed to generate plan. The AI returned invalid JSON. Please try again.");
+            setGeneratingPlan(false);
         }
     };
 
@@ -184,264 +115,28 @@ const IdeaPage: React.FC = () => {
                         {/* Idea / Workshop tabs */}
                         <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1">
                             <button
-                                onClick={() => setActiveTab("idea")}
-                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "idea"
-                                    ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"
+                                onClick={() => setActiveTab("document")}
+                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "document"
+                                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
                                     : "text-white/50 hover:text-white hover:bg-white/10"
                                     }`}
                             >
-                                Idea
+                                Idea Document
                             </button>
                             <button
-                                onClick={() => setActiveTab("workshop")}
-                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "workshop"
+                                onClick={() => setActiveTab("workspace")}
+                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "workspace"
                                     ? "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg shadow-indigo-500/20"
                                     : "text-white/50 hover:text-white hover:bg-white/10"
                                     }`}
                             >
-                                AI Workshop
+                                AI Workspace
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {activeTab === "idea" && (
-                    <div
-                        className="flex-1 min-h-0 grid gap-4 animate-fade-in xl:grid-cols-[320px,1fr]"
-                        style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}
-                    >
-                        {/* LEFT COLUMN: Metrics & Info */}
-                        <div className="space-y-4">
-                            {/* Idea Readiness Score */}
-                            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/8 p-4">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Idea Readiness</div>
-                                <div className="mt-2 flex items-end justify-between">
-                                    <div className="text-3xl font-black text-white">{ideaHealthScore}%</div>
-                                    <div className="text-[11px] text-white/45">{ideaWordCount} words</div>
-                                </div>
-                                <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 transition-all duration-300"
-                                        style={{ width: `${ideaHealthScore}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Quality Checklist */}
-                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-white/60">Quality Checklist</div>
-                                <ul className="mt-3 space-y-2">
-                                    {qualityChecks.map((check) => (
-                                        <li key={check.id} className="flex items-center gap-2 text-xs">
-                                            <span
-                                                className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ${
-                                                    check.done
-                                                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                                        : "bg-white/8 text-white/45 border border-white/15"
-                                                }`}
-                                            >
-                                                {check.done ? "✓" : "•"}
-                                            </span>
-                                            <span className={check.done ? "text-white/85" : "text-white/45"}>{check.label}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-
-                            {/* Detected Sections & Highlights */}
-                            {!isEditing && idea && (
-                                <>
-                                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                        <div className="text-[10px] uppercase tracking-widest text-white/60 font-black mb-3">Detected Sections ({headingMatches.length})</div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {headingMatches.length > 0 ? headingMatches.map((heading) => (
-                                                <span key={heading} className="px-2 py-1 rounded-lg text-[10px] bg-indigo-500/15 border border-indigo-500/25 text-indigo-200">
-                                                    {heading}
-                                                </span>
-                                            )) : (
-                                                <span className="text-[11px] text-white/45">No sections detected.</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                        <div className="text-[10px] uppercase tracking-widest text-white/60 font-black mb-3">Highlights</div>
-                                        <ul className="space-y-1.5 text-xs text-white/70">
-                                            {extractedHighlights.length > 0 ? extractedHighlights.map((highlight, index) => (
-                                                <li key={`highlight-${index}`} className="flex items-start gap-2">
-                                                    <span className="text-white/30">•</span> {highlight}
-                                                </li>
-                                            )) : (
-                                                <li className="flex items-start gap-2 text-white/45">
-                                                    <span className="text-white/30">•</span> Add bullet points to highlight keys here.
-                                                </li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                </>
-                            )}
-
-                            {/* AI Context Info */}
-                            <div className="flex flex-col gap-3 p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
-                                <div className="flex text-lg mt-0.5">🤖</div>
-                                <div>
-                                    <p className="text-[11px] font-medium text-indigo-200/50 leading-relaxed">
-                                        Your project idea context is fed directly into the floating AI bot. The better you describe it, the smarter your AI will be.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* RIGHT COLUMN: Idea Editor/Viewer */}
-                        <div className="min-h-0 flex flex-col gap-4">
-                            {/* Templates Block (If editing or empty) */}
-                            {(isEditing || !idea) && (
-                                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                                    <div className="flex items-center justify-between mb-2 px-1">
-                                        <span className="text-[10px] font-black text-cyan-300 uppercase tracking-widest">Quick Building Blocks</span>
-                                        <button
-                                            onClick={() => setActiveTab("workshop")}
-                                            className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
-                                        >
-                                            Open AI Workshop →
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {IDEA_TAB_BLOCKS.map((block) => (
-                                            <button
-                                                key={block.id}
-                                                onClick={() => handleInsertBlock(block.content)}
-                                                className="h-8 px-3 rounded-lg text-[11px] font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-all"
-                                            >
-                                                + {block.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Central Card */}
-                            <div className="flex-1 min-h-0 relative bg-white/[0.04] border border-white/[0.08] rounded-3xl overflow-hidden flex flex-col">
-                                {/* Top gradient accent */}
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 z-10" />
-
-                                <div className="p-6 md:p-8 flex flex-col h-full mt-1">
-                                    {/* Controls */}
-                                    <div className="flex items-center justify-between mb-4 flex-shrink-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">
-                                                {isEditing ? "Editing Idea" : "Idea Document"}
-                                            </span>
-                                            {saved && (
-                                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest animate-fade-in shadow-emerald-400/20 shadow-sm px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                                                    ✓ Saved
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {isEditing ? (
-                                                <>
-                                                    <button
-                                                        onClick={() => {
-                                                            setIsEditing(false);
-                                                            setIdea(project.description || "");
-                                                        }}
-                                                        className="px-4 py-2 text-xs font-bold rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                    <button
-                                                        onClick={handleSave}
-                                                        disabled={saving}
-                                                        className="px-6 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:opacity-90 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50"
-                                                    >
-                                                        {saving ? "Saving..." : "Save"}
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {idea && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => {
-                                                                    const blob = new Blob([`# ${project.name} Idea\n\n${idea}`], { type: "text/markdown" });
-                                                                    const url = URL.createObjectURL(blob);
-                                                                    const a = document.createElement("a");
-                                                                    a.href = url;
-                                                                    a.download = `${project.name.replace(/\s+/g, "_").toLowerCase()}_idea.md`;
-                                                                    document.body.appendChild(a);
-                                                                    a.click();
-                                                                    document.body.removeChild(a);
-                                                                    URL.revokeObjectURL(url);
-                                                                }}
-                                                                className="px-3 py-2 text-xs font-bold rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all flex items-center gap-2"
-                                                                title="Download as Markdown"
-                                                            >
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                                </svg>
-                                                                Download
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setActiveTab("workshop")}
-                                                                className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-all flex items-center gap-2"
-                                                            >
-                                                                <span className="text-sm">✨</span>
-                                                                Improve
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                    <button
-                                                        onClick={() => setIsEditing(true)}
-                                                        className="px-4 py-2 text-xs font-bold rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all flex items-center gap-2"
-                                                    >
-                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                        </svg>
-                                                        Edit
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Content Scroll Area */}
-                                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 -mr-2">
-                                        {isEditing ? (
-                                            <textarea
-                                                value={idea}
-                                                onChange={(e) => setIdea(e.target.value)}
-                                                autoFocus
-                                                placeholder="Describe your project idea in detail... What problem does it solve? Who is it for? What are the key features and goals?"
-                                                className="w-full h-full min-h-[400px] bg-black/20 border border-white/5 rounded-2xl p-6 text-white/90 text-[15px] leading-[1.8] focus:outline-none focus:border-amber-500/40 focus:ring-2 focus:ring-amber-500/10 transition-all placeholder:text-white/20 resize-none font-medium custom-scrollbar"
-                                            />
-                                        ) : idea ? (
-                                            <div className="text-white/80 text-[15px] leading-[1.8] whitespace-pre-wrap font-medium p-2">
-                                                {idea}
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col items-center justify-center py-20 text-center h-full">
-                                                <span className="text-5xl mb-4 opacity-30">💡</span>
-                                                <h3 className="text-lg font-bold text-white/40 mb-2">No idea yet</h3>
-                                                <p className="text-sm text-white/20 max-w-sm mb-6">
-                                                    Click "Edit" to describe your project. The more detail you provide, the better AI workshop insights you'll get.
-                                                </p>
-                                                <button
-                                                    onClick={() => setIsEditing(true)}
-                                                    className="px-6 py-3 text-xs font-bold rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:opacity-90 transition-all shadow-lg shadow-amber-500/20"
-                                                >
-                                                    Start Writing
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === "workshop" && (
+                {activeTab === "workspace" && (
                     <div className="flex-1 min-h-0" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
                         <IdeaWorkshop
                             projectName={project.name}
@@ -449,8 +144,110 @@ const IdeaPage: React.FC = () => {
                             initialIdea={idea}
                             fullScreen
                             onRefined={handleWorkshopRefined}
-                            onCancel={() => setActiveTab("idea")}
+                            onCancel={() => setActiveTab("document")}
                         />
+                    </div>
+                )}
+
+                {activeTab === "document" && (
+                    <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 overflow-y-auto custom-scrollbar" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Structured Plan</h2>
+                                <p className="text-sm text-white/50 mt-1">AI-extracted metadata, problem scope, solution, and roadmap.</p>
+                            </div>
+                            <button
+                                onClick={handleGeneratePlan}
+                                disabled={generatingPlan || !idea}
+                                className="px-5 py-2.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {generatingPlan ? "Generating..." : project.settings?.ideaDetails ? "Refresh Plan from Idea" : "Generate Plan from Idea"}
+                            </button>
+                        </div>
+                        
+                        {!project.settings?.ideaDetails && !generatingPlan ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
+                                <span className="text-4xl mb-4 opacity-30">🧩</span>
+                                <h3 className="text-lg font-bold text-white/50 mb-2">No Structured Plan Yet</h3>
+                                <p className="text-sm text-white/30 max-w-md">Click "Generate Plan from Idea" to let AI parse your unstructured project idea into a neat, actionable JSON breakdown.</p>
+                            </div>
+                        ) : generatingPlan ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-center animate-pulse">
+                                <span className="text-4xl mb-4 opacity-50">🤖</span>
+                                <h3 className="text-lg font-bold text-white/70 mb-2">Extracting Details...</h3>
+                                <p className="text-sm text-white/40">Our AI is analyzing your project description and breaking it down into structured modules.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+                                {/* Metadata Card */}
+                                <div className="p-5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col gap-3">
+                                    <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest border-b border-white/[0.05] pb-2">Idea Metadata</h3>
+                                    <div className="text-xs text-white/70"><strong>Name:</strong> {project.settings.ideaDetails?.ideaMetadata?.ideaName || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Tagline:</strong> {project.settings.ideaDetails?.ideaMetadata?.tagline || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Summary:</strong> {project.settings.ideaDetails?.ideaMetadata?.summary || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Category:</strong> <span className="px-2 py-0.5 rounded-md bg-white/10 text-white/90">{project.settings.ideaDetails?.ideaMetadata?.category || "N/A"}</span></div>
+                                </div>
+                                
+                                {/* Problem Card */}
+                                <div className="p-5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col gap-3">
+                                    <h3 className="text-sm font-black text-rose-400 uppercase tracking-widest border-b border-white/[0.05] pb-2">The Problem</h3>
+                                    <div className="text-xs text-white/70"><strong>Statement:</strong> {project.settings.ideaDetails?.problem?.problemStatement || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Urgency:</strong> <span className="text-rose-300 font-bold">{project.settings.ideaDetails?.problem?.urgencyLevel || "N/A"}</span></div>
+                                    <div>
+                                        <div className="text-[10px] uppercase text-white/40 font-bold mb-1">Pain Points</div>
+                                        <ul className="list-disc pl-4 text-xs text-white/60 space-y-1">
+                                            {project.settings.ideaDetails?.problem?.painPoints?.map((p: string, i: number) => <li key={i}>{p}</li>) || <li>N/A</li>}
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                {/* Solution Card */}
+                                <div className="p-5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col gap-3">
+                                    <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest border-b border-white/[0.05] pb-2">The Solution</h3>
+                                    <div className="text-xs text-white/70"><strong>Innovation:</strong> {project.settings.ideaDetails?.solution?.coreInnovation || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Value Prop:</strong> {project.settings.ideaDetails?.solution?.valueProposition || "N/A"}</div>
+                                    <div>
+                                        <div className="text-[10px] uppercase text-white/40 font-bold mb-1">Key Benefits</div>
+                                        <ul className="list-disc pl-4 text-xs text-white/60 space-y-1">
+                                            {project.settings.ideaDetails?.solution?.keyBenefits?.map((b: string, i: number) => <li key={i}>{b}</li>) || <li>N/A</li>}
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                {/* Product Features Card */}
+                                <div className="p-5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col gap-3">
+                                    <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest border-b border-white/[0.05] pb-2">Core Product</h3>
+                                    <div>
+                                        <div className="text-[10px] uppercase text-white/40 font-bold mb-1">Core Features</div>
+                                        <ul className="list-disc pl-4 text-xs text-white/60 space-y-1">
+                                            {project.settings.ideaDetails?.product?.coreFeatures?.map((f: string, i: number) => <li key={i}>{f}</li>) || <li>N/A</li>}
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] uppercase text-white/40 font-bold mb-1">Advanced Features</div>
+                                        <ul className="list-disc pl-4 text-xs text-white/60 space-y-1">
+                                            {project.settings.ideaDetails?.product?.advancedFeatures?.map((f: string, i: number) => <li key={i}>{f}</li>) || <li>-</li>}
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                {/* Target Market Card */}
+                                <div className="p-5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col gap-3 md:col-span-2 lg:col-span-1">
+                                    <h3 className="text-sm font-black text-fuchsia-400 uppercase tracking-widest border-b border-white/[0.05] pb-2">Target Market</h3>
+                                    <div className="text-xs text-white/70"><strong>Primary Users:</strong> {project.settings.ideaDetails?.targetMarket?.primaryUsers?.join(", ") || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Focus:</strong> {project.settings.ideaDetails?.targetMarket?.geographicFocus || "Global"}</div>
+                                    <div className="text-xs text-white/40 italic">Note: Consider filling in TAM/SAM/SOM if required.</div>
+                                </div>
+                                
+                                {/* Additional Architecture/Roadmap Summary */}
+                                <div className="p-5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex flex-col gap-3 md:col-span-2 lg:col-span-1">
+                                    <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest border-b border-white/[0.05] pb-2">Technical & MVP</h3>
+                                    <div className="text-xs text-white/70"><strong>Tech Stack:</strong> {project.settings.ideaDetails?.technicalArchitecture?.frontend || "Frontend"}, {project.settings.ideaDetails?.technicalArchitecture?.backend || "Backend"}, {project.settings.ideaDetails?.technicalArchitecture?.database || "DB"}</div>
+                                    <div className="text-xs text-white/70"><strong>MVP Goal:</strong> {project.settings.ideaDetails?.mvpPlan?.mvpGoal || "N/A"}</div>
+                                    <div className="text-xs text-white/70"><strong>Est. Time:</strong> {project.settings.ideaDetails?.mvpPlan?.developmentTimeEstimate || "N/A"}</div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

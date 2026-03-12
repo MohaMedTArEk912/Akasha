@@ -185,6 +185,63 @@ export interface VariableSchema {
     archived: boolean;
 }
 
+export interface StructuredIdeaDetails {
+    ideaMetadata?: {
+        ideaName: string; tagline: string; summary: string; industry: string; category: string; innovationType: string; creationDate: string;
+    };
+    problem?: {
+        problemStatement: string; problemContext: string; whoHasThisProblem: string[]; painPoints: string[]; currentSolutions: string[]; whyCurrentSolutionsFail: string[]; urgencyLevel: string;
+    };
+    solution?: {
+        productDescription: string; coreInnovation: string; valueProposition: string; keyBenefits: string[]; useCases: string[];
+    };
+    targetMarket?: {
+        primaryUsers: string[]; customerSegments: string[]; marketSize: { tam: string; sam: string; som: string; }; geographicFocus: string; earlyAdopters: string[];
+    };
+    competition?: {
+        directCompetitors: string[]; indirectCompetitors: string[]; competitiveAdvantages: string[]; weaknessesOfCompetitors: string[]; differentiationStrategy: string;
+    };
+    product?: {
+        coreFeatures: string[]; advancedFeatures: string[]; futureFeatures: string[]; platforms: string[];
+    };
+    userExperience?: {
+        onboardingFlow: string[]; mainUserJourney: string[]; retentionMechanisms: string[]; viralityMechanisms: string[];
+    };
+    monetization?: {
+        revenueModel: string; pricingStrategy: string; pricingTiers: { free: string; pro: string; enterprise: string; }; estimatedLTV: string; estimatedCAC: string;
+    };
+    goToMarket?: {
+        launchStrategy: string[]; marketingChannels: string[]; growthLoops: string[]; partnerships: string[];
+    };
+    technicalArchitecture?: {
+        frontend: string; backend: string; database: string; aiComponents: string; infrastructure: string; integrations: string[]; security: string[]; scalabilityPlan: string;
+    };
+    dataModel?: {
+        coreEntities: string[]; relationships: string[]; dataPrivacy: string;
+    };
+    aiStrategy?: {
+        aiRoleInProduct: string; modelsUsed: string[]; trainingDataSources: string[]; aiRisks: string[];
+    };
+    mvpPlan?: {
+        mvpGoal: string; mustHaveFeatures: string[]; developmentTimeEstimate: string; teamRequired: string[];
+    };
+    validation?: {
+        assumptions: string[]; validationMethods: string[]; successCriteria: string[];
+    };
+    risks?: {
+        technicalRisks: string[]; marketRisks: string[]; legalRisks: string[]; businessRisks: string[];
+    };
+    metrics?: {
+        northStarMetric: string; kpis: string[];
+    };
+    roadmap?: {
+        phase1: string; phase2: string; phase3: string; phase4: string;
+    };
+    ideaScore?: {
+        marketPotential: string; technicalFeasibility: string; competitionLevel: string; buildDifficulty: string; overallScore: string | number;
+    };
+}
+
 export interface ProjectSettings {
     default_locale: string;
     locales: string[];
@@ -206,6 +263,7 @@ export interface ProjectSettings {
         default_og_image?: string;
         favicon?: string;
     };
+    ideaDetails?: StructuredIdeaDetails;
 }
 
 export interface FileEntry {

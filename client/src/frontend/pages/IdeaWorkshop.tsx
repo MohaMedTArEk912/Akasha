@@ -163,10 +163,10 @@ function buildFeatureDecisions(analysis: any): FeatureDecision[] {
 
     return source
         .filter((item: unknown): item is string => typeof item === 'string')
-        .map((item) => item.trim())
-        .filter(Boolean)
+        .map((item: string) => item.trim())
+        .filter((item: string) => Boolean(item))
         .slice(0, 8)
-        .map((title, index) => ({
+        .map((title: string, index: number) => ({
             id: toFeatureDecisionId(title, index),
             title,
             include: true,
@@ -1524,7 +1524,7 @@ export default function IdeaWorkshop({
                             onClick={() => onRefined(refinedIdea)}
                             className="btn-modern-primary !h-10 !px-8 text-xs !bg-gradient-to-r !from-emerald-500 !to-teal-500 hover:!from-emerald-400 hover:!to-teal-400 !shadow-emerald-500/20"
                         >
-                            Finalize & Save
+                            Generate Structured Plan
                         </button>
                     )}
                 </div>

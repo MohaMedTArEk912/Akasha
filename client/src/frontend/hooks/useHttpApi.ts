@@ -52,6 +52,10 @@ export const httpApi = {
     updateSettings: async (_settings: Partial<ProjectSettings>) => {
         throw new Error('Update settings not implemented');
     },
+    generateStructuredIdea: async (id: string, ideaContent?: string): Promise<ProjectSchema> => {
+        const res = await client.post(`/project/${id}/generate-idea-details`, { ideaContent });
+        return res.data;
+    },
     resetProject: async (_clearDiskFiles?: boolean): Promise<ProjectSchema> => {
         // Mock implementation for reset
         if (!activeProjectId) throw new Error("No active project");

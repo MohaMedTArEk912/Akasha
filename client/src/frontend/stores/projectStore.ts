@@ -280,6 +280,25 @@ export async function updateProjectSettings(settings: Record<string, unknown>): 
 }
 
 /**
+ * Generate Structured Idea logic (AI)
+ */
+export async function generateStructuredIdea(ideaContent?: string): Promise<void> {
+    const projectId = state.project?.id;
+    if (!projectId) throw new Error("No active project");
+
+    updateState(() => ({ loading: true, error: null, loadingMessage: "Generating AI Structured Plan..." }));
+    try {
+        const project = await api.generateStructuredIdea(projectId, ideaContent);
+        updateState(() => ({ project }));
+    } catch (err) {
+        updateState(() => ({ error: String(err) }));
+        throw err;
+    } finally {
+        updateState(() => ({ loading: false, loadingMessage: null }));
+    }
+}
+
+/**
  * Reset the current project to initial state
  * @param clearDiskFiles - If true, clears all files in the project folder before resetting
  */
