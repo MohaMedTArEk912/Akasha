@@ -19,13 +19,11 @@ const IdeaPage: React.FC = () => {
     const [generatingPlan, setGeneratingPlan] = useState(false);
 
     useEffect(() => {
-        if (project && activeTab === "workspace") {
-            // Set initial tab based on whether idea details exist
-            if (project.settings?.ideaDetails) {
-                setActiveTab("document");
-            }
+        if (project && project.settings?.ideaDetails) {
+            setActiveTab("document");
         }
-    }, [project, activeTab]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Only run once on mount to set the initial tab
 
     const handleGeneratePlan = async () => {
         setGeneratingPlan(true);

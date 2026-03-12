@@ -149,34 +149,55 @@ const ProjectDashboard: React.FC = () => {
                 </div>
 
                 {/* ── Project Idea Preview ── */}
-                {project?.description && (
-                    <div
-                        className="mb-8 relative bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden group cursor-pointer hover:border-amber-500/20 transition-all duration-300"
-                        onClick={() => setActivePage("idea")}
-                        style={{ animation: "fadeSlideUp 0.5s ease-out 0.1s both" }}
-                    >
-                        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500/60 via-orange-500/60 to-yellow-500/60" />
-                        <div className="p-5 flex items-start gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/10 flex items-center justify-center flex-shrink-0">
-                                <span className="text-lg">💡</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="text-xs font-bold text-white/80">Project Idea</h3>
-                                    <span className="text-[8px] font-black text-amber-500/60 uppercase tracking-widest">AI Context</span>
+                {(project?.description || project?.settings?.ideaDetails) && (() => {
+                    const details = project?.settings?.ideaDetails;
+                    const ideaName = details?.ideaMetadata?.ideaName;
+                    const tagline = details?.ideaMetadata?.tagline;
+                    const summary = details?.ideaMetadata?.summary;
+                    // Strip markdown headers, JSON noise, and excessive whitespace for plain text fallback
+                    const cleanDesc = (project?.description || "")
+                        .replace(/^#+\s.*/gm, "")
+                        .replace(/\`\`\`[\s\S]*?\`\`\`/g, "")
+                        .replace(/[{}\[\]"]/g, "")
+                        .replace(/\s{2,}/g, " ")
+                        .trim();
+                    const previewText = tagline || summary || cleanDesc;
+
+                    return (
+                        <div
+                            className="mb-8 relative bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden group cursor-pointer hover:border-amber-500/20 transition-all duration-300"
+                            onClick={() => setActivePage("idea")}
+                            style={{ animation: "fadeSlideUp 0.5s ease-out 0.1s both" }}
+                        >
+                            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500/60 via-orange-500/60 to-yellow-500/60" />
+                            <div className="p-5 flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/10 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-lg">💡</span>
                                 </div>
-                                <p className="text-[12px] text-white/35 leading-relaxed line-clamp-2 group-hover:text-white/50 transition-colors">
-                                    {project.description}
-                                </p>
-                            </div>
-                            <div className="text-white/20 group-hover:text-amber-400/60 transition-colors flex-shrink-0 mt-1">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                                </svg>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="text-xs font-bold text-white/80">
+                                            {ideaName || "Project Idea"}
+                                        </h3>
+                                        {details ? (
+                                            <span className="text-[8px] font-black text-emerald-500/70 uppercase tracking-widest">✓ Structured</span>
+                                        ) : (
+                                            <span className="text-[8px] font-black text-amber-500/60 uppercase tracking-widest">AI Context</span>
+                                        )}
+                                    </div>
+                                    <p className="text-[12px] text-white/35 leading-relaxed line-clamp-2 group-hover:text-white/50 transition-colors">
+                                        {previewText || "Click to open the Idea Workspace"}
+                                    </p>
+                                </div>
+                                <div className="text-white/20 group-hover:text-amber-400/60 transition-colors flex-shrink-0 mt-1">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
                 {/* ── Quick Actions ── */}
                 <div className="mb-8" style={{ animation: "fadeSlideUp 0.5s ease-out 0.15s both" }}>
                     <h2 className="text-[10px] font-black text-white/25 uppercase tracking-[0.2em] mb-3">Quick Actions</h2>

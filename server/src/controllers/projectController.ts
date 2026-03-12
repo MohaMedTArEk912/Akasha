@@ -226,13 +226,14 @@ Use this exact structure:
 Fill ALL string values with real content inferred from the project idea. Return ONLY the JSON object, nothing else.`;
 
         const llmProvider = getLLMProvider();
+        // Qwen's /chat API has no 'system' role — merge the system prompt into the user message directly
+        const combinedUserMessage = `${systemPrompt}\n\nProject idea:\n${rawIdea}`;
         const modelOutput = await llmProvider.chat({
-            model: 'google/gemini-2.5-pro',
+            model: 'qwen',
             temperature: 0.2,
-            max_tokens: 2500,
+            max_tokens: 2000,
             messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: `Project idea:\n${rawIdea}` }
+                { role: 'user', content: combinedUserMessage }
             ]
         });
 
