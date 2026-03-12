@@ -8,11 +8,10 @@ import React, { useEffect } from "react";
 import "./index.css";
 
 // Components
-import IDELayout from "./components/Layout/IDELayout";
-import DashboardView from "./components/Dashboard/DashboardView";
-import WorkspaceSetup from "./components/Dashboard/WorkspaceSetup";
-import ErrorBoundary from './components/Shared/ErrorBoundary';
-import FloatingBot from "./components/Bot/FloatingBot";
+import IDELayout from "./components/layout/IDELayout";
+import DashboardView from "./pages/Dashboard/DashboardView";
+import ErrorBoundary from './components/ui/ErrorBoundary';
+import FloatingBot from "./components/features/Bot/FloatingBot";
 
 // Stores
 import { initWorkspace } from "./stores/projectStore";
@@ -25,7 +24,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { DragDropProvider } from "./context/DragDropContext";
 
 const App: React.FC = () => {
-  const { project, workspacePath, isDashboardActive } = useProjectStore();
+  const { project, isDashboardActive } = useProjectStore();
   useKeyboardShortcuts();
 
   // Initialize workspace and try to load any existing project on mount
@@ -41,19 +40,6 @@ const App: React.FC = () => {
   }, []);
 
   // Main navigation logic
-  if (!workspacePath) {
-    return (
-      <ErrorBoundary>
-        <ThemeProvider>
-          <ToastProvider>
-            <WorkspaceSetup />
-            <FloatingBot />
-          </ToastProvider>
-        </ThemeProvider>
-      </ErrorBoundary>
-    );
-  }
-
   if (isDashboardActive || !project) {
     return (
       <ErrorBoundary>

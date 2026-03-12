@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import Modal from "../Shared/Modal";
+import Modal from "../ui/Modal";
 import { useToast } from "../../context/ToastContext";
-import StructuredAiResponseCard from "../Shared/StructuredAiResponse";
+import StructuredAiResponseCard from "../ui/StructuredAiResponse";
 import { normalizeAiResponse, type StructuredAiResponse } from "../../utils/aiResponse";
 
 interface AIChatModalProps {

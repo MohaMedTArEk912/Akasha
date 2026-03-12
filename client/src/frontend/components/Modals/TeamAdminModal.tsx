@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Modal from "../Shared/Modal";
+import Modal from "../ui/Modal";
 import { useToast } from "../../context/ToastContext";
 
 interface TeamAdminModalProps {
