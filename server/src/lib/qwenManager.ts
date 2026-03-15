@@ -14,6 +14,8 @@ const __dirname = path.dirname(__filename);
 
 let qwenProcess: ChildProcess | null = null;
 const QWEN_PORT = Number(process.env.QWEN_PORT || 8000);
+const QWEN_STARTUP_MAX_ATTEMPTS = Number(process.env.QWEN_STARTUP_MAX_ATTEMPTS || 120);
+const QWEN_STARTUP_DELAY_MS = Number(process.env.QWEN_STARTUP_DELAY_MS || 1000);
 
 function execAsync(command: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -79,9 +81,9 @@ export async function startQwenServer(): Promise<boolean> {
         return false;
     }
 
-    const existingQwenHealthy = await checkQwenHealth();
+        const existingQwenHealthy = await checkQwenHealth();
     if (existingQwenHealthy) {
-        console.log('[Qwen] Existing Qwen service detected on http://localhost:8000, skipping new spawn');
+        console.log(`[Qwen] Existing Qwen service detected on ${process.env.QWEN_URL || 'http://localhost:8000'}, skipping new spawn`);
         return true;
     }
 
@@ -126,11 +128,11 @@ export async function startQwenServer(): Promise<boolean> {
         });
 
         // Wait for Qwen server to be healthy
-        console.log('[Qwen] Waiting for server health check...');
-        const healthy = await waitForQwenHealth(30, 1000);
+        console.log(`[Qwen] Waiting for server health check (attempts=${QWEN_STARTUP_MAX_ATTEMPTS}, delayMs=${QWEN_STARTUP_DELAY_MS})...`);
+        const healthy = await waitForQwenHealth(QWEN_STARTUP_MAX_ATTEMPTS, QWEN_STARTUP_DELAY_MS);
 
         if (healthy) {
-            console.log('[Qwen] ✓ Server ready on http://localhost:8000');
+            console.log(`[Qwen] ✓ Server ready on ${process.env.QWEN_URL || 'http://localhost:8000'}`);
             return true;
         } else {
             console.warn('[Qwen] ✗ Server health check failed - server may not be ready');

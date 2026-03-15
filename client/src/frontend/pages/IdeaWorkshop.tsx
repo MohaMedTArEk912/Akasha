@@ -1649,7 +1649,7 @@ export default function IdeaWorkshop({
                 </div>
 
                 <div className="px-5 pb-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                         {WORKFLOW_STEPS.map((step, index) => {
                             const stepNumber = index + 1;
                             const isActive = stepNumber === activeStep;
@@ -1658,7 +1658,7 @@ export default function IdeaWorkshop({
                             return (
                                 <div
                                     key={step}
-                                    className={`rounded-xl border px-3 py-2 text-xs transition-all ${
+                                    className={`rounded-xl border px-3 py-2 text-xs transition-all flex flex-col justify-center min-h-[48px] ${
                                         isActive
                                             ? 'border-indigo-400/50 bg-indigo-500/15 text-indigo-200'
                                             : isDone

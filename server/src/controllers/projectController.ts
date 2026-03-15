@@ -2,8 +2,46 @@ import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { randomUUID } from 'crypto';
 
+function parseJsonValue<T>(value: unknown, fallback: T): T {
+    if (typeof value !== 'string') {
+        return (value as T) ?? fallback;
+    }
+
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return fallback;
+    }
+}
+
+function toPageSchema(page: any, blocks: any[] = []) {
+    const meta = parseJsonValue<Record<string, unknown>>(page.meta, {});
+    const inferredRootBlockId = typeof meta.root_block_id === 'string' && meta.root_block_id
+        ? meta.root_block_id
+        : blocks.find((block) => String(block.pageId) === String(page.idRoot) && !block.parentId && !block.archived)?.id;
+
+    return {
+        id: page.id,
+        name: page.name,
+        path: page.path,
+        root_block_id: inferredRootBlockId,
+        is_dynamic: page.isDynamic || false,
+        meta,
+        archived: page.archived || false,
+    };
+}
+
 // Transform Prisma project to client-expected snake_case format
 function toProjectSchema(p: any, pages: any[] = [], blocks: any[] = []) {
+    const serializedPages = (pages || []).map((pg: any) => toPageSchema(pg, blocks));
+    const pageIdByInternalId = new Map<string, string>();
+
+    for (const pg of pages || []) {
+        if (pg.idRoot && pg.id) {
+            pageIdByInternalId.set(String(pg.idRoot), String(pg.id));
+        }
+    }
+
     return {
         id: p.id,
         name: p.name,
@@ -12,31 +50,24 @@ function toProjectSchema(p: any, pages: any[] = [], blocks: any[] = []) {
         updated_at: (p.updatedAt instanceof Date ? p.updatedAt : new Date(p.updatedAt)).toISOString(),
         root_path: p.rootPath || '',
         version: '1.0.0',
-        settings: typeof p.settings === 'string' ? JSON.parse(p.settings || '{}') : (p.settings || {}),
+        settings: parseJsonValue<Record<string, unknown>>(p.settings, {}),
         blocks: blocks.map((b: any) => ({
             id: b.id,
             block_type: b.blockType,
             name: b.name,
-            properties: typeof b.properties === 'string' ? JSON.parse(b.properties || '{}') : (b.properties || {}),
-            styles: typeof b.styles === 'string' ? JSON.parse(b.styles || '{}') : (b.styles || {}),
-            responsive_styles: typeof b.responsiveStyles === 'string' ? JSON.parse(b.responsiveStyles || '{}') : (b.responsiveStyles || {}),
-            classes: typeof b.classes === 'string' ? JSON.parse(b.classes || '[]') : (b.classes || []),
-            events: typeof b.events === 'string' ? JSON.parse(b.events || '{}') : (b.events || {}),
-            bindings: typeof b.bindings === 'string' ? JSON.parse(b.bindings || '{}') : (b.bindings || {}),
-            children: typeof b.children === 'string' ? JSON.parse(b.children || '[]') : (b.children || []),
+            properties: parseJsonValue<Record<string, unknown>>(b.properties, {}),
+            styles: parseJsonValue<Record<string, string | number | boolean>>(b.styles, {}),
+            responsive_styles: parseJsonValue<Record<string, Record<string, string | number | boolean>>>(b.responsiveStyles, {}),
+            classes: parseJsonValue<string[]>(b.classes, []),
+            event_handlers: parseJsonValue<any[]>(b.events, []),
+            bindings: parseJsonValue<Record<string, unknown>>(b.bindings, {}),
+            children: parseJsonValue<string[]>(b.children, []),
             parent_id: b.parentId || null,
-            page_id: b.pageId || null,
+            page_id: b.pageId ? pageIdByInternalId.get(String(b.pageId)) || null : null,
             order: b.order || 0,
             archived: b.archived || false,
         })),
-        pages: (pages || []).map((pg: any) => ({
-            id: pg.id,
-            name: pg.name,
-            path: pg.path,
-            is_dynamic: pg.isDynamic || false,
-            meta: typeof pg.meta === 'string' ? JSON.parse(pg.meta || '{}') : (pg.meta || {}),
-            archived: pg.archived || false,
-        })),
+        pages: serializedPages,
         apis: [],
         logic_flows: [],
         data_models: [],
@@ -101,7 +132,34 @@ export async function createProject(req: Request, res: Response) {
             }
         });
 
-        res.json(toProjectSchema(project, [homePage], []));
+        const rootBlock = await prisma.block.create({
+            data: {
+                projectId: project.id,
+                pageId: homePage.idRoot,
+                parentId: null,
+                blockType: 'canvas',
+                name: 'Page Root',
+                properties: JSON.stringify({}),
+                styles: JSON.stringify({}),
+                responsiveStyles: JSON.stringify({}),
+                classes: JSON.stringify([]),
+                events: JSON.stringify([]),
+                bindings: JSON.stringify({}),
+                children: JSON.stringify([]),
+                order: 0,
+            }
+        });
+
+        const updatedHomePage = await prisma.page.update({
+            where: { id: homePage.id },
+            data: {
+                meta: JSON.stringify({
+                    root_block_id: rootBlock.id,
+                }),
+            }
+        });
+
+        res.json(toProjectSchema(project, [updatedHomePage], [rootBlock]));
     } catch (error) {
         console.error('Error creating project:', error);
         res.status(500).json({ error: 'Failed to create project' });

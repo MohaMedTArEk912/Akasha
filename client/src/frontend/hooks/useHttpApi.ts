@@ -14,6 +14,7 @@ import {
   FieldSchema,
   RelationSchema,
 } from "../types/api";
+import type { UiBuilderGenerateRequest, UiBuilderGenerateResponse } from "../types/uiBuilder";
 
 const API_BASE_URL = "http://localhost:3001/api";
 
@@ -47,8 +48,12 @@ export const httpApi = {
 
   // ─── Project ────────────────────────────────────
   getProject: async (): Promise<ProjectSchema | null> => {
-    console.warn("getProject called in web mode without ID context.");
-    return null; // Return null explicitly
+    if (!activeProjectId) {
+      console.warn("getProject called in web mode without ID context.");
+      return null;
+    }
+    const res = await client.get(`/project/${activeProjectId}`);
+    return res.data;
   },
   createProject: async (
     name: string,
@@ -145,11 +150,42 @@ export const httpApi = {
     });
     return res.data;
   },
-  updatePage: async (_id: string, _name?: string, _path?: string) => {},
+  updatePage: async (id: string, name?: string, path?: string) => {
+    const res = await client.put(`/pages/${id}`, { name, path });
+    return res.data;
+  },
   archivePage: async (id: string) => {
     await client.delete(`/pages/${id}`);
   },
-  getPageContent: async (_id: string) => ({ content: "{}" }),
+  getPageContent: async (id: string) => {
+    const res = await client.get(`/pages/${id}/content`);
+    return res.data;
+  },
+
+  // ─── UI Builder AI ──────────────────────────────
+  generateUiLayout: async (payload: UiBuilderGenerateRequest): Promise<UiBuilderGenerateResponse> => {
+    const res = await client.post("/ai/ui-builder/generate", payload);
+    return res.data;
+  },
+  analyzeUiLayout: async (payload: UiBuilderGenerateRequest): Promise<UiBuilderGenerateResponse> => {
+    const res = await client.post("/ai/ui-builder/analyze", payload);
+    return res.data;
+  },
+  applyGeneratedLayout: async (payload: {
+    pageId: string;
+    blocks: BlockSchema[];
+    layout_plan?: unknown;
+  }): Promise<{ success: boolean; pageId: string; blockCount: number }> => {
+    const res = await client.post("/ai/ui-builder/apply", payload);
+    return res.data;
+  },
+  streamUiLayout: async (payload: UiBuilderGenerateRequest): Promise<Response> => {
+    return fetch(`${API_BASE_URL}/ai/ui-builder/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
 
   // ─── Logic Flows ────────────────────────────────
   getLogicFlows: async () => {

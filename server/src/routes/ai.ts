@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/aiController.js';
+import * as uiBuilderCtrl from '../controllers/uiBuilderAiController.js';
 
 const router = Router();
 
@@ -28,6 +29,12 @@ router.post('/simple-chat', ctrl.simpleChat);
 
 // Project-Context-Aware Chat
 router.post('/project-chat', ctrl.projectChat);
+
+// UI Builder AI
+router.post('/ui-builder/generate', uiBuilderCtrl.generate);
+router.post('/ui-builder/analyze', uiBuilderCtrl.analyze);
+router.post('/ui-builder/apply', uiBuilderCtrl.apply);
+router.post('/ui-builder/stream', uiBuilderCtrl.stream);
 
 // Idea Validation & Refinement
 router.post('/analyze-idea', ctrl.analyzeIdea);

@@ -6,6 +6,8 @@
 
 import { api } from "../hooks/useApi";
 import { ProjectSchema, BlockSchema, PageSchema, InstallResult } from "../types/api";
+import type { UiBuilderGenerateResponse, UiBuilderMode } from "../types/uiBuilder";
+import { BLOCK_REGISTRY } from "../components/features/VisualBuilder/craft/blockRegistry";
 
 // Store state type
 interface ProjectState {
@@ -295,6 +297,230 @@ export async function generateStructuredIdea(ideaContent?: string): Promise<void
         throw err;
     } finally {
         updateState(() => ({ loading: false, loadingMessage: null }));
+    }
+}
+
+/**
+ * Generate a real AI UI builder response for the current project/page context.
+ */
+export async function generateBuilderLayout(
+    mode: UiBuilderMode,
+    prompt: string
+): Promise<UiBuilderGenerateResponse> {
+    const project = state.project;
+    if (!project) throw new Error("No active project");
+
+    const selectedPage = project.pages.find((page) => page.id === state.selectedPageId && !page.archived) || null;
+    const activePages = project.pages
+        .filter((page) => !page.archived)
+        .map((page) => ({ id: page.id, name: page.name, path: page.path }));
+    const existingBlocks = project.blocks
+        .filter((block) => !block.archived && block.page_id === selectedPage?.id)
+        .slice(0, 24)
+        .map((block) => ({
+            id: block.id,
+            type: block.block_type,
+            name: block.name,
+            parent_id: block.parent_id ?? null,
+        }));
+
+    updateState(() => ({
+        loading: true,
+        error: null,
+        loadingMessage: "Generating builder layout...",
+    }));
+
+    try {
+        const response = await api.generateUiLayout({
+            projectId: project.id,
+            pageId: selectedPage?.id,
+            mode,
+            prompt,
+            context: {
+                projectName: project.name,
+                projectDescription: project.description,
+                viewport: state.viewport,
+                selectedPage: selectedPage ? { id: selectedPage.id, name: selectedPage.name, path: selectedPage.path } : null,
+                pages: activePages,
+                existingBlocks,
+                allowedBlockTypes: Object.keys(BLOCK_REGISTRY),
+            },
+        });
+
+        return response;
+    } catch (err) {
+        updateState(() => ({ error: String(err) }));
+        throw err;
+    } finally {
+        updateState(() => ({
+            loading: false,
+            loadingMessage: null,
+        }));
+    }
+}
+
+/**
+ * Analyze the current builder state using the backend AI route.
+ */
+export async function analyzeBuilderLayout(prompt: string): Promise<UiBuilderGenerateResponse> {
+    return generateBuilderLayout("analyze", prompt);
+}
+
+/**
+ * Streaming variant of generateBuilderLayout.
+ * Calls the SSE /ai/ui-builder/stream endpoint and invokes `onToken` for each
+ * raw text chunk as the LLM produces it.  Returns the fully assembled response
+ * once the stream is done.  Falls back to the non-streaming path on any error.
+ */
+export async function streamBuilderLayout(
+    mode: UiBuilderMode,
+    prompt: string,
+    onToken: (text: string) => void,
+): Promise<UiBuilderGenerateResponse> {
+    const project = state.project;
+    if (!project) throw new Error("No active project");
+
+    const selectedPage =
+        project.pages.find((page) => page.id === state.selectedPageId && !page.archived) || null;
+    const activePages = project.pages
+        .filter((page) => !page.archived)
+        .map((page) => ({ id: page.id, name: page.name, path: page.path }));
+    const existingBlocks = project.blocks
+        .filter((block) => !block.archived && block.page_id === selectedPage?.id)
+        .slice(0, 24)
+        .map((block) => ({
+            id: block.id,
+            type: block.block_type,
+            name: block.name,
+            parent_id: block.parent_id ?? null,
+        }));
+
+    updateState(() => ({ loading: true, error: null, loadingMessage: "Generating (streaming)..." }));
+
+    try {
+        const response = await api.streamUiLayout({
+            projectId: project.id,
+            pageId: selectedPage?.id,
+            mode,
+            prompt,
+            context: {
+                projectName: project.name,
+                projectDescription: project.description,
+                viewport: state.viewport,
+                selectedPage: selectedPage
+                    ? { id: selectedPage.id, name: selectedPage.name, path: selectedPage.path }
+                    : null,
+                pages: activePages,
+                existingBlocks,
+                allowedBlockTypes: Object.keys(BLOCK_REGISTRY),
+            },
+        });
+
+        if (!response.ok || !response.body) {
+            throw new Error(`Stream request failed: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let eventType = "";
+        let dataLines: string[] = [];
+        let result: UiBuilderGenerateResponse | null = null;
+
+        outer: while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+                if (line.startsWith("event: ")) {
+                    eventType = line.slice(7).trim();
+                } else if (line.startsWith("data: ")) {
+                    dataLines.push(line.slice(6));
+                } else if (line === "") {
+                    // Dispatch buffered event
+                    if (dataLines.length > 0) {
+                        const dataStr = dataLines.join("\n");
+                        dataLines = [];
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (eventType === "token" && typeof data.text === "string") {
+                                onToken(data.text);
+                            } else if (eventType === "result") {
+                                result = data as UiBuilderGenerateResponse;
+                            } else if (eventType === "error") {
+                                throw new Error(
+                                    typeof data.message === "string" ? data.message : "Stream error"
+                                );
+                            } else if (eventType === "done") {
+                                break outer;
+                            }
+                        } catch (parseErr) {
+                            if (parseErr instanceof SyntaxError) {
+                                // malformed SSE data — skip
+                            } else {
+                                throw parseErr;
+                            }
+                        }
+                    }
+                    eventType = "";
+                }
+            }
+        }
+
+        if (result) return result;
+        // If we didn't get a result event, fall back to sync path
+        return generateBuilderLayout(mode, prompt);
+    } catch (err) {
+        updateState(() => ({ error: String(err) }));
+        throw err;
+    } finally {
+        updateState(() => ({ loading: false, loadingMessage: null }));
+    }
+}
+
+/**
+ * Persist a generated layout onto the selected page.
+ */
+export async function applyBuilderLayout(
+    blocks: BlockSchema[],
+    pageId?: string
+): Promise<void> {
+    const project = state.project;
+    const targetPageId = pageId || state.selectedPageId;
+    if (!project) throw new Error("No active project");
+    if (!targetPageId) throw new Error("No selected page");
+
+    updateState(() => ({
+        loading: true,
+        error: null,
+        loadingMessage: "Applying generated layout...",
+    }));
+
+    try {
+        await api.applyGeneratedLayout({
+            pageId: targetPageId,
+            blocks,
+        });
+        await loadProject();
+        isDirtyValue = true;
+
+        if (state.editMode === "visual" && state.project?.root_path) {
+            await api.syncToDisk().catch((err) =>
+                console.error("Auto-sync failed:", err)
+            );
+        }
+    } catch (err) {
+        updateState(() => ({ error: String(err) }));
+        throw err;
+    } finally {
+        updateState(() => ({
+            loading: false,
+            loadingMessage: null,
+        }));
     }
 }
 

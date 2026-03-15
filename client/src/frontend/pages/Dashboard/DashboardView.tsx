@@ -6,7 +6,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { openProject, deleteProject, createProject } from "../../stores/projectStore";
+import { openProject, deleteProject, createProject, generateStructuredIdea, setActivePage } from "../../stores/projectStore";
 import { useToast } from "../../context/ToastContext";
 import { useTheme } from "../../context/ThemeContext";
 import IDESettingsModal from "../../components/Modals/IDESettingsModal";
@@ -44,9 +44,12 @@ const DashboardView: React.FC = () => {
     const handleCreateProjectFinal = async (refinedIdea: string) => {
         try {
             await createProject(projectName.trim(), refinedIdea);
+            await generateStructuredIdea(refinedIdea);
+            setActivePage("idea");
             setProjectName("");
             setIsCreateModalOpen(false);
             setIsCreateWorkshopOpen(false);
+            toast.showToast("Project PRD generated and saved.", "success");
         } catch (err) {
             toast.showToast(`Failed to create project: ${err}`, "error");
         }

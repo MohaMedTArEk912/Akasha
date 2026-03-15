@@ -761,13 +761,36 @@ Rules:
                 : [];
 
         const fallbackAnalysis = buildFallbackIdeaAnalysis(idea);
+        const llmProvider = getLLMProvider();
 
-        const parseJsonFromModelOutput = (modelOutput: string) => {
+        const parseJsonFromModelOutput = async (modelOutput: string) => {
             const rawJson = extractJsonObject(modelOutput || '{}');
-            return JSON.parse(rawJson);
+            try {
+                return JSON.parse(rawJson);
+            } catch {
+                // If the model returns near-valid JSON (missing comma/trailing issue),
+                // ask for a strict JSON repair pass before giving up.
+                const repaired = await llmProvider.chat({
+                    model: 'google/gemma-3-4b-it:free',
+                    temperature: 0,
+                    max_tokens: 3000,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You repair malformed JSON. Return ONLY valid JSON with the same keys and values. Do not add markdown fences or commentary.'
+                        },
+                        {
+                            role: 'user',
+                            content: rawJson
+                        }
+                    ]
+                });
+
+                const repairedJson = extractJsonObject(repaired || rawJson);
+                return JSON.parse(repairedJson);
+            }
         };
 
-        const llmProvider = getLLMProvider();
         const response = await llmProvider.chat({
             model: 'google/gemini-2.5-flash',
             temperature: 0.2,
@@ -780,7 +803,7 @@ Rules:
 
         let parsed: any = null;
         try {
-            parsed = parseJsonFromModelOutput(response);
+            parsed = await parseJsonFromModelOutput(response);
         } catch (parseError: any) {
             console.warn('Idea analysis returned non-JSON output, using fallback seed:', parseError?.message || parseError);
             parsed = {};
@@ -1128,7 +1151,7 @@ Rules:
 
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: 'google/gemini-2.5-pro',
+            model: 'google/gemma-3-4b-it:free',
             temperature: 0.2,
             max_tokens: 2400,
             messages: [
@@ -1266,7 +1289,7 @@ Rules:
 
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: 'google/gemini-2.5-pro',
+            model: 'google/gemma-3-4b-it:free',
             temperature: 0.3,
             max_tokens: 2200,
             messages

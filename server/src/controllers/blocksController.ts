@@ -12,7 +12,7 @@ export async function syncBlocks(req: Request, res: Response) {
 
         const page = await prisma.page.findUnique({
             where: { id: page_id },
-            select: { projectId: true }
+            select: { projectId: true, idRoot: true }
         });
 
         if (!page) {
@@ -23,14 +23,14 @@ export async function syncBlocks(req: Request, res: Response) {
         const projectId = page.projectId;
 
         // removed $transaction to support MongoDB standalone
-        await prisma.block.deleteMany({ where: { pageId: page_id } });
+        await prisma.block.deleteMany({ where: { pageId: page.idRoot } });
 
         const operations = blocks.map((b: any, index: number) => {
             return prisma.block.create({
                 data: {
                     id: b.id,
                     projectId: projectId as string,
-                    pageId: page_id,
+                    pageId: page.idRoot,
                     parentId: b.parent_id || null,
                     blockType: b.block_type,
                     name: b.name,

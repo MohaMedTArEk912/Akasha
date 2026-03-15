@@ -6,6 +6,9 @@ dist/
 build/
 target/
 *.tsbuildinfo
+*.map
+*.d.ts
+*.d.ts.map
 
 # Environment variables
 .env
@@ -71,3 +74,4 @@ Cargo.lock
 
 # Local model assets
 Qwen/
+docs/

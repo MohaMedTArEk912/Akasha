@@ -24,7 +24,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { DragDropProvider } from "./context/DragDropContext";
 
 const App: React.FC = () => {
-  const { project, isDashboardActive } = useProjectStore();
+  const { project, isDashboardActive, activePage } = useProjectStore();
   useKeyboardShortcuts();
 
   // Initialize workspace and try to load any existing project on mount
@@ -46,7 +46,6 @@ const App: React.FC = () => {
         <ThemeProvider>
           <ToastProvider>
             <DashboardView />
-            <FloatingBot />
           </ToastProvider>
         </ThemeProvider>
       </ErrorBoundary>
@@ -59,7 +58,7 @@ const App: React.FC = () => {
         <ToastProvider>
           <DragDropProvider>
             <IDELayout />
-            <FloatingBot />
+            {activePage !== "idea" && <FloatingBot />}
           </DragDropProvider>
         </ToastProvider>
       </ThemeProvider>

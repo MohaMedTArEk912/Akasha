@@ -17,6 +17,7 @@ import React, { useState } from "react";
 import { CraftEditor } from "../components/features/VisualBuilder/craft/CraftEditor";
 import { CraftFrame } from "../components/features/VisualBuilder/craft/CraftFrame";
 import Inspector from "../components/features/VisualBuilder/Inspector";
+import AIDesignCopilotPanel from "../components/features/VisualBuilder/AIDesignCopilotPanel";
 import ComponentPalette from "../components/features/VisualBuilder/ComponentPalette";
 import LayersPanel from "../components/features/VisualBuilder/LayersPanel";
 import ExportModal from "../components/features/VisualBuilder/ExportModal";
@@ -26,6 +27,7 @@ import { addPage, updatePage, archivePage, selectPage, setActivePage } from "../
 import { useToast } from "../context/ToastContext";
 
 type LeftTab = "pages" | "components" | "layers";
+type RightTab = "copilot" | "inspector";
 
 /* ═══════════════════  Page List Panel  ═════════════════ */
 
@@ -202,6 +204,7 @@ const UIDesignPage: React.FC = () => {
     const [leftTab, setLeftTab] = useState<LeftTab>("pages");
     const [inspectorOpen, setInspectorOpen] = useState(true);
     const [exportOpen, setExportOpen] = useState(false);
+    const [rightTab, setRightTab] = useState<RightTab>("copilot");
 
     const tabs: { key: LeftTab; label: string }[] = [
         { key: "pages", label: "Pages" },
@@ -275,8 +278,43 @@ const UIDesignPage: React.FC = () => {
 
                     {/* ── Right: Inspector ── */}
                     {inspectorOpen && (
-                        <div className="w-72 flex-shrink-0 border-l border-[var(--ide-border)] overflow-y-auto bg-[var(--ide-bg-sidebar)]">
-                            <Inspector />
+                        <div className="w-[26rem] flex-shrink-0 border-l border-[var(--ide-border)] bg-[var(--ide-bg-sidebar)] flex flex-col overflow-hidden">
+                            <div className="h-10 flex items-center border-b border-[var(--ide-border)] select-none shrink-0">
+                                {([
+                                    { key: "copilot", label: "Copilot" },
+                                    { key: "inspector", label: "Inspector" },
+                                ] as { key: RightTab; label: string }[]).map((tab) => (
+                                    <button
+                                        key={tab.key}
+                                        onClick={() => setRightTab(tab.key)}
+                                        className={`flex-1 h-full text-[11px] font-semibold uppercase tracking-wider transition-colors relative ${rightTab === tab.key
+                                            ? "text-[var(--ide-text)] bg-white/5"
+                                            : "text-[var(--ide-text-muted)] hover:text-[var(--ide-text-secondary)]"
+                                            }`}
+                                    >
+                                        {tab.label}
+                                        {rightTab === tab.key && (
+                                            <div className="absolute bottom-0 inset-x-0 h-[2px] bg-[var(--ide-primary)]" />
+                                        )}
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={() => setInspectorOpen(false)}
+                                    className="w-10 h-full flex items-center justify-center text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-white/5 transition-colors border-l border-[var(--ide-border)]"
+                                    title="Close right panel"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M4 5l7 7-7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto">
+                                {rightTab === "copilot" ? (
+                                    <AIDesignCopilotPanel onOpenInspector={() => setRightTab("inspector")} />
+                                ) : (
+                                    <Inspector />
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -286,7 +324,7 @@ const UIDesignPage: React.FC = () => {
                     <button
                         onClick={() => setInspectorOpen(true)}
                         className="fixed right-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-lg bg-[var(--ide-bg-sidebar)] border border-[var(--ide-border)] shadow-lg hover:bg-[var(--ide-bg-elevated)] transition-colors"
-                        title="Open Inspector"
+                        title="Open right panel"
                     >
                         <svg className="w-4 h-4 text-[var(--ide-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />

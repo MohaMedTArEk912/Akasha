@@ -66,7 +66,7 @@ async function startServer() {
     try {
         // Start Qwen if enabled
         const qwenStarted = await startQwenServer();
-        if (!qwenStarted && process.env.QWEN_ENABLED === 'true') {
+        if (!qwenStarted && process.env.QWEN_ENABLED !== 'false') {
             console.warn('[Server] Qwen did not start successfully. Will use OpenRouter fallback.');
         }
 
