@@ -120,6 +120,115 @@ function inferSubject(prompt: string, projectName?: string): string {
     return 'this product';
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function sanitizeString(value: unknown, maxLength = 800): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const compact = value.trim().replace(/\s+/g, ' ');
+    if (!compact) return undefined;
+    return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact;
+}
+
+function compactRecord(record: Record<string, unknown>): Record<string, unknown> | undefined {
+    return Object.keys(record).length > 0 ? record : undefined;
+}
+
+function normalizeDesignSystemContext(designSystem: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    if (!designSystem) return undefined;
+
+    const source = asRecord(designSystem);
+    const sourceProject = asRecord(source.project);
+    const sourceFoundations = asRecord(source.foundations);
+    const sourceUx = asRecord(source.ux);
+
+    const project = compactRecord({
+        ...(sanitizeString(sourceProject.name, 180) ? { name: sanitizeString(sourceProject.name, 180) } : {}),
+        ...(sanitizeString(sourceProject.industry, 180) ? { industry: sanitizeString(sourceProject.industry, 180) } : {}),
+        ...(sanitizeString(sourceProject.platform, 60) ? { platform: sanitizeString(sourceProject.platform, 60) } : {}),
+        ...(sanitizeString(sourceProject.styleDirection, 220) ? { styleDirection: sanitizeString(sourceProject.styleDirection, 220) } : {}),
+    });
+
+    const foundations = compactRecord({
+        ...(sanitizeString(sourceFoundations.colorPalette, 260) ? { colorPalette: sanitizeString(sourceFoundations.colorPalette, 260) } : {}),
+        ...(sanitizeString(sourceFoundations.typography, 220) ? { typography: sanitizeString(sourceFoundations.typography, 220) } : {}),
+        ...(sanitizeString(sourceFoundations.spacingRadius, 200) ? { spacingRadius: sanitizeString(sourceFoundations.spacingRadius, 200) } : {}),
+        ...(sanitizeString(sourceFoundations.tone, 200) ? { tone: sanitizeString(sourceFoundations.tone, 200) } : {}),
+        ...(sanitizeString(sourceFoundations.brandKeywords, 220) ? { brandKeywords: sanitizeString(sourceFoundations.brandKeywords, 220) } : {}),
+    });
+
+    const ux = compactRecord({
+        ...(sanitizeString(sourceUx.audience, 260) ? { audience: sanitizeString(sourceUx.audience, 260) } : {}),
+        ...(sanitizeString(sourceUx.coreFlows, 400) ? { coreFlows: sanitizeString(sourceUx.coreFlows, 400) } : {}),
+        ...(sanitizeString(sourceUx.accessibility, 260) ? { accessibility: sanitizeString(sourceUx.accessibility, 260) } : {}),
+        ...(sanitizeString(sourceUx.responsiveRules, 260) ? { responsiveRules: sanitizeString(sourceUx.responsiveRules, 260) } : {}),
+        ...(sanitizeString(sourceUx.statesMotion, 260) ? { statesMotion: sanitizeString(sourceUx.statesMotion, 260) } : {}),
+    });
+
+    const normalized: Record<string, unknown> = {};
+    if (project) normalized.project = project;
+    if (foundations) normalized.foundations = foundations;
+    if (ux) normalized.ux = ux;
+
+    const components = sanitizeString(source.components, 400);
+    if (components) normalized.components = components;
+
+    const vision = sanitizeString(source.vision, 400);
+    if (vision) normalized.vision = vision;
+
+    return compactRecord(normalized);
+}
+
+function stringifyDesignSystem(designSystem: Record<string, unknown> | undefined): string {
+    if (!designSystem) return 'Not provided';
+    try {
+        const project = (designSystem.project && typeof designSystem.project === 'object')
+            ? (designSystem.project as Record<string, unknown>)
+            : {};
+        const foundations = (designSystem.foundations && typeof designSystem.foundations === 'object')
+            ? (designSystem.foundations as Record<string, unknown>)
+            : {};
+        const ux = (designSystem.ux && typeof designSystem.ux === 'object')
+            ? (designSystem.ux as Record<string, unknown>)
+            : {};
+
+        const snippets = [
+            typeof project.name === 'string' ? `name:${project.name}` : null,
+            typeof project.industry === 'string' ? `industry:${project.industry}` : null,
+            typeof project.platform === 'string' ? `platform:${project.platform}` : null,
+            typeof project.styleDirection === 'string' ? `style:${project.styleDirection}` : null,
+            typeof foundations.colorPalette === 'string' ? `palette:${foundations.colorPalette}` : null,
+            typeof foundations.typography === 'string' ? `typography:${foundations.typography}` : null,
+            typeof foundations.spacingRadius === 'string' ? `spacing:${foundations.spacingRadius}` : null,
+            typeof foundations.tone === 'string' ? `tone:${foundations.tone}` : null,
+            typeof ux.audience === 'string' ? `audience:${ux.audience}` : null,
+            typeof ux.coreFlows === 'string' ? `flows:${ux.coreFlows}` : null,
+            typeof ux.accessibility === 'string' ? `a11y:${ux.accessibility}` : null,
+            typeof ux.responsiveRules === 'string' ? `responsive:${ux.responsiveRules}` : null,
+            typeof designSystem.components === 'string' ? `components:${designSystem.components}` : null,
+            typeof designSystem.vision === 'string' ? `vision:${designSystem.vision}` : null,
+        ].filter((part): part is string => Boolean(part));
+
+        if (snippets.length === 0) return 'Not provided';
+
+        const compact = snippets.join(' | ');
+        return compact.length > 3000 ? `${compact.slice(0, 3000)}...` : compact;
+    } catch {
+        return 'Not provided';
+    }
+}
+
+function extractPrimaryColorFromDesignSystem(designSystem: Record<string, unknown> | undefined): string | undefined {
+    if (!designSystem) return undefined;
+    const foundations = designSystem.foundations;
+    if (!foundations || typeof foundations !== 'object') return undefined;
+    const palette = (foundations as Record<string, unknown>).colorPalette;
+    if (typeof palette !== 'string') return undefined;
+    const match = palette.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b/);
+    return match?.[0];
+}
+
 function hasNamedPage(pages: UiBuilderContextPage[], keywords: string[]): boolean {
     return pages.some((page) => {
         const haystack = `${page.name} ${page.path}`.toLowerCase();
@@ -401,7 +510,11 @@ function buildFallbackResponse(
     hasThemeTokens: boolean,
 ): UiBuilderResponsePayload {
     const subject = inferSubject(request.prompt, request.context?.projectName);
-    const theme = buildFallbackTheme(`${subject} ${request.context?.projectDescription || ''}`);
+    const designSystemSeed = stringifyDesignSystem(request.context?.designSystem);
+    const theme = buildFallbackTheme(
+        `${subject} ${request.context?.projectDescription || ''} ${designSystemSeed === 'Not provided' ? '' : designSystemSeed}`,
+        extractPrimaryColorFromDesignSystem(request.context?.designSystem),
+    );
     const competitor = buildFallbackCompetitorIntel(subject, pages);
     const quality = buildFallbackQuality(pages, selectedPage, selectedPageBlockCount, request.context?.viewport || 'desktop', hasThemeTokens);
     const guidance = buildFallbackGuidance(pages, selectedPage, selectedPageBlockCount);
@@ -518,6 +631,7 @@ Selected page: ${selectedPage ? `${selectedPage.name} (${selectedPage.path})` : 
 Pages: ${pages.map((page) => `${page.name}:${page.path}`).join(', ') || 'None'}
 Existing block summary: ${selectedBlockSummary || 'None'}
 Allowed block types: ${allowedBlocks.join(', ')}
+Design system context: ${stringifyDesignSystem(request.context?.designSystem)}
 
 User request:
 ${request.prompt}`;
@@ -655,10 +769,19 @@ export async function generateUiBuilderResult(request: UiBuilderGenerateRequest)
         throw new Error('Project not found');
     }
 
+    const normalizedDesignSystem = normalizeDesignSystemContext(request.context?.designSystem);
+    const normalizedRequest: UiBuilderGenerateRequest = {
+        ...request,
+        context: {
+            ...(request.context || {}),
+            designSystem: normalizedDesignSystem,
+        },
+    };
+
     const pages = project.pages as unknown as PageRecord[];
     const blocks = project.blocks as unknown as BlockRecord[];
     const publicPages = toPublicPages(pages);
-    const pageRecord = request.pageId ? pages.find((page) => page.id === request.pageId) : undefined;
+    const pageRecord = normalizedRequest.pageId ? pages.find((page) => page.id === normalizedRequest.pageId) : undefined;
     const pageRootId = inferPageRootId(pageRecord, blocks);
     const selectedPage: BuilderPageTarget | null = pageRecord
         ? {
@@ -667,18 +790,18 @@ export async function generateUiBuilderResult(request: UiBuilderGenerateRequest)
             path: pageRecord.path,
             root_block_id: pageRootId,
         }
-        : request.context?.selectedPage
+        : normalizedRequest.context?.selectedPage
             ? {
-                id: request.context.selectedPage.id,
-                name: request.context.selectedPage.name,
-                path: request.context.selectedPage.path,
+                id: normalizedRequest.context.selectedPage.id,
+                name: normalizedRequest.context.selectedPage.name,
+                path: normalizedRequest.context.selectedPage.path,
             }
             : null;
     const selectedPageBlocks = pageRecord ? blocks.filter((block) => block.pageId === pageRecord.idRoot) : [];
-    const hasThemeTokens = Boolean(parseJsonValue<Record<string, unknown>>(project.settings, {}).theme);
+    const hasThemeTokens = Boolean(parseJsonValue<Record<string, unknown>>(project.settings, {}).theme) || Boolean(normalizedRequest.context?.designSystem);
 
     const fallback = buildFallbackResponse(
-        request,
+        normalizedRequest,
         publicPages,
         selectedPage,
         countBlocksForInternalPage(blocks, pageRecord?.idRoot),
@@ -691,10 +814,10 @@ export async function generateUiBuilderResult(request: UiBuilderGenerateRequest)
     try {
         const llmProvider = getLLMProvider();
         providerName = llmProvider.getActiveProvider();
-        const prompt = buildPrompt(request, publicPages, selectedPage, selectedPageBlocks);
+        const prompt = buildPrompt(normalizedRequest, publicPages, selectedPage, selectedPageBlocks);
         const modelOutput = await llmProvider.chat({
             model: '',
-            temperature: request.mode === 'analyze' ? 0.2 : 0.35,
+            temperature: normalizedRequest.mode === 'analyze' ? 0.2 : 0.35,
             max_tokens: 2200,
             messages: [{ role: 'user', content: prompt }],
         });
@@ -709,7 +832,7 @@ export async function generateUiBuilderResult(request: UiBuilderGenerateRequest)
         };
     }
 
-    return finalizeUiBuilderPayload(normalized, fallback, request, selectedPage, providerName);
+    return finalizeUiBuilderPayload(normalized, fallback, normalizedRequest, selectedPage, providerName);
 }
 
 /**
@@ -734,21 +857,30 @@ export async function* generateUiBuilderStream(
 
     if (!project) throw new Error('Project not found');
 
+    const normalizedDesignSystem = normalizeDesignSystemContext(request.context?.designSystem);
+    const normalizedRequest: UiBuilderGenerateRequest = {
+        ...request,
+        context: {
+            ...(request.context || {}),
+            designSystem: normalizedDesignSystem,
+        },
+    };
+
     const pages = project.pages as unknown as PageRecord[];
     const blocks = project.blocks as unknown as BlockRecord[];
     const publicPages = toPublicPages(pages);
-    const pageRecord = request.pageId ? pages.find((page) => page.id === request.pageId) : undefined;
+    const pageRecord = normalizedRequest.pageId ? pages.find((page) => page.id === normalizedRequest.pageId) : undefined;
     const pageRootId = inferPageRootId(pageRecord, blocks);
     const selectedPage: BuilderPageTarget | null = pageRecord
         ? { id: pageRecord.id, name: pageRecord.name, path: pageRecord.path, root_block_id: pageRootId }
-        : request.context?.selectedPage
-            ? { id: request.context.selectedPage.id, name: request.context.selectedPage.name, path: request.context.selectedPage.path }
+        : normalizedRequest.context?.selectedPage
+            ? { id: normalizedRequest.context.selectedPage.id, name: normalizedRequest.context.selectedPage.name, path: normalizedRequest.context.selectedPage.path }
             : null;
     const selectedPageBlocks = pageRecord ? blocks.filter((block) => block.pageId === pageRecord.idRoot) : [];
-    const hasThemeTokens = Boolean(parseJsonValue<Record<string, unknown>>(project.settings, {}).theme);
+    const hasThemeTokens = Boolean(parseJsonValue<Record<string, unknown>>(project.settings, {}).theme) || Boolean(normalizedRequest.context?.designSystem);
 
     const fallback = buildFallbackResponse(
-        request,
+        normalizedRequest,
         publicPages,
         selectedPage,
         countBlocksForInternalPage(blocks, pageRecord?.idRoot),
@@ -757,10 +889,10 @@ export async function* generateUiBuilderStream(
 
     const llmProvider = getLLMProvider();
     const providerName = llmProvider.getActiveProvider();
-    const prompt = buildPrompt(request, publicPages, selectedPage, selectedPageBlocks);
+    const prompt = buildPrompt(normalizedRequest, publicPages, selectedPage, selectedPageBlocks);
     const llmOptions: LLMCompletionOptions = {
         model: '',
-        temperature: request.mode === 'analyze' ? 0.2 : 0.35,
+        temperature: normalizedRequest.mode === 'analyze' ? 0.2 : 0.35,
         max_tokens: 2200,
         messages: [{ role: 'user', content: prompt }],
     };
@@ -779,5 +911,5 @@ export async function* generateUiBuilderStream(
         ? (await mergeLLMText(fullText, fallback)).normalized
         : { ...fallback, warnings: [...fallback.warnings, 'Model stream produced no output; fallback used.'].slice(0, 4) };
 
-    return finalizeUiBuilderPayload(normalized, fallback, request, selectedPage, providerName);
+    return finalizeUiBuilderPayload(normalized, fallback, normalizedRequest, selectedPage, providerName);
 }

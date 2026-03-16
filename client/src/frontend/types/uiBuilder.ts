@@ -91,6 +91,7 @@ export interface UiBuilderGenerateRequest {
         pages?: UiBuilderContextPage[];
         existingBlocks?: UiBuilderContextBlock[];
         allowedBlockTypes?: string[];
+        designSystem?: Record<string, unknown>;
     };
 }
 

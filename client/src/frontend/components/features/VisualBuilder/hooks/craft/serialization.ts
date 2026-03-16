@@ -7,7 +7,7 @@
  */
 
 import type { SerializedNodes } from "@craftjs/core";
-import type { BlockSchema } from "../../../../hooks/useApi";
+import type { BlockSchema } from "../../../../../hooks/useApi";
 import { CONTAINER_TYPES } from "./blockRegistry";
 
 /* ═══════════════════  Types  ═══════════════════════ */

@@ -12,7 +12,7 @@ import { createMasterComponent, selectComponent } from "../../../stores/projectS
 import { useDragDrop } from "../../../context/DragDropContext";
 import { useEditor } from "@craftjs/core";
 import { CraftBlock } from "./craft/CraftBlock";
-import { BLOCK_REGISTRY, getPaletteCategories } from "./craft/blockRegistry";
+import { BLOCK_REGISTRY, getPaletteCategories } from "./hooks/craft/blockRegistry";
 
 const ComponentPalette: React.FC = () => {
     const { project } = useProjectStore();

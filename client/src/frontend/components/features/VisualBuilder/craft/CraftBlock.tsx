@@ -14,8 +14,8 @@
 
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useNode, useEditor } from "@craftjs/core";
-import { BLOCK_REGISTRY, CONTAINER_TYPES } from "./blockRegistry";
-import type { CraftBlockProps } from "./serialization";
+import { BLOCK_REGISTRY, CONTAINER_TYPES } from "../hooks/craft/blockRegistry";
+import type { CraftBlockProps } from "../hooks/craft/serialization";
 
 /* ═══════════════════  Component  ═══════════════════ */
 

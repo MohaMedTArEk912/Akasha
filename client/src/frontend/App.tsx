@@ -9,7 +9,7 @@ import "./index.css";
 
 // Components
 import IDELayout from "./components/layout/IDELayout";
-import DashboardView from "./pages/Dashboard/DashboardView";
+import DashboardView from "./pages/DashboardView";
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import FloatingBot from "./components/features/Bot/FloatingBot";
 

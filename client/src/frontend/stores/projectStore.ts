@@ -7,7 +7,7 @@
 import { api } from "../hooks/useApi";
 import { ProjectSchema, BlockSchema, PageSchema, InstallResult } from "../types/api";
 import type { UiBuilderGenerateResponse, UiBuilderMode } from "../types/uiBuilder";
-import { BLOCK_REGISTRY } from "../components/features/VisualBuilder/craft/blockRegistry";
+import { BLOCK_REGISTRY } from "../components/features/VisualBuilder/hooks/craft/blockRegistry";
 
 // Store state type
 interface ProjectState {
@@ -20,7 +20,7 @@ interface ProjectState {
     selectedBlockId: string | null;
     selectedPageId: string | null;
     selectedComponentId: string | null;
-    activePage: "dashboard" | "idea" | "ui" | "builder" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+    activePage: "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
     viewport: "desktop" | "tablet" | "mobile";
     editMode: "visual" | "code";
     inspectorOpen: boolean;
@@ -216,12 +216,13 @@ export async function initWorkspace(): Promise<void> {
         // ── Restore previously open project from sessionStorage ──
         if (workspace_path && !state.project) {
             const savedProjectId = sessionStorage.getItem(SESSION_PROJECT_ID_KEY);
-            const savedActivePage = sessionStorage.getItem(SESSION_ACTIVE_PAGE_KEY) as FeaturePage | null;
+            const savedActivePage = sessionStorage.getItem(SESSION_ACTIVE_PAGE_KEY);
             if (savedProjectId && projects.some((p: ProjectSchema) => p.id === savedProjectId)) {
                 try {
                     await openProject(savedProjectId);
-                    if (savedActivePage) {
-                        setActivePage(savedActivePage);
+                    const normalizedActivePage = savedActivePage === "builder" ? "ui" : savedActivePage;
+                    if (normalizedActivePage) {
+                        setActivePage(normalizedActivePage as FeaturePage);
                     }
                 } catch (err) {
                     console.error("Failed to restore project session:", err);
@@ -305,7 +306,8 @@ export async function generateStructuredIdea(ideaContent?: string): Promise<void
  */
 export async function generateBuilderLayout(
     mode: UiBuilderMode,
-    prompt: string
+    prompt: string,
+    designSystem?: Record<string, unknown>
 ): Promise<UiBuilderGenerateResponse> {
     const project = state.project;
     if (!project) throw new Error("No active project");
@@ -344,6 +346,7 @@ export async function generateBuilderLayout(
                 pages: activePages,
                 existingBlocks,
                 allowedBlockTypes: Object.keys(BLOCK_REGISTRY),
+                designSystem,
             },
         });
 
@@ -376,6 +379,7 @@ export async function streamBuilderLayout(
     mode: UiBuilderMode,
     prompt: string,
     onToken: (text: string) => void,
+    designSystem?: Record<string, unknown>,
 ): Promise<UiBuilderGenerateResponse> {
     const project = state.project;
     if (!project) throw new Error("No active project");
@@ -413,6 +417,7 @@ export async function streamBuilderLayout(
                 pages: activePages,
                 existingBlocks,
                 allowedBlockTypes: Object.keys(BLOCK_REGISTRY),
+                designSystem,
             },
         });
 
@@ -473,7 +478,7 @@ export async function streamBuilderLayout(
 
         if (result) return result;
         // If we didn't get a result event, fall back to sync path
-        return generateBuilderLayout(mode, prompt);
+        return generateBuilderLayout(mode, prompt, designSystem);
     } catch (err) {
         updateState(() => ({ error: String(err) }));
         throw err;
@@ -1316,7 +1321,7 @@ export function closeDiffView(): void {
 /**
  * Switch the active feature page
  */
-export type FeaturePage = "dashboard" | "idea" | "ui" | "builder" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";

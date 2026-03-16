@@ -5,12 +5,12 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { useProjectStore } from "../../hooks/useProjectStore";
-import { openProject, deleteProject, createProject, generateStructuredIdea, setActivePage } from "../../stores/projectStore";
-import { useToast } from "../../context/ToastContext";
-import { useTheme } from "../../context/ThemeContext";
-import IDESettingsModal from "../../components/Modals/IDESettingsModal";
-import IdeaWorkshop from "../IdeaWorkshop";
+import { useProjectStore } from "../hooks/useProjectStore";
+import { openProject, deleteProject, createProject, generateStructuredIdea, setActivePage } from "../stores/projectStore";
+import { useToast } from "../context/ToastContext";
+import { useTheme } from "../context/ThemeContext";
+import IDESettingsModal from "../components/Modals/IDESettingsModal";
+import IdeaWorkshop from "./IdeaWorkshop";
 
 interface ProjectSummary {
     id: string;

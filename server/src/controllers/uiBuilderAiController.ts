@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { createHash } from 'node:crypto';
+import { ObjectId } from 'mongodb';
 import prisma from '../lib/prisma.js';
 import { generateUiBuilderResult, generateUiBuilderStream, type UiBuilderGenerateResult } from '../services/uiBuilderAi.js';
 import { normalizeLayoutPlan, type UiBuilderGenerateRequest } from '../services/uiBuilderSchema.js';
@@ -87,6 +88,11 @@ async function syncBlocksForPublicPageId(pageId: string, blocks: BuilderBlock[])
     })();
 
     const rootBlock = blocks.find((block) => !block.parent_id) ?? blocks[0];
+    const blockIdMap = new Map<string, string>();
+    for (const block of blocks) {
+        blockIdMap.set(block.id, new ObjectId().toHexString());
+    }
+
     const applyHash = createHash('sha256')
         .update(JSON.stringify({ pageId, blocks }))
         .digest('hex');
@@ -102,10 +108,10 @@ async function syncBlocksForPublicPageId(pageId: string, blocks: BuilderBlock[])
             blocks.map((block, index) =>
                 tx.block.create({
                     data: {
-                        id: block.id,
+                        id: blockIdMap.get(block.id) || new ObjectId().toHexString(),
                         projectId: page.projectId,
                         pageId: page.idRoot,
-                        parentId: block.parent_id || null,
+                        parentId: block.parent_id ? (blockIdMap.get(block.parent_id) || null) : null,
                         blockType: block.block_type,
                         name: block.name,
                         properties: JSON.stringify(block.properties || {}),
@@ -114,7 +120,7 @@ async function syncBlocksForPublicPageId(pageId: string, blocks: BuilderBlock[])
                         classes: JSON.stringify(block.classes || []),
                         events: JSON.stringify(block.event_handlers || []),
                         bindings: JSON.stringify(block.bindings || {}),
-                        children: JSON.stringify(block.children || []),
+                        children: JSON.stringify((block.children || []).map((childId) => blockIdMap.get(childId) || childId)),
                         order: index,
                         archived: false,
                     },
@@ -127,7 +133,7 @@ async function syncBlocksForPublicPageId(pageId: string, blocks: BuilderBlock[])
             data: {
                 meta: JSON.stringify({
                     ...meta,
-                    root_block_id: rootBlock?.id,
+                    root_block_id: rootBlock ? (blockIdMap.get(rootBlock.id) || rootBlock.id) : undefined,
                     ai_last_apply_hash: applyHash,
                 }),
             },
@@ -249,7 +255,7 @@ export async function stream(req: Request, res: Response) {
     };
 
     let closed = false;
-    req.on('close', () => {
+    res.on('close', () => {
         closed = true;
     });
 

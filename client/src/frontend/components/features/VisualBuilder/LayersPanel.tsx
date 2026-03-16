@@ -1,5 +1,48 @@
 import React from "react";
-import { Layers } from "@craftjs/layers";
+import { useEditor } from "@craftjs/core";
+import { DefaultLayerHeader, Layers, useLayer } from "@craftjs/layers";
+
+const DarkLayer: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+    const {
+        id,
+        expanded,
+        hovered,
+        connectors: { layer },
+    } = useLayer((layerState) => ({
+        hovered: layerState.event.hovered,
+        expanded: layerState.expanded,
+    }));
+
+    const { hasChildCanvases } = useEditor((_, query) => ({
+        hasChildCanvases: query.node(id).isParentOfTopLevelNodes(),
+    }));
+
+    return (
+        <div
+            ref={(dom) => {
+                if (dom) {
+                    layer(dom);
+                }
+            }}
+            className={`transition-colors ${hovered ? "bg-white/5" : "bg-transparent"}`}
+            style={{ paddingBottom: hasChildCanvases && expanded ? 5 : 0 }}
+        >
+            <DefaultLayerHeader />
+            {children ? (
+                <div
+                    className="craft-layer-children"
+                    style={{
+                        margin: `0 0 0 ${hasChildCanvases ? 35 : 0}px`,
+                        background: hasChildCanvases ? "rgba(255, 255, 255, 0.02)" : "transparent",
+                        padding: "0 0 0 5px",
+                    }}
+                >
+                    {children}
+                </div>
+            ) : null}
+        </div>
+    );
+};
 
 const LayersPanel: React.FC = () => {
     return (
@@ -15,7 +58,7 @@ const LayersPanel: React.FC = () => {
 
             <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-3">
                 <div className="craft-layers-wrapper">
-                    <Layers expandRootOnLoad={true} />
+                    <Layers expandRootOnLoad={true} renderLayer={DarkLayer} />
                 </div>
             </div>
         </div>

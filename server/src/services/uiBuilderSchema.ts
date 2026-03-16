@@ -44,6 +44,7 @@ export interface UiBuilderRequestContext {
     pages?: UiBuilderContextPage[];
     existingBlocks?: UiBuilderContextBlock[];
     allowedBlockTypes?: string[];
+    designSystem?: Record<string, unknown>;
 }
 
 export interface UiBuilderGenerateRequest {

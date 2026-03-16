@@ -11,7 +11,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useEditor } from "@craftjs/core";
 import { CraftBlock } from "./craft/CraftBlock";
-import type { CraftBlockProps } from "./craft/serialization";
+import type { CraftBlockProps } from "./hooks/craft/serialization";
 
 interface MenuPosition {
     x: number;

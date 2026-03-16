@@ -222,7 +222,7 @@ function buildFeatureDecisions(analysis: any): FeatureDecision[] {
                     detailsRequested: false,
                 };
             })
-            .filter((item): item is FeatureDecision => !!item)
+            .filter((item: FeatureDecision | null): item is FeatureDecision => item !== null)
             .slice(0, 10);
     }
 
@@ -1600,8 +1600,8 @@ export default function IdeaWorkshop({
                     <div className="rounded-2xl bg-cyan-500/8 border border-cyan-500/20 p-4">
                         <div className="text-[11px] font-black text-cyan-300 uppercase tracking-widest mb-2">Open Questions</div>
                         <ul className="space-y-1 text-xs text-cyan-100/80">
-                            {(analysis?.questions || []).length > 0
-                                ? (analysis.questions as string[]).map((item: string, index: number) => (
+                            {((analysis?.questions as string[] | undefined) || []).length > 0
+                                ? ((analysis?.questions as string[] | undefined) || []).map((item: string, index: number) => (
                                     <li key={`question-${index}`}>• {item}</li>
                                 ))
                                 : <li>• No open questions captured.</li>}
@@ -1610,8 +1610,8 @@ export default function IdeaWorkshop({
                     <div className="rounded-2xl bg-emerald-500/8 border border-emerald-500/20 p-4">
                         <div className="text-[11px] font-black text-emerald-300 uppercase tracking-widest mb-2">Idea Improvement Focus</div>
                         <ul className="space-y-1 text-xs text-emerald-100/80">
-                            {(analysis?.suggestions || []).length > 0
-                                ? (analysis.suggestions as string[]).map((item: string, index: number) => (
+                            {((analysis?.suggestions as string[] | undefined) || []).length > 0
+                                ? ((analysis?.suggestions as string[] | undefined) || []).map((item: string, index: number) => (
                                     <li key={`suggestion-${index}`}>• {item}</li>
                                 ))
                                 : <li>• No suggestions captured.</li>}

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor } from "@craftjs/core";
 import { useProjectStore } from "../../../hooks/useProjectStore";
-import { applyBuilderLayout, createPage, generateBuilderLayout, selectPage } from "../../../stores/projectStore";
+import { createPage, generateBuilderLayout, selectPage } from "../../../stores/projectStore";
 import { useToast } from "../../../context/ToastContext";
 import type { BlockSchema, PageSchema, ProjectSchema } from "../../../types/api";
 import type { UiBuilderGenerateResponse, UiBuilderGuidanceItem as ServerGuidanceItem } from "../../../types/uiBuilder";
-import { blocksToSerializedNodes } from "./craft/serialization";
+import { blocksToSerializedNodes } from "./hooks/craft/serialization";
 
 type CopilotMode = "create" | "edit" | "suggest" | "ask" | "analyze" | "compete";
 type SuggestionAction =
@@ -584,8 +584,6 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [pendingActionId, setPendingActionId] = useState<string | null>(null);
     const [generatedBlocks, setGeneratedBlocks] = useState<BlockSchema[]>([]);
-    const [isApplyingLayout, setIsApplyingLayout] = useState(false);
-    const [previewLoaded, setPreviewLoaded] = useState(false);
     const progressTimerRef = useRef<number | null>(null);
 
     const pages = useMemo(() => getActivePages(project), [project]);
@@ -686,33 +684,11 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
         try {
             const serialized = blocksToSerializedNodes(generatedBlocks, rootBlockId);
             actions.deserialize(serialized);
-            setPreviewLoaded(true);
             toast.info("Preview loaded into the canvas.");
             return true;
         } catch (error) {
             toast.error(`Preview failed: ${String(error)}`);
             return false;
-        }
-    };
-
-    const handleApplyLayout = async (): Promise<boolean> => {
-        const targetPageId = response?.page?.id || selectedPage?.id;
-        if (!targetPageId || generatedBlocks.length === 0) {
-            toast.error("No generated layout is available to apply.");
-            return false;
-        }
-
-        setIsApplyingLayout(true);
-        try {
-            await applyBuilderLayout(generatedBlocks, targetPageId);
-            setPreviewLoaded(false);
-            toast.success("Generated layout applied to the selected page.");
-            return true;
-        } catch (error) {
-            toast.error(`Apply failed: ${String(error)}`);
-            return false;
-        } finally {
-            setIsApplyingLayout(false);
         }
     };
 
@@ -791,7 +767,6 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
         setResult(null);
         setResponse(null);
         setGeneratedBlocks([]);
-        setPreviewLoaded(false);
         setIsGenerating(true);
         startProgress();
 
@@ -998,12 +973,12 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                             </p>
                         </div>
                         <div className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ide-text-muted)]">
-                            {guidance.length} live suggestions
+                            {effectiveGuidance.length} live suggestions
                         </div>
                     </div>
 
                     <div className="mt-4 space-y-3">
-                        {guidance.map((item) => (
+                        {effectiveGuidance.map((item) => (
                             <div key={item.id} className="rounded-2xl border border-[var(--ide-border)] bg-[var(--ide-bg)] p-3">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
@@ -1128,7 +1103,7 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                     </div>
 
                     <div className="mt-4 space-y-3">
-                        {quality.map((item) => (
+                        {effectiveQuality.map((item) => (
                             <div key={item.key} className="rounded-2xl border border-[var(--ide-border)] bg-[var(--ide-bg)] p-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="text-sm font-semibold">{item.label}</div>
@@ -1155,25 +1130,25 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                             </p>
                         </div>
                         <div className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300">
-                            {themeDirection.theme}
+                            {effectiveThemeDirection.theme}
                         </div>
                     </div>
 
                     <div className="mt-4 grid gap-3">
                         <div className="rounded-2xl border border-white/8 bg-[linear-gradient(135deg,rgba(15,23,42,0.8),rgba(6,182,212,0.12),rgba(249,115,22,0.12))] p-4">
                             <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ide-text-muted)]">Metaphor</div>
-                            <div className="mt-1 text-sm font-black">{themeDirection.metaphor}</div>
+                            <div className="mt-1 text-sm font-black">{effectiveThemeDirection.metaphor}</div>
                             <div className="mt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ide-text-muted)]">Motion</div>
-                            <div className="mt-1 text-xs leading-relaxed text-[var(--ide-text-secondary)]">{themeDirection.motion}</div>
+                            <div className="mt-1 text-xs leading-relaxed text-[var(--ide-text-secondary)]">{effectiveThemeDirection.motion}</div>
                         </div>
 
                         <div className="rounded-2xl border border-[var(--ide-border)] bg-[var(--ide-bg)] p-4">
                             <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ide-text-muted)]">Typography</div>
-                            <div className="mt-1 text-sm font-semibold">{themeDirection.typography}</div>
-                            <p className="mt-2 text-xs leading-relaxed text-[var(--ide-text-secondary)]">{themeDirection.note}</p>
+                            <div className="mt-1 text-sm font-semibold">{effectiveThemeDirection.typography}</div>
+                            <p className="mt-2 text-xs leading-relaxed text-[var(--ide-text-secondary)]">{effectiveThemeDirection.note}</p>
 
                             <div className="mt-4 flex items-center gap-2">
-                                {themeDirection.palette.map((color) => (
+                                {effectiveThemeDirection.palette.map((color) => (
                                     <div key={color} className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2 py-1">
                                         <span className="h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: color }} />
                                         <span className="text-[10px] font-mono text-[var(--ide-text-secondary)]">{color}</span>
@@ -1201,7 +1176,7 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                         <div className="rounded-2xl border border-[var(--ide-border)] bg-[var(--ide-bg)] p-4">
                             <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ide-text-muted)]">Common patterns</div>
                             <div className="mt-2 space-y-2">
-                                {competitorIntel.patterns.map((item) => (
+                                {effectiveCompetitorIntel.patterns.map((item) => (
                                     <div key={item} className="rounded-xl border border-white/8 bg-black/10 px-3 py-2 text-xs leading-relaxed text-[var(--ide-text-secondary)]">
                                         {item}
                                     </div>
@@ -1213,7 +1188,7 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
                                 <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">Strengths</div>
                                 <div className="mt-2 space-y-2">
-                                    {competitorIntel.strengths.map((item) => (
+                                    {effectiveCompetitorIntel.strengths.map((item) => (
                                         <div key={item} className="text-xs leading-relaxed text-emerald-50/90">{item}</div>
                                     ))}
                                 </div>
@@ -1221,7 +1196,7 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4">
                                 <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-300">Weaknesses</div>
                                 <div className="mt-2 space-y-2">
-                                    {competitorIntel.weaknesses.map((item) => (
+                                    {effectiveCompetitorIntel.weaknesses.map((item) => (
                                         <div key={item} className="text-xs leading-relaxed text-rose-50/90">{item}</div>
                                     ))}
                                 </div>
@@ -1231,7 +1206,7 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
                             <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300">Differentiation strategy</div>
                             <div className="mt-2 space-y-2">
-                                {competitorIntel.differentiation.map((item) => (
+                                {effectiveCompetitorIntel.differentiation.map((item) => (
                                     <div key={item} className="rounded-xl border border-cyan-500/10 bg-black/10 px-3 py-2 text-xs leading-relaxed text-cyan-50/90">
                                         {item}
                                     </div>

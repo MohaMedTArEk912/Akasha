@@ -16,12 +16,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Frame, Element, useEditor } from "@craftjs/core";
 import { useProjectStore } from "../../../../hooks/useProjectStore";
-import { setViewport } from "../../../../stores/projectStore";
+import { closeComponentEditor, setViewport } from "../../../../stores/projectStore";
 import { CraftBlock } from "./CraftBlock";
-import { blocksToSerializedNodes } from "./serialization";
-import { useCanvasViewport } from "./useCanvasViewport";
+import { blocksToSerializedNodes } from "../hooks/craft/serialization";
+import { useCanvasViewport } from "../hooks/craft/useCanvasViewport";
 import { CanvasToolbar } from "./CanvasToolbar";
-import { BLOCK_REGISTRY } from "./blockRegistry";
+import { BLOCK_REGISTRY } from "../hooks/craft/blockRegistry";
 import { HexColorPicker } from "react-colorful";
 
 /* ═══════════════════  Constants  ═══════════════════ */
@@ -604,7 +604,7 @@ const ComponentBanner: React.FC<{ name?: string }> = ({ name }) => (
         <button
             onClick={(e) => {
                 e.stopPropagation();
-                import("../../../../stores/projectStore").then(m => m.closeComponentEditor());
+                closeComponentEditor();
             }}
             className="px-3 py-1 text-[10px] font-bold bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
         >

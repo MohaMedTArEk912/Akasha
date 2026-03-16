@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useEditor } from "@craftjs/core";
-import { generateReactCode } from "./craft/generateCode";
+import { generateReactCode } from "./hooks/craft/generateCode";
 
 type ExportFormat = "code" | "tsx" | "zip";
 

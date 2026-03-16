@@ -11,7 +11,7 @@
 import React, { useCallback } from "react";
 import { useNode, useEditor } from "@craftjs/core";
 import { Resizable } from "re-resizable";
-import type { CraftBlockProps } from "./serialization";
+import type { CraftBlockProps } from "../hooks/craft/serialization";
 
 /* ═══════════════════  RenderNode  ══════════════════ */
 
