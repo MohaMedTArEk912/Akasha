@@ -68,9 +68,20 @@ export const httpApi = {
     }
     return res.data;
   },
-  renameProject: async (_name: string) => {
-    // Needs ID context usually
-    throw new Error("Rename not implemented in HTTP hook without ID");
+  renameProject: async (name: string, projectId?: string): Promise<ProjectSchema> => {
+    const targetId = projectId || activeProjectId;
+    if (!targetId) throw new Error("Rename requires a project ID");
+
+    const current = await client.get(`/project/${targetId}`);
+    const currentProject = current.data as ProjectSchema;
+
+    const res = await client.put(`/project/${targetId}`, {
+      name,
+      description: currentProject.description || "",
+      settings: currentProject.settings || {},
+    });
+    activeProjectId = targetId;
+    return res.data;
   },
   updateSettings: async (_settings: Partial<ProjectSettings>) => {
     if (!activeProjectId) throw new Error("No active project");

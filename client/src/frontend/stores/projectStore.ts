@@ -257,7 +257,9 @@ export async function setWorkspace(path: string): Promise<void> {
 export async function renameProject(name: string): Promise<void> {
     updateState(() => ({ loading: true, error: null }));
     try {
-        const project = await api.renameProject(name);
+        const projectId = state.project?.id;
+        if (!projectId) throw new Error("No active project");
+        const project = await api.renameProject(name, projectId);
         updateState(() => ({ project }));
         await initWorkspace(); // Refresh project list in dashboard
     } catch (err) {

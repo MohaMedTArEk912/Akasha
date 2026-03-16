@@ -8,7 +8,7 @@ import type { BuilderLeftTab } from "../hooks/panels/types";
 interface LeftSidebarProps {
     tab: BuilderLeftTab;
     onTabChange: (tab: BuilderLeftTab) => void;
-    onExportClick: () => void;
+
     onBack?: () => void;
 }
 
@@ -18,7 +18,7 @@ const tabs: Array<{ key: BuilderLeftTab; label: string }> = [
     { key: "layers", label: "Layers" },
 ];
 
-const LeftSidebar: React.FC<LeftSidebarProps> = ({ tab, onTabChange, onExportClick, onBack }) => {
+const LeftSidebar: React.FC<LeftSidebarProps> = ({ tab, onTabChange, onBack }) => {
     return (
         <div className="w-64 bg-[var(--ide-bg-sidebar)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0">
             <div className="h-10 flex items-center border-b border-[var(--ide-border)] select-none">
@@ -57,17 +57,6 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ tab, onTabChange, onExportCli
                 {tab === "layers" && <LayersPanel />}
             </div>
 
-            <div className="p-2 border-t border-[var(--ide-border)]">
-                <button
-                    onClick={onExportClick}
-                    className="w-full px-3 py-2 text-xs font-medium rounded-lg bg-[var(--ide-primary)]/10 text-[var(--ide-primary)] hover:bg-[var(--ide-primary)]/20 transition-colors flex items-center justify-center gap-2"
-                >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    Export Code
-                </button>
-            </div>
         </div>
     );
 };

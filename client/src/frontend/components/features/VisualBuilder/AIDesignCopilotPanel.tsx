@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useEditor } from "@craftjs/core";
 import { useProjectStore } from "../../../hooks/useProjectStore";
 import { createPage, generateBuilderLayout, selectPage } from "../../../stores/projectStore";
 import { useToast } from "../../../context/ToastContext";
 import type { BlockSchema, PageSchema, ProjectSchema } from "../../../types/api";
 import type { UiBuilderGenerateResponse, UiBuilderGuidanceItem as ServerGuidanceItem } from "../../../types/uiBuilder";
-import { blocksToSerializedNodes } from "./hooks/craft/serialization";
 
-type CopilotMode = "create" | "edit" | "suggest" | "ask" | "analyze" | "compete";
+type CopilotMode = "create" | "edit" | "suggest" | "ask" | "analyze" | "compete" | "discussion";
 type SuggestionAction =
     | { type: "create-page"; name: string }
     | { type: "select-page"; pageId: string }
@@ -64,6 +62,14 @@ interface CopilotResult {
     warnings: string[];
 }
 
+interface IdeaContextCapsule {
+    productName: string;
+    industry: string;
+    audience: string;
+    summary: string;
+    platforms: string[];
+}
+
 interface AIDesignCopilotPanelProps {
     onOpenInspector: () => void;
 }
@@ -116,6 +122,13 @@ const COPILOT_MODES: Array<{
             summary: "Benchmark the product against competitors and find separation.",
             placeholder: "Name competitors or the market you want to outperform.",
             button: "Map Competition",
+        },
+        {
+            key: "discussion",
+            label: "Discussion",
+            summary: "Discuss the idea and get the next UI sections to build without exposing full idea details.",
+            placeholder: "Discuss scope, priorities, or constraints. Leave empty to use idea context automatically.",
+            button: "Suggest Sections",
         },
     ];
 
@@ -182,6 +195,109 @@ function inferSubject(prompt: string, projectName?: string): string {
     }
 
     return "this product";
+}
+
+function pickFirstText(...values: unknown[]): string {
+    for (const value of values) {
+        if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return "";
+}
+
+function extractIdeaContext(project: ProjectSchema | null): IdeaContextCapsule {
+    const details = (project?.settings as { ideaDetails?: any } | undefined)?.ideaDetails;
+    const meta = details?.ideaMetadata ?? {};
+    const target = details?.targetMarket ?? {};
+    const product = details?.product ?? {};
+
+    const platforms = Array.isArray(product?.platforms)
+        ? product.platforms.filter((item: unknown): item is string => typeof item === "string")
+        : [];
+
+    return {
+        productName: pickFirstText(meta?.ideaName, project?.name, "Product"),
+        industry: pickFirstText(meta?.industry, meta?.category),
+        audience: pickFirstText(target?.primaryUsers?.[0], target?.geographicFocus, details?.problem?.whoHasThisProblem?.[0]),
+        summary: pickFirstText(meta?.summary, details?.solution?.valueProposition, details?.solution?.productDescription),
+        platforms,
+    };
+}
+
+function buildDiscussionGuidance(capsule: IdeaContextCapsule, pages: PageSchema[]): GuidanceItem[] {
+    const productLabel = capsule.productName || "the product";
+    const items: GuidanceItem[] = [];
+
+    if (!hasNamedPage(pages, ["home", "landing", "hero"])) {
+        items.push({
+            id: "discussion-landing",
+            title: "Start with a focused landing section",
+            description: `Create a clean entry page that explains ${productLabel} in one message and one primary CTA.`,
+            impact: "Sets immediate clarity.",
+            actionLabel: "Create Home",
+            action: { type: "create-page", name: "Home" },
+        });
+    }
+
+    if (!hasNamedPage(pages, ["feature", "solution", "capabilities", "product"])) {
+        items.push({
+            id: "discussion-value",
+            title: "Add a value and features section",
+            description: "Group core features into a scannable section with clear user outcomes and visual hierarchy.",
+            impact: "Improves comprehension.",
+            actionLabel: "Create Features",
+            action: { type: "create-page", name: "Features" },
+        });
+    }
+
+    if (!hasNamedPage(pages, ["workflow", "how", "onboarding", "dashboard", "overview"])) {
+        items.push({
+            id: "discussion-flow",
+            title: "Design the primary user flow",
+            description: "Build the core task flow page to show how a user moves from first action to first success.",
+            impact: "Improves activation.",
+            actionLabel: "Create Flow",
+            action: { type: "create-page", name: "Flow" },
+        });
+    }
+
+    if (!hasNamedPage(pages, ["pricing", "plan", "trust", "faq", "about"])) {
+        items.push({
+            id: "discussion-proof",
+            title: "Add trust and decision support",
+            description: "Add pricing, trust indicators, or FAQs to reduce decision friction before conversion.",
+            impact: "Improves conversion readiness.",
+            actionLabel: "Create Pricing",
+            action: { type: "create-page", name: "Pricing" },
+        });
+    }
+
+    if (items.length === 0) {
+        items.push({
+            id: "discussion-refine",
+            title: "Refine sections with inspector",
+            description: "Current structure is decent. Improve spacing, copy focus, and CTA emphasis section-by-section.",
+            impact: "Raises quality.",
+            actionLabel: "Open Inspector",
+            action: { type: "open-inspector" },
+        });
+    }
+
+    return items.slice(0, 4);
+}
+
+function buildDiscussionResult(subject: string, capsule: IdeaContextCapsule, guidance: GuidanceItem[], pages: PageSchema[]): CopilotResult {
+    const brief = [capsule.industry, capsule.audience].filter(Boolean).join(" • ");
+    return {
+        title: `Discussion plan for ${subject}`,
+        summary: brief
+            ? `Using idea context (${brief}), here are the UI sections to build next in priority order.`
+            : "Using available idea context, here are the UI sections to build next in priority order.",
+        detail: "This mode intentionally keeps context concise and focuses on actionable section planning.",
+        priorities: guidance.map((item, index) => `P${index + 1}: ${item.title}. ${item.description}`),
+        nextAction: guidance[0]?.title ?? "Open Inspector",
+        flow: buildFlowRecommendations(pages),
+        warnings: [],
+    };
 }
 
 function resolveThemeDirection(seed: string, primaryColor?: string): ThemeDirection {
@@ -572,7 +688,6 @@ function getStatusClasses(status: QueueItem["status"]): string {
 
 const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspector }) => {
     const { project, selectedPageId, viewport } = useProjectStore();
-    const { actions } = useEditor();
     const toast = useToast();
 
     const [mode, setMode] = useState<CopilotMode>("suggest");
@@ -612,9 +727,18 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
         () => buildGuidanceItems(pages, selectedPage, selectedPageBlockCount),
         [pages, selectedPage, selectedPageBlockCount]
     );
+    const ideaCapsule = useMemo(() => extractIdeaContext(project), [project]);
+    const discussionGuidance = useMemo(
+        () => buildDiscussionGuidance(ideaCapsule, pages),
+        [ideaCapsule, pages]
+    );
     const effectiveGuidance = useMemo(
-        () => (response?.guidance?.length ? response.guidance.map((item) => mapServerGuidanceItem(item)) : guidance),
-        [guidance, response]
+        () => (response?.guidance?.length
+            ? response.guidance.map((item) => mapServerGuidanceItem(item))
+            : mode === "discussion"
+                ? discussionGuidance
+                : guidance),
+        [discussionGuidance, guidance, mode, response]
     );
     const effectiveThemeDirection = response?.theme_direction ?? themeDirection;
     const effectiveCompetitorIntel = response?.competitor_intelligence ?? competitorIntel;
@@ -675,21 +799,15 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
     };
 
     const handlePreviewLayout = async (): Promise<boolean> => {
-        const rootBlockId = response?.page?.root_block_id || selectedPage?.root_block_id;
-        if (!rootBlockId || generatedBlocks.length === 0) {
+        if (generatedBlocks.length === 0) {
             toast.error("No generated layout is available to preview.");
             return false;
         }
 
-        try {
-            const serialized = blocksToSerializedNodes(generatedBlocks, rootBlockId);
-            actions.deserialize(serialized);
-            toast.info("Preview loaded into the canvas.");
-            return true;
-        } catch (error) {
-            toast.error(`Preview failed: ${String(error)}`);
-            return false;
-        }
+        // Outside Craft <Editor />, we can still guide users to open builder and apply there.
+        onOpenInspector();
+        toast.info("Generated layout is ready. Open Visual Builder to preview/apply on canvas.");
+        return true;
     };
 
     const runAction = async (item: GuidanceItem | QueueItem): Promise<boolean> => {
@@ -771,6 +889,14 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
         startProgress();
 
         try {
+            if (mode === "discussion") {
+                stopProgress();
+                setActiveStep(GENERATION_STEPS.length);
+                setResult(buildDiscussionResult(subject, ideaCapsule, discussionGuidance, pages));
+                toast.success("Discussion mode generated UI section suggestions from idea context.");
+                return;
+            }
+
             const serverResponse = await generateBuilderLayout(mode, prompt);
             stopProgress();
             setActiveStep(GENERATION_STEPS.length);
@@ -837,6 +963,16 @@ const AIDesignCopilotPanel: React.FC<AIDesignCopilotPanelProps> = ({ onOpenInspe
                             <div className="text-[9px] uppercase tracking-[0.14em] text-[var(--ide-text-muted)]">Viewport</div>
                             <div className="mt-1 text-sm font-bold">{toTitleCase(viewport)}</div>
                         </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+                        <div className="text-[9px] uppercase tracking-[0.14em] text-[var(--ide-text-muted)]">Idea context capsule</div>
+                        <div className="mt-1 text-xs text-[var(--ide-text-secondary)]">
+                            {[ideaCapsule.industry, ideaCapsule.audience].filter(Boolean).join(" • ") || "No structured idea context detected"}
+                        </div>
+                        {ideaCapsule.summary && (
+                            <div className="mt-1 text-[11px] text-[var(--ide-text-muted)] line-clamp-2">{ideaCapsule.summary}</div>
+                        )}
                     </div>
                 </div>
             </div>
