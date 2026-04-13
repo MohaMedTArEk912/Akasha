@@ -13,6 +13,7 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
     const toast = useToast();
     const [ideas, setIdeas] = useState<any[]>([]);
     const [bestIdea, setBestIdea] = useState<any>(null);
+    const [pipelineResult, setPipelineResult] = useState<any>(null);
     const [input, setInput] = useState("");
     const [sessionId, setSessionId] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,9 +59,27 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
     const fetchBest = async () => {
         if (!sessionId) return;
         try {
-            const res = await fetch(`${API_BASE}/bestIdea?sessionId=${sessionId}`);
+            const res = await fetch(`${API_BASE}/top-ideas?sessionId=${sessionId}&limit=1`);
             const data = await res.json();
-            setBestIdea(data);
+            if (data && data.length > 0) {
+                setBestIdea(data[0]);
+                if (data[0].pipelineStatus === 'done') {
+                    fetchPipelineResult(data[0].id);
+                } else {
+                    setPipelineResult(null);
+                }
+            } else {
+                setBestIdea(null);
+                setPipelineResult(null);
+            }
+        } catch (err) { }
+    }
+
+    const fetchPipelineResult = async (ideaId: string) => {
+        try {
+            const res = await fetch(`${API_BASE}/pipeline-result?sessionId=${sessionId}&ideaId=${ideaId}`);
+            const data = await res.json();
+            setPipelineResult(data);
         } catch (err) { }
     }
 
@@ -79,7 +98,7 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
         if (!input.trim() || !sessionId) return;
         setIsSubmitting(true);
         try {
-            await fetch(`${API_BASE}/ideas`, {
+            await fetch(`${API_BASE}/submit-idea`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ idea: input.trim(), sessionId })
@@ -90,6 +109,21 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
             toast.showToast(`Submission Error: ${err.message}`, "error");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleTriggerPipeline = async () => {
+        if (!bestIdea || !sessionId) return;
+        try {
+            await fetch(`${API_BASE}/trigger-pipeline`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ideaId: bestIdea.id, sessionId })
+            });
+            toast.showToast("Pipeline started. It usually takes 10-20 seconds.", "success");
+            fetchBest();
+        } catch (err: any) {
+            toast.showToast(`Pipeline Error: ${err.message}`, "error");
         }
     };
 
@@ -104,10 +138,10 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
             <div className="flex flex-1 h-full overflow-hidden absolute inset-0 pt-16">
 
                 {/* Left Sidebar: Best Idea */}
-                <div className="w-[300px] border-r border-white/5 bg-[#0b0c13] p-6 flex flex-col shrink-0">
-                    <div className="bg-gradient-to-br from-[#0ea5e9]/10 to-transparent border border-[#0ea5e9]/30 rounded-2xl p-5 mb-auto">
+                <div className="w-[300px] border-r border-white/5 bg-[#0b0c13] p-6 flex flex-col shrink-0 overflow-y-auto custom-scrollbar">
+                    <div className="bg-gradient-to-br from-[#0ea5e9]/10 to-transparent border border-[#0ea5e9]/30 rounded-2xl p-5 mb-6">
                         <h3 className="text-xs font-black text-[#0ea5e9] uppercase tracking-widest mb-4 flex items-center gap-2">
-                            🏆 Highest Rated
+                            🏆 Top Idea
                         </h3>
                         {!bestIdea ? (
                             <p className="text-xs text-white/30 italic">No ideas evaluated yet.</p>
@@ -116,11 +150,52 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
                                 <p className="text-sm font-medium text-white line-clamp-4 leading-relaxed">{bestIdea.idea}</p>
                                 <div className="pt-4 border-t border-white/10">
                                     <div className="text-xs text-white/50 mb-1">Score</div>
-                                    <div className="text-3xl font-black text-[#10b981]">{bestIdea.evaluation?.overallScore || '?'}<span className="text-lg text-white/30">/10</span></div>
+                                    <div className="text-3xl font-black text-[#10b981]">{bestIdea.evaluation?.final_score || bestIdea.evaluation?.overallScore || '?'}<span className="text-lg text-white/30">/10</span></div>
+                                </div>
+                                <div className="pt-4">
+                                    {bestIdea.pipelineStatus === 'none' && status === 'admin' && (
+                                        <button
+                                            onClick={handleTriggerPipeline}
+                                            className="w-full py-2 bg-[#0ea5e9]/20 hover:bg-[#0ea5e9]/40 text-[#0ea5e9] border border-[#0ea5e9]/30 rounded-lg text-xs font-bold transition-all"
+                                        >
+                                            Generate Full Spec (AI Pipeline)
+                                        </button>
+                                    )}
+                                    {bestIdea.pipelineStatus === 'running' && (
+                                        <div className="text-xs text-[#0ea5e9] animate-pulse flex items-center gap-2 justify-center py-2 border border-[#0ea5e9]/20 rounded-lg bg-[#0ea5e9]/5">
+                                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                            Pipeline Running...
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
                     </div>
+
+                    {pipelineResult && (
+                        <div className="space-y-6 pb-6">
+                            <div>
+                                <h4 className="text-[10px] uppercase font-bold text-white/40 tracking-wider mb-2">Domains</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {(pipelineResult.result?.categories || []).map((c: string) => (
+                                        <span key={c} className="px-2 py-1 bg-white/5 border border-white/10 rounded text-[10px] text-white/70">{c}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <h4 className="text-[10px] uppercase font-bold text-white/40 tracking-wider mb-2">Core Features</h4>
+                                <ul className="text-xs space-y-1 text-white/80 list-disc list-inside">
+                                    {(pipelineResult.result?.features?.core || []).map((f: string, i: number) => <li key={`cf-${i}`}>{f}</li>)}
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="text-[10px] uppercase font-bold text-white/40 tracking-wider mb-2">Requirements</h4>
+                                <ul className="text-xs space-y-1 text-white/60 list-disc list-inside">
+                                    {(pipelineResult.result?.requirements?.functional || []).slice(0, 5).map((r: string, i: number) => <li key={`rf-${i}`}>{r}</li>)}
+                                </ul>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right Area: Feed & Input */}
@@ -138,9 +213,23 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
                                         <div className="flex items-center gap-2 text-sm font-bold text-white">
                                             <div className="w-6 h-6 rounded-full bg-[#0ea5e9] text-[10px] flex items-center justify-center text-black">A</div>
                                             {item.username}
+                                            {bestIdea?.id === item.id && (
+                                                <span className="ml-2 px-2 py-0.5 bg-[#10b981]/20 text-[#10b981] rounded text-[9px] uppercase tracking-wider border border-[#10b981]/30">Top Idea</span>
+                                            )}
                                         </div>
-                                        <div className="text-[10px] text-white/30 font-black uppercase tracking-wider">
-                                            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        <div className="flex items-center gap-3">
+                                            {item.pipelineStatus && item.pipelineStatus !== 'none' && (
+                                                <div className={`text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded 
+                                                    ${item.pipelineStatus === 'done' ? 'bg-[#10b981]/10 text-[#10b981] border border-[#10b981]/20' : 
+                                                    item.pipelineStatus === 'running' ? 'bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20 animate-pulse' : 
+                                                    item.pipelineStatus === 'error' ? 'bg-[#ef4444]/10 text-[#ef4444] border border-[#ef4444]/20' : 
+                                                    'bg-white/5 text-white/40'}`}>
+                                                    Pipeline: {item.pipelineStatus}
+                                                </div>
+                                            )}
+                                            <div className="text-[10px] text-white/30 font-black uppercase tracking-wider">
+                                                {new Date(item.createdAt || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
                                         </div>
                                     </div>
 
