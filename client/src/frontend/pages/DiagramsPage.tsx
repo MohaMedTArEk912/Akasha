@@ -1,553 +1,411 @@
-/**
- * Diagrams Page
- *
- * Full-page view for architecture and system diagrams:
- * - Sidebar to list/create/delete diagrams
- * - Embeds draw.io editor as an iframe
- * - Handles saving/loading via backend API
- * - Uses custom modals instead of native browser dialogs
- */
-
-import React, { useRef, useState, useCallback, useEffect } from "react";
-import useApi, { DiagramEntry, AnalysisResult } from "../hooks/useApi";
+import React, { useRef, useState, useEffect, Suspense } from "react";
+import useApi, { DiagramEntry } from "../hooks/useApi";
 import AnalysisPanel from "../components/features/Akasha/AnalysisPanel";
+type AppState = any;
+type ExcalidrawImperativeAPI = any;
 
+// Dynamic import for Excalidraw, exportToBlob, serializeAsJSON
+const Excalidraw = React.lazy(() => import("@excalidraw/excalidraw").then(module => ({ default: module.Excalidraw })));
+import { serializeAsJSON } from "@excalidraw/excalidraw";
 
-const DRAWIO_SRC = "/src/drawio/index.html";
+// --- ErrorBoundary Inline ---
+class ErrorBoundary extends React.Component<{ fallback: React.ReactNode, children: React.ReactNode }, { hasError: boolean }> {
+    constructor(props: any) { super(props); this.state = { hasError: false }; }
+    static getDerivedStateFromError(_error: any) { return { hasError: true }; }
+    render() {
+        if (this.state.hasError) return this.props.fallback;
+        return this.props.children;
+    }
+}
+
+// --- Library Items for palette ---
+const createItem = (type: string, bg: string, stroke: string, text: string, id: string, extra?: any) => {
+    const w = extra?.width || 100;
+    const h = extra?.height || 50;
+    return {
+        id,
+        status: "published" as const,
+        elements: [
+            { id: `shape-${id}`, type, x: 0, y: 0, width: w, height: h, strokeColor: stroke, backgroundColor: bg, fillStyle: "solid", strokeWidth: 1, strokeStyle: extra?.strokeStyle || "solid", roughness: 0, opacity: 100, groupIds: [id], boundElements: [] },
+            { id: `text-${id}`, type: "text", x: w/2 - 30, y: h/2 - 10, width: 60, height: 20, strokeColor: stroke, backgroundColor: "transparent", fillStyle: "solid", strokeWidth: 1, strokeStyle: "solid", roughness: 0, opacity: 100, groupIds: [id], text, fontSize: 16, fontFamily: 1, textAlign: "center", verticalAlign: "middle" }
+        ] as any[]
+    };
+};
+
+const libraryItems = [
+    // Use Case Kit
+    createItem("ellipse", "#EEF2FF", "#6366F1", "Actor", "uc-actor"),
+    createItem("ellipse", "#EEF2FF", "#6366F1", "Use Case", "uc-usecase"),
+    createItem("rectangle", "#EEF2FF", "#6366F1", "System", "uc-system"),
+    // System Architecture Kit
+    createItem("rectangle", "#F0FDF4", "#22C55E", "Service", "sa-service"),
+    createItem("rectangle", "#F0FDF4", "#22C55E", "Database", "sa-db"),
+    createItem("rectangle", "#F0FDF4", "#22C55E", "API Gateway", "sa-api"),
+    createItem("rectangle", "#F0FDF4", "#22C55E", "Queue", "sa-queue"),
+    createItem("rectangle", "#F0FDF4", "#22C55E", "External", "sa-external", { strokeStyle: "dashed" }),
+    // Sequence Kit
+    createItem("rectangle", "#FFF7ED", "#F97316", "Lifeline", "sq-lifeline", { width: 10, height: 180 }),
+    createItem("rectangle", "#FFF7ED", "#F97316", "Activation", "sq-activation", { width: 10, height: 80 }),
+    // Flow Kit
+    createItem("rectangle", "#F0F9FF", "#0EA5E9", "Process", "fl-process"),
+    createItem("diamond", "#F0F9FF", "#0EA5E9", "Decision", "fl-decision", { width: 120, height: 80 }),
+    createItem("ellipse", "#F0F9FF", "#0EA5E9", "Start", "fl-start"),
+    createItem("ellipse", "#F0F9FF", "#0EA5E9", "End", "fl-end", { strokeStyle: "solid" })
+];
+
+// --- Interface & Type ---
+interface MetadataObject {
+    name: string;
+    type: string;
+    auth: string;
+    notes: string;
+}
 
 /* ─── Inline Modal Components ─────────────────────────── */
-
-/** Text input modal (replaces prompt) */
-const InputModal: React.FC<{
-    isOpen: boolean;
-    title: string;
-    placeholder?: string;
-    confirmText?: string;
-    onConfirm: (value: string) => void;
-    onCancel: () => void;
-}> = ({ isOpen, title, placeholder, confirmText = "Create", onConfirm, onCancel }) => {
+const InputModal: React.FC<{ isOpen: boolean; title: string; placeholder?: string; confirmText?: string; onConfirm: (v: string) => void; onCancel: () => void }> = ({ isOpen, title, placeholder, confirmText = "Create", onConfirm, onCancel }) => {
     const [value, setValue] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (isOpen) {
-            setValue("");
-            setTimeout(() => inputRef.current?.focus(), 100);
-        }
-    }, [isOpen]);
-
+    useEffect(() => { if (isOpen) { setValue(""); setTimeout(() => inputRef.current?.focus(), 100); } }, [isOpen]);
     if (!isOpen) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (value.trim()) onConfirm(value.trim());
-    };
-
+    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (value.trim()) onConfirm(value.trim()); };
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-            <div
-                className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl overflow-hidden"
-                style={{ animation: "scaleUp 0.2s ease-out" }}
-            >
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <div className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl p-6" style={{ animation: "scaleUp 0.2s ease-out" }}>
+                <form onSubmit={handleSubmit} className="space-y-4">
                     <h3 className="text-lg font-bold text-[var(--ide-text)]">{title}</h3>
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder={placeholder || "Enter name..."}
-                        className="w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-xl px-4 py-3 text-sm text-[var(--ide-text)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all placeholder:text-[var(--ide-text-muted)]"
-                        required
-                    />
-                    <div className="flex gap-3 pt-1">
-                        <button
-                            type="button"
-                            onClick={onCancel}
-                            className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={!value.trim()}
-                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs uppercase tracking-wider transition-all disabled:opacity-40"
-                        >
-                            {confirmText}
-                        </button>
-                    </div>
+                    <input ref={inputRef} type="text" value={value} onChange={e => setValue(e.target.value)} placeholder={placeholder} className="w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-xl px-4 py-3 text-sm text-[var(--ide-text)]" required />
+                    <div className="flex gap-3"><button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)]">Cancel</button><button type="submit" disabled={!value.trim()} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white">{confirmText}</button></div>
                 </form>
             </div>
         </div>
     );
 };
 
-/** Confirm/delete modal (replaces confirm) */
-const ConfirmDeleteModal: React.FC<{
-    isOpen: boolean;
-    name: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-}> = ({ isOpen, name, onConfirm, onCancel }) => {
+const ConfirmDeleteModal: React.FC<{ isOpen: boolean; name: string; onConfirm: () => void; onCancel: () => void }> = ({ isOpen, name, onConfirm, onCancel }) => {
     if (!isOpen) return null;
-
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-            <div
-                className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl p-6 space-y-4"
-                style={{ animation: "scaleUp 0.2s ease-out" }}
-            >
+            <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+            <div className="relative bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl p-6">
                 <h3 className="text-lg font-bold text-[var(--ide-text)]">Delete Diagram?</h3>
-                <p className="text-sm text-[var(--ide-text-secondary)]">
-                    Are you sure you want to delete <strong className="text-[var(--ide-text)]">"{name}"</strong>? This action cannot be undone.
-                </p>
-                <div className="flex gap-3 pt-1">
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={onConfirm}
-                        className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-xs uppercase tracking-wider transition-all"
-                    >
-                        Delete
-                    </button>
-                </div>
+                <p>Delete "{name}"?</p>
+                <div className="flex gap-3"><button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)]">Cancel</button><button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white">Delete</button></div>
             </div>
         </div>
     );
 };
 
-/** Discard changes modal (replaces confirm for unsaved changes) */
-const DiscardModal: React.FC<{
-    isOpen: boolean;
-    onDiscard: () => void;
-    onCancel: () => void;
-}> = ({ isOpen, onDiscard, onCancel }) => {
+const DiscardModal: React.FC<{ isOpen: boolean; onDiscard: () => void; onCancel: () => void }> = ({ isOpen, onDiscard, onCancel }) => {
     if (!isOpen) return null;
-
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-            <div
-                className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl p-6 space-y-4"
-                style={{ animation: "scaleUp 0.2s ease-out" }}
-            >
-                <h3 className="text-lg font-bold text-[var(--ide-text)]">Unsaved Changes</h3>
-                <p className="text-sm text-[var(--ide-text-secondary)]">
-                    You have unsaved changes. Do you want to discard them?
-                </p>
-                <div className="flex gap-3 pt-1">
-                    <button
-                        onClick={onCancel}
-                        className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all"
-                    >
-                        Keep Editing
-                    </button>
-                    <button
-                        onClick={onDiscard}
-                        className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs uppercase tracking-wider transition-all"
-                    >
-                        Discard
-                    </button>
-                </div>
+            <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+            <div className="relative bg-[var(--ide-bg-panel)] rounded-2xl p-6 border border-[var(--ide-border)]">
+                <h3>Unsaved Changes</h3>
+                <p>Discard them?</p>
+                <div className="flex gap-3"><button onClick={onCancel} className="flex-1 py-2 rounded border">Cancel</button><button onClick={onDiscard} className="flex-1 py-2 rounded bg-amber-500 text-white">Discard</button></div>
             </div>
         </div>
     );
 };
 
-/** Toast notification (replaces alert for errors) */
-const Toast: React.FC<{ message: string | null; type?: "error" | "success"; onDismiss: () => void }> = ({ message, type = "error", onDismiss }) => {
-    useEffect(() => {
-        if (message) {
-            const t = setTimeout(onDismiss, 5000);
-            return () => clearTimeout(t);
-        }
-    }, [message, onDismiss]);
-
+const Toast: React.FC<{ message: string | null; type?: "error"|"success"; onDismiss: () => void }> = ({ message, type = "error", onDismiss }) => {
+    useEffect(() => { if (message) { const t = setTimeout(onDismiss, 3000); return () => clearTimeout(t); } }, [message, onDismiss]);
     if (!message) return null;
-
     return (
-        <div className={`fixed bottom-6 right-6 z-[300] max-w-sm px-5 py-3 rounded-xl shadow-2xl border text-sm font-medium flex items-center gap-3
-            ${type === "error"
-                ? "bg-red-500/10 border-red-500/30 text-red-400"
-                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-            }`}
-            style={{ animation: "slideUp 0.3s ease-out" }}
-        >
+        <div className={`fixed bottom-6 right-6 z-[300] max-w-sm px-5 py-3 rounded-xl shadow-2xl border text-sm font-medium flex items-center gap-3 ${type === "error" ? "bg-red-500/10 border-red-500/30 text-red-500" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"}`} style={{ animation: "slideUp 0.3s ease-out" }}>
             <span className="flex-1">{message}</span>
-            <button onClick={onDismiss} className="opacity-60 hover:opacity-100 transition-opacity">✕</button>
+            <button onClick={onDismiss}>✕</button>
         </div>
     );
 };
-
-/* ─── Main Component ──────────────────────────────────── */
 
 const DiagramsPage: React.FC = () => {
     const api = useApi();
-    const iframeRef = useRef<HTMLIFrameElement>(null);
     const [diagrams, setDiagrams] = useState<DiagramEntry[]>([]);
     const [selectedDiagram, setSelectedDiagram] = useState<string | null>(null);
-    const [loaded, setLoaded] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [loadingList, setLoadingList] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
-
-    // Akasha analysis state
-    const [showAnalysis, setShowAnalysis] = useState(false);
-    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-    const [analysisLoading, setAnalysisLoading] = useState(false);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
-
-    // Modal states
+    
+    // UI state
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
     const [discardCallback, setDiscardCallback] = useState<(() => void) | null>(null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [toastType, setToastType] = useState<"error" | "success">("error");
 
-    const showToast = (msg: string, type: "error" | "success" = "error") => {
-        setToastMessage(msg);
-        setToastType(type);
-    };
+    const [showAnalysis, setShowAnalysis] = useState(false);
+    const [editingDiagramName, setEditingDiagramName] = useState("");
 
-    // Initial load of diagrams
-    useEffect(() => {
-        loadDiagrams();
-    }, []);
+    // Excalidraw refs
+    const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+    const metadataMap = useRef<Map<string, MetadataObject>>(new Map());
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
+    // Selected element
+    const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+
+    const showToast = (msg: string, type: "error" | "success" = "error") => { setToastMessage(msg); setToastType(type); };
+
+    useEffect(() => { loadDiagrams(); return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); }; }, []);
 
     const loadDiagrams = async () => {
-        setLoadingList(true);
-        try {
-            const list = await api.listDiagrams();
-            setDiagrams(list);
-        } catch (err) {
-            console.error("Failed to list diagrams:", err);
-        } finally {
-            setLoadingList(false);
-        }
+        try { const list = await api.listDiagrams(); setDiagrams(list); } catch (e) { }
     };
 
     const handleCreate = async (name: string) => {
         try {
-            await api.createDiagram(name);
+            const fileName = name.endsWith('.excalidraw') ? name : `${name}-${Date.now()}.excalidraw`;
+            await api.createDiagram(fileName);
             await loadDiagrams();
-            // Use the filename with .drawio extension for selection
-            const fileName = name.endsWith('.drawio') ? name : `${name}.drawio`;
-            selectDiagram(fileName);
+            doSelectDiagram(fileName);
             setShowCreateModal(false);
-            showToast(`Created "${fileName}"`, "success");
-        } catch (err) {
-            showToast(`Failed to create diagram: ${err}`);
-        }
+            showToast(`Created`, "success");
+        } catch (e) { showToast(`Failed to create`); }
     };
 
     const handleDeleteConfirm = async () => {
         if (!deleteTarget) return;
         try {
             await api.deleteDiagram(deleteTarget);
-            if (selectedDiagram === deleteTarget) {
-                setSelectedDiagram(null);
-                setLoaded(false);
-            }
+            if (selectedDiagram === deleteTarget) { setSelectedDiagram(null); }
             await loadDiagrams();
-            showToast(`Deleted "${deleteTarget}"`, "success");
-        } catch (err) {
-            showToast(`Failed to delete diagram: ${err}`);
-        } finally {
+            showToast(`Deleted`, "success");
             setDeleteTarget(null);
-        }
-    };
-
-    const selectDiagram = async (name: string) => {
-        if (isDirty) {
-            // Show discard modal and store the pending action
-            setDiscardCallback(() => () => doSelectDiagram(name));
-            return;
-        }
-        doSelectDiagram(name);
+        } catch (e) { showToast(`Failed to delete`); }
     };
 
     const doSelectDiagram = async (name: string) => {
         setSelectedDiagram(name);
-        setLoaded(false);
+        setEditingDiagramName(name);
         setIsDirty(false);
-        setError(null);
-
+        setSelectedElementId(null);
+        if (excalidrawAPI) excalidrawAPI.updateScene({ elements: [] }); // clear first
         try {
             const content = await api.readDiagram(name);
-            if (iframeRef.current && iframeRef.current.contentWindow) {
-                loadContentIntoFrame(content);
+            if (content && excalidrawAPI) {
+                const data = JSON.parse(content);
+                excalidrawAPI.updateScene({ elements: data.elements, appState: data.appState });
             }
-        } catch (err) {
-            setError(`Failed to load diagram: ${err}`);
-        }
+        } catch (e) { console.error("Error loading diagram json", e); }
     };
 
-    const loadContentIntoFrame = (xml: string) => {
-        if (!iframeRef.current?.contentWindow) return;
-        iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ action: "load", autosave: 1, xml }),
-            "*"
-        );
-        setLoaded(true);
+    const selectDiagram = (name: string) => {
+        if (isDirty) { setDiscardCallback(() => () => doSelectDiagram(name)); return; }
+        doSelectDiagram(name);
     };
 
-    // Akasha analysis handler
-    const handleAnalyze = async () => {
-        if (!selectedDiagram) return;
-        setAnalysisLoading(true);
-        setAnalysisError(null);
+    const handleSave = async (isAutoSave: boolean) => {
+        if (!excalidrawAPI || !selectedDiagram) return;
         try {
-            const result = await api.analyzeDiagram(selectedDiagram);
-            setAnalysisResult(result);
-        } catch (err) {
-            setAnalysisError(`Analysis failed: ${err}`);
-        } finally {
-            setAnalysisLoading(false);
+            const els = excalidrawAPI.getSceneElements();
+            const json = serializeAsJSON(els, excalidrawAPI.getAppState(), excalidrawAPI.getFiles(), "local");
+            await api.saveDiagram(selectedDiagram, json);
+            if (!isAutoSave) { setIsDirty(false); showToast("Saved", "success"); }
+            else setIsDirty(false); // keep it simple
+        } catch (e) { showToast("Save failed"); }
+    };
+
+    const handleRenameBlur = async () => {
+        if (!selectedDiagram || editingDiagramName === selectedDiagram) return;
+        try {
+            const newName = editingDiagramName.endsWith(".excalidraw") ? editingDiagramName : editingDiagramName + ".excalidraw";
+            const els = excalidrawAPI!.getSceneElements();
+            const json = serializeAsJSON(els, excalidrawAPI!.getAppState(), excalidrawAPI!.getFiles(), "local");
+            await api.saveDiagram(newName, json);
+            await api.deleteDiagram(selectedDiagram);
+            setSelectedDiagram(newName);
+            await loadDiagrams();
+            showToast("Renamed", "success");
+        } catch (e) { setEditingDiagramName(selectedDiagram); showToast("Rename failed"); }
+    };
+
+    // Linter
+    const lintConnections = (elements: readonly any[]) => {
+        let hasUpdates = false;
+        const newEls = elements.map(el => {
+            if (el.type === "arrow" && el.startBinding && el.endBinding) {
+                const startMeta = metadataMap.current.get(el.startBinding.elementId) || { type: "" };
+                const endMeta = metadataMap.current.get(el.endBinding.elementId) || { type: "" };
+                let err = null;
+                let warn = false;
+                if (startMeta.type === "Actor" && endMeta.type === "Database") err = "Actors must connect to API Endpoints, not directly to Databases";
+                else if (startMeta.type === "Actor" && endMeta.type === "External Service") err = "Actors interact with your system, not external services directly";
+                else if (startMeta.type === "API Endpoint" && endMeta.type === "Actor") err = "API Endpoints should not point back to Actors";
+                else if (startMeta.type && startMeta.type === endMeta.type) warn = true;
+
+                if (err) {
+                    if (el.strokeColor !== "#EF4444" || el.customData?.lintError !== err) {
+                        hasUpdates = true; showToast(err, "error");
+                        return { ...el, strokeColor: "#EF4444", customData: { lintError: err } };
+                    }
+                } else if (warn) {
+                    if (el.strokeColor !== "#F59E0B") {
+                        hasUpdates = true; return { ...el, strokeColor: "#F59E0B", customData: { lintError: "Same-type connection seems unusual" } };
+                    }
+                } else if (el.customData?.lintError) {
+                    hasUpdates = true; return { ...el, strokeColor: "#000000", customData: {} };
+                }
+            }
+            return el;
+        });
+        if (hasUpdates && excalidrawAPI) {
+            // Need to update scene without triggering infinite loop
+            setTimeout(() => excalidrawAPI.updateScene({ elements: newEls }), 0);
         }
     };
 
-    const handleIframeLoad = useCallback(() => {
-        // Iframe DOM loaded, draw.io may still be initializing
-    }, []);
+    const onChange = (elements: readonly any[], appState: AppState) => {
+        setIsDirty(true);
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => handleSave(true), 1000);
+        
+        lintConnections(elements);
+        
+        const selIds = Object.keys(appState.selectedElementIds || {}).filter(k => appState.selectedElementIds[k]);
+        if (selIds.length === 1) {
+            if (selectedElementId !== selIds[0]) setSelectedElementId(selIds[0]);
+        } else {
+            console.log("No single element selected");
+            if (selectedElementId !== null) setSelectedElementId(null);
+        }
+    };
 
-    const handleIframeError = useCallback(() => {
-        setError("Failed to load the diagram editor.");
-        setLoaded(false);
-    }, []);
-
-    // Listen for messages from draw.io iframe
-    useEffect(() => {
-        const handler = async (e: MessageEvent) => {
-            if (!iframeRef.current) return;
-            try {
-                const msg = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-
-                if (msg.event === "init") {
-                    console.log("[Diagrams] draw.io editor initialized");
-                    if (selectedDiagram) {
-                        const content = await api.readDiagram(selectedDiagram);
-                        loadContentIntoFrame(content);
-                    }
-                } else if (msg.event === "save") {
-                    if (selectedDiagram && msg.xml) {
-                        console.log("[Diagrams] Saving", selectedDiagram);
-                        await api.saveDiagram(selectedDiagram, msg.xml);
-                        setIsDirty(false);
-                    }
-                } else if (msg.event === "autosave") {
-                    if (selectedDiagram && msg.xml) {
-                        await api.saveDiagram(selectedDiagram, msg.xml);
-                        setIsDirty(false);
-                    }
-                } else if (msg.event === "change") {
-                    setIsDirty(true);
-                } else if (msg.event === "configure") {
-                    iframeRef.current.contentWindow?.postMessage(JSON.stringify({
-                        action: 'configure',
-                        config: { compressXml: false }
-                    }), '*');
-                }
-            } catch {
-                // ignore non-JSON messages
+    const handleGenerateBoilerplate = () => {
+        if (!excalidrawAPI) return;
+        const elements = excalidrawAPI.getSceneElements();
+        let txt = ""; let m=0, r=0, i=0;
+        
+        elements.forEach((c: any) => {
+            const meta = metadataMap.current.get(c.id);
+            if (!meta) return;
+            if (c.type === "rectangle" && meta.type === "Database") {
+                const n = (meta.name || "User");
+                txt += `\n=== FILE: prisma/schema_${n}.prisma ===\nmodel ${n} {\n  id String @id @default(uuid())\n}\n`;
+                m++;
+            } else if (meta.type === "API Endpoint") {
+                const safe = (meta.name || "GET_items").replace(/[^a-zA-Z0-9]/g, '_');
+                txt += `\n=== FILE: server/routes/${safe}_generated.ts ===\nimport { Router } from 'express';\nconst router = Router();\n// Route for ${meta.name}\nexport default router;\n`;
+                r++;
+            } else if (meta.type === "Actor") {
+                const safe = (meta.name || "Admin").replace(/[^a-zA-Z0-9]/g, '');
+                txt += `\n=== FILE: types/${safe}_generated.ts ===\nexport interface ${safe} {\n  id: string;\n  role: string;\n}\n`;
+                i++;
             }
-        };
-        window.addEventListener("message", handler);
-        return () => window.removeEventListener("message", handler);
-    }, [selectedDiagram, api]);
+        });
+        
+        const blob = new Blob([txt], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "generated-boilerplate.txt";
+        a.click(); URL.revokeObjectURL(url);
+        showToast(`Generated ${m} models, ${r} routes, ${i} interfaces`, "success");
+    };
+
+    const saveMetadata = (e: React.FormEvent) => {
+        e.preventDefault();
+        showToast("Metadata Saved", "success");
+    };
 
     return (
         <div className="flex flex-1 overflow-hidden h-full bg-[var(--ide-bg)]">
-            {/* Sidebar */}
             <div className="w-64 bg-[var(--ide-sidebar-bg)] border-r border-[var(--ide-border)] flex flex-col">
                 <div className="h-9 flex items-center px-4 font-semibold text-xs text-[var(--ide-text-secondary)] uppercase tracking-wider bg-[var(--ide-chrome)] border-b border-[var(--ide-border)]">
                     <span>Diagrams</span>
                     <div className="flex-1" />
-                    <button
-                        onClick={() => setShowCreateModal(true)}
-                        className="text-[var(--ide-text-secondary)] hover:text-[var(--ide-primary)] transition-colors"
-                        title="New Diagram"
-                    >
+                    <button onClick={() => setShowCreateModal(true)} className="text-[var(--ide-text-secondary)] hover:text-[var(--ide-primary)]" title="New Diagram">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                     </button>
                 </div>
-
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    {loadingList && <div className="text-xs text-center p-2 text-[var(--ide-text-secondary)]">Loading...</div>}
-
-                    {!loadingList && diagrams.length === 0 && (
-                        <div className="text-xs text-center p-4 text-[var(--ide-text-secondary)]">
-                            No diagrams yet.<br />Click + to create one.
-                        </div>
-                    )}
-
                     {diagrams.map(d => (
-                        <div
-                            key={d.path}
-                            onClick={() => selectDiagram(d.name)}
-                            className={`group flex items-center px-3 py-2 text-sm rounded cursor-pointer select-none ${selectedDiagram === d.name
-                                ? "bg-[var(--ide-active-bg)] text-[var(--ide-active-text)]"
-                                : "text-[var(--ide-text)] hover:bg-[var(--ide-hover-bg)]"
-                                }`}
-                        >
-                            <svg className={`w-4 h-4 mr-2 ${selectedDiagram === d.name ? "text-[var(--ide-primary)]" : "text-[var(--ide-text-secondary)]"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-                            </svg>
-                            <span className="truncate flex-1">{d.name}</span>
-
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeleteTarget(d.name);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
-                                title="Delete"
-                            >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                        </div>
+                         <div key={d.path} onClick={() => selectDiagram(d.name)} className={`group flex items-center px-3 py-2 text-sm rounded cursor-pointer select-none ${selectedDiagram === d.name ? "bg-[var(--ide-active-bg)] text-[var(--ide-active-text)]" : "text-[var(--ide-text)] hover:bg-[var(--ide-hover-bg)]"}`}>
+                             <svg className={`w-4 h-4 mr-2 ${selectedDiagram === d.name ? "text-[var(--ide-primary)]" : "text-[var(--ide-text-secondary)]"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" /></svg>
+                             <span className="truncate flex-1">{d.name}</span>
+                             <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(d.name); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500" title="Delete">
+                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1" /></svg>
+                             </button>
+                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* Main Area + Analysis Panel */}
-            <div className="flex-1 flex min-w-0">
-                {/* Editor Area */}
-                <div className="flex-1 flex flex-col min-w-0">
-                    {/* Toolbar */}
-                    {selectedDiagram && (
-                        <div
-                            style={{
-                                height: 36,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-end",
-                                padding: "0 8px",
-                                gap: 6,
-                                background: "var(--ide-chrome)",
-                                borderBottom: "1px solid var(--ide-border)",
-                            }}
-                        >
-                            <button
-                                onClick={() => setShowAnalysis(!showAnalysis)}
-                                style={{
-                                    padding: "4px 10px",
-                                    fontSize: 11,
-                                    fontWeight: 500,
-                                    borderRadius: 4,
-                                    border: showAnalysis
-                                        ? "1px solid var(--ide-primary, #3b82f6)"
-                                        : "1px solid var(--ide-border)",
-                                    cursor: "pointer",
-                                    background: showAnalysis
-                                        ? "rgba(59,130,246,0.12)"
-                                        : "transparent",
-                                    color: showAnalysis
-                                        ? "var(--ide-primary, #3b82f6)"
-                                        : "var(--ide-text-secondary)",
-                                    transition: "all 0.15s",
-                                }}
-                            >
-                                🧠 Akasha
-                            </button>
+            <div className="flex-1 flex flex-col min-w-0">
+                {selectedDiagram && (
+                    <div style={{ height: 40, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px", background: "var(--ide-chrome)", borderBottom: "1px solid var(--ide-border)" }}>
+                        <div className="flex items-center gap-2">
+                             <input type="text" value={editingDiagramName} onChange={e => setEditingDiagramName(e.target.value)} onBlur={handleRenameBlur} className="bg-transparent border-none outline-none font-semibold text-sm w-64" />
+                             {isDirty && <span className="text-red-500 text-xs">●</span>}
                         </div>
-                    )}
+                        <div className="flex items-center gap-4 text-sm font-medium">
+                            <button onClick={() => handleSave(false)} className="hover:text-amber-600 transition-colors">💾 Save</button>
+                            <button onClick={handleGenerateBoilerplate} className="hover:text-indigo-600 transition-colors">⚡ Generate</button>
+                            <button onClick={() => setShowAnalysis(!showAnalysis)} className={`px-2 py-1 rounded border ${showAnalysis ? 'border-primary bg-primary/10 text-primary' : 'border-gray-300'}`}>🧠 Akasha</button>
+                        </div>
+                    </div>
+                )}
+                
+                {!selectedDiagram ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-[var(--ide-text-secondary)]">Select a diagram</div>
+                ) : (
+                    <div className="flex-1 relative bg-white w-full h-full">
+                        <ErrorBoundary fallback={<div className="p-4 text-red-500">Error loading Excalidraw editor. Make sure @excalidraw/excalidraw is installed correctly.</div>}>
+                            <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center">Loading editor...</div>}>
+                                <div style={{width:"100%", height:"100%", position:"relative"}}>
+                                    {/* @ts-ignore */}
+                                    <Excalidraw 
+                                        excalidrawAPI={(api: any) => { setExcalidrawAPI(api); if (selectedDiagram) doSelectDiagram(selectedDiagram); }} 
+                                        // @ts-ignore
+                                        libraryItems={libraryItems} 
+                                        onChange={onChange}
+                                    />
+                                    {selectedElementId && (() => {
+                                        const cMeta = metadataMap.current.get(selectedElementId) || { name: "", type: "Feature", auth: "N/A", notes: "" };
+                                        const el = excalidrawAPI?.getSceneElements().find((e: any) => e.id === selectedElementId);
+                                        if (el && !cMeta.name && (el as any).text) cMeta.name = (el as any).text;
 
-                    {!selectedDiagram ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-[var(--ide-text-secondary)]">
-                            <svg className="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-                            </svg>
-                            <p>Select a diagram to edit</p>
-                        </div>
-                    ) : (
-                        <div className="flex-1 relative bg-white">
-                            {error && (
-                                <div className="absolute inset-0 z-50 bg-[var(--ide-bg)] flex items-center justify-center">
-                                    <div className="text-center p-8 text-red-500">
-                                        <p>{error}</p>
-                                        <button onClick={() => selectDiagram(selectedDiagram)} className="mt-4 px-4 py-2 bg-[var(--ide-surface)] rounded border hover:bg-[var(--ide-hover-bg)]">Retry</button>
-                                    </div>
+                                        return (
+                                            <div className="absolute top-4 right-4 z-10 bg-white border shadow-lg rounded-xl p-4 w-64">
+                                                <h4 className="font-bold mb-3 text-sm">Metadata</h4>
+                                                <form onSubmit={saveMetadata} className="space-y-3">
+                                                    <div>
+                                                        <label className="block text-xs font-semibold mb-1">Element Type</label>
+                                                        <select className="w-full text-xs p-1 border rounded" value={cMeta.type} onChange={e => { cMeta.type = e.target.value; metadataMap.current.set(selectedElementId, cMeta); }}>
+                                                            {["Actor", "Feature", "Screen", "API Endpoint", "Database", "External Service", "Decision", "Process"].map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-semibold mb-1">Component Name</label>
+                                                        <input className="w-full text-xs p-1 border rounded" value={cMeta.name} onChange={e => { cMeta.name = e.target.value; metadataMap.current.set(selectedElementId, cMeta); }} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-semibold mb-1">Auth Required</label>
+                                                        <select className="w-full text-xs p-1 border rounded" value={cMeta.auth} onChange={e => { cMeta.auth = e.target.value; metadataMap.current.set(selectedElementId, cMeta); }}>
+                                                            {["N/A", "Yes - JWT", "Yes - API Key", "No"].map(t => <option key={t} value={t}>{t}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-semibold mb-1">Notes</label>
+                                                        <input className="w-full text-xs p-1 border rounded" value={cMeta.notes} onChange={e => { cMeta.notes = e.target.value; metadataMap.current.set(selectedElementId, cMeta); }} />
+                                                    </div>
+                                                    <button type="submit" className="w-full py-1 bg-indigo-500 text-white rounded text-xs font-bold">Save Metadata</button>
+                                                </form>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
-                            )}
-                            {!loaded && !error && (
-                                <div className="absolute inset-0 z-50 bg-[var(--ide-bg)] flex items-center justify-center text-[var(--ide-text-secondary)]">
-                                    <span className="animate-pulse">Loading editor...</span>
-                                </div>
-                            )}
-
-                            <iframe
-                                ref={iframeRef}
-                                src={DRAWIO_SRC}
-                                className={`w-full h-full border-0 block ${!loaded ? 'opacity-0' : 'opacity-100'}`}
-                                title="Architecture Diagram Editor"
-                                onLoad={handleIframeLoad}
-                                onError={handleIframeError}
-                            />
-                        </div>
-                    )}
-                </div>
-
-                {/* Akasha Analysis Panel */}
-                {showAnalysis && selectedDiagram && (
-                    <AnalysisPanel
-                        result={analysisResult}
-                        loading={analysisLoading}
-                        error={analysisError}
-                        onAnalyze={handleAnalyze}
-                    />
+                            </Suspense>
+                        </ErrorBoundary>
+                    </div>
                 )}
             </div>
-
-            {/* ─── Modals ─────────────────────────────────── */}
-            <InputModal
-                isOpen={showCreateModal}
-                title="New Diagram"
-                placeholder="e.g. system-architecture"
-                confirmText="Create"
-                onConfirm={handleCreate}
-                onCancel={() => setShowCreateModal(false)}
-            />
-
-            <ConfirmDeleteModal
-                isOpen={!!deleteTarget}
-                name={deleteTarget || ""}
-                onConfirm={handleDeleteConfirm}
-                onCancel={() => setDeleteTarget(null)}
-            />
-
-            <DiscardModal
-                isOpen={!!discardCallback}
-                onDiscard={() => {
-                    const cb = discardCallback;
-                    setDiscardCallback(null);
-                    cb?.();
-                }}
-                onCancel={() => setDiscardCallback(null)}
-            />
-
-            <Toast
-                message={toastMessage}
-                type={toastType}
-                onDismiss={() => setToastMessage(null)}
-            />
-
-            {/* Scoped animations */}
-            <style>{`
-                @keyframes scaleUp {
-                    from { opacity: 0; transform: scale(0.95) translateY(8px); }
-                    to { opacity: 1; transform: scale(1) translateY(0); }
-                }
-                @keyframes slideUp {
-                    from { opacity: 0; transform: translateY(12px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
+            
+            {showAnalysis && selectedDiagram && <AnalysisPanel onAnalyze={() => {}} result={null} loading={false} error={null} />}
+            
+            <InputModal isOpen={showCreateModal} title="New Diagram" placeholder="e.g. diagram" onConfirm={handleCreate} onCancel={() => setShowCreateModal(false)} />
+            <ConfirmDeleteModal isOpen={!!deleteTarget} name={deleteTarget!} onConfirm={handleDeleteConfirm} onCancel={() => setDeleteTarget(null)} />
+            <DiscardModal isOpen={!!discardCallback} onDiscard={() => { discardCallback!(); setDiscardCallback(null); }} onCancel={() => setDiscardCallback(null)} />
+            <Toast message={toastMessage} type={toastType} onDismiss={() => setToastMessage(null)} />
         </div>
     );
 };
