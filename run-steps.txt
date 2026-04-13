@@ -1,0 +1,11 @@
+# Run Steps
+
+1. Start backend:
+   `cd server`
+   `npm run dev`
+
+2. Start frontend:
+   `cd client`
+   `npm run dev`
+   
+3. Open browser at `http://localhost:5173/` (or whichever port Vite uses).
