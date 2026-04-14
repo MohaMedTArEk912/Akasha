@@ -4,13 +4,22 @@
  * Main landing screen to see all projects, search, create, and delete.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
-import { openProject, deleteProject, createProject, generateStructuredIdea, setActivePage } from "../stores/projectStore";
+import {
+    createProject,
+    deleteProject,
+    generateStructuredIdea,
+    getProjectImportTemplate,
+    importProject,
+    openProject,
+    setActivePage,
+} from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
 import { useTheme } from "../context/ThemeContext";
 import IDESettingsModal from "../components/Modals/IDESettingsModal";
 import IdeaWorkshop from "./IdeaWorkshop";
+import { getSampleProjectIdeaJson } from "../utils/projectTemplates";
 
 interface ProjectSummary {
     id: string;
@@ -22,10 +31,17 @@ const DashboardView: React.FC = () => {
     const { projects, workspacePath } = useProjectStore();
     const { theme } = useTheme();
     const toast = useToast();
+    const importFileInputRef = useRef<HTMLInputElement | null>(null);
+
     const [searchQuery, setSearchQuery] = useState("");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isCreateWorkshopOpen, setIsCreateWorkshopOpen] = useState(false);
+    const [createMode, setCreateMode] = useState<"workshop" | "import">("workshop");
     const [projectName, setProjectName] = useState("");
+    const [startWithSampleJson, setStartWithSampleJson] = useState(false);
+    const [importJson, setImportJson] = useState("");
+    const [isLoadingSample, setIsLoadingSample] = useState(false);
+    const [isImportingProject, setIsImportingProject] = useState(false);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -44,12 +60,14 @@ const DashboardView: React.FC = () => {
     const handleCreateProjectFinal = async (refinedIdea: string) => {
         try {
             await createProject(projectName.trim(), refinedIdea);
-            await generateStructuredIdea(refinedIdea);
+            try {
+                await generateStructuredIdea(refinedIdea);
+            } catch (ideaError) {
+                toast.showToast(`Project created, but PRD generation failed: ${ideaError}`, "warning");
+            }
             setActivePage("idea");
-            setProjectName("");
-            setIsCreateModalOpen(false);
-            setIsCreateWorkshopOpen(false);
-            toast.showToast("Project PRD generated and saved.", "success");
+            handleCancelCreate();
+            toast.showToast("Project created successfully.", "success");
         } catch (err) {
             toast.showToast(`Failed to create project: ${err}`, "error");
         }
@@ -58,7 +76,55 @@ const DashboardView: React.FC = () => {
     const handleCancelCreate = () => {
         setIsCreateModalOpen(false);
         setIsCreateWorkshopOpen(false);
+        setCreateMode("workshop");
         setProjectName("");
+        setStartWithSampleJson(false);
+        setImportJson("");
+        setIsLoadingSample(false);
+        setIsImportingProject(false);
+    };
+
+    const handleLoadSampleJson = async () => {
+        setIsLoadingSample(true);
+        try {
+            const template = await getProjectImportTemplate();
+            setImportJson(template);
+        } catch (err) {
+            toast.showToast(`Failed to load sample JSON: ${err}`, "error");
+        } finally {
+            setIsLoadingSample(false);
+        }
+    };
+
+    const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => setImportJson(String(reader.result || ""));
+        reader.onerror = () => toast.showToast("Failed to read JSON file.", "error");
+        reader.readAsText(file);
+
+        event.target.value = "";
+    };
+
+    const handleImportProject = async () => {
+        if (!importJson.trim()) {
+            toast.showToast("Load or paste project JSON first.", "warning");
+            return;
+        }
+
+        setIsImportingProject(true);
+        try {
+            JSON.parse(importJson);
+            await importProject(importJson);
+            handleCancelCreate();
+            toast.showToast("Project created from JSON.", "success");
+        } catch (err) {
+            toast.showToast(`Failed to import project: ${err}`, "error");
+        } finally {
+            setIsImportingProject(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
@@ -81,7 +147,6 @@ const DashboardView: React.FC = () => {
 
             <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-10 lg:p-12 pt-6 custom-scrollbar">
                 <div className="max-w-[1600px] mx-auto space-y-8">
-                    {/* Top Header */}
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 animate-fade-in group">
                         <div className="space-y-2">
                             <h1 className="text-4xl md:text-5xl font-black tracking-[-0.04em] uppercase italic flex items-center gap-3 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
@@ -129,6 +194,8 @@ const DashboardView: React.FC = () => {
                             <button
                                 onClick={() => {
                                     setIsCreateWorkshopOpen(false);
+                                    setCreateMode("workshop");
+                                    setStartWithSampleJson(false);
                                     setIsCreateModalOpen(true);
                                 }}
                                 className="h-10 px-6 rounded-xl bg-[#0ea5e9] hover:bg-[#0284c7] text-[#050508] font-bold text-xs transition-all shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] flex items-center justify-center gap-2 whitespace-nowrap"
@@ -142,7 +209,6 @@ const DashboardView: React.FC = () => {
                         <span>{filteredProjects.length} project{filteredProjects.length === 1 ? "" : "s"}</span>
                     </div>
 
-                    {/* Project Grid */}
                     {filteredProjects.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in pb-12">
                             {filteredProjects.map((project, idx) => (
@@ -171,6 +237,8 @@ const DashboardView: React.FC = () => {
                             <button
                                 onClick={() => {
                                     setIsCreateWorkshopOpen(false);
+                                    setCreateMode("workshop");
+                                    setStartWithSampleJson(false);
                                     setIsCreateModalOpen(true);
                                 }}
                                 className="btn-modern-primary !h-12 !px-12"
@@ -181,13 +249,11 @@ const DashboardView: React.FC = () => {
                     )}
                 </div>
 
-                {/* Modals */}
                 <IDESettingsModal
                     isOpen={showSettingsModal}
                     onClose={() => setShowSettingsModal(false)}
                 />
 
-                {/* Delete Confirmation */}
                 {confirmDeleteId && (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-black/55 backdrop-blur-md animate-fade-in" onClick={() => setConfirmDeleteId(null)} />
@@ -218,7 +284,7 @@ const DashboardView: React.FC = () => {
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-black/55 backdrop-blur-xl animate-fade-in" onClick={handleCancelCreate} />
 
-                        <div className="relative w-full max-w-lg bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-[2rem] shadow-[var(--ide-shadow)] overflow-hidden animate-slide-up">
+                        <div className="relative w-full max-w-4xl bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-[2rem] shadow-[var(--ide-shadow)] overflow-hidden animate-slide-up">
                             <div className="p-8 md:p-10">
                                 <div className="flex items-center gap-4 mb-8">
                                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 text-white flex items-center justify-center shadow-xl shadow-indigo-500/20">
@@ -227,44 +293,155 @@ const DashboardView: React.FC = () => {
                                         </svg>
                                     </div>
                                     <div>
-                                        <h2 className="text-2xl font-black leading-tight text-[var(--ide-text)]">New Project</h2>
-                                        <p className="text-[10px] text-[var(--ide-text-muted)] font-black uppercase tracking-widest mt-1">Step 1: Naming</p>
+                                        <h2 className="text-2xl font-black leading-tight text-[var(--ide-text)]">
+                                            {createMode === "workshop" ? "New Project" : "Create From JSON"}
+                                        </h2>
+                                        <p className="text-[10px] text-[var(--ide-text-muted)] font-black uppercase tracking-widest mt-1">
+                                            {createMode === "workshop" ? "Guided workshop" : "Editable project template"}
+                                        </p>
                                     </div>
                                 </div>
 
-                                <form onSubmit={handleNextStep} className="space-y-6">
-                                    <div className="space-y-3">
-                                        <label className="text-xs font-black text-[var(--ide-text-secondary)] uppercase tracking-widest ml-1">
-                                            Project Name
-                                        </label>
-                                        <input
-                                            type="text"
-                                            autoFocus
-                                            value={projectName}
-                                            onChange={(e) => setProjectName(e.target.value)}
-                                            placeholder="e.g. Neo-Commerce"
-                                            className="w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl px-6 py-4 text-[var(--ide-text)] font-bold text-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/40 transition-all placeholder:text-[var(--ide-text-muted)]"
-                                            required
-                                        />
-                                    </div>
+                                        <div className="grid grid-cols-2 gap-3 mb-6 rounded-2xl bg-[var(--ide-bg-elevated)] p-2 border border-[var(--ide-border)]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCreateMode("workshop")}
+                                        className={`rounded-xl px-4 py-3 text-[11px] font-black uppercase tracking-widest transition-all ${
+                                            createMode === "workshop"
+                                                ? "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg shadow-indigo-500/20"
+                                                : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
+                                        }`}
+                                    >
+                                        Workshop
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCreateMode("import")}
+                                        className={`rounded-xl px-4 py-3 text-[11px] font-black uppercase tracking-widest transition-all ${
+                                            createMode === "import"
+                                                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                                                : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
+                                        }`}
+                                    >
+                                                Direct JSON Import
+                                    </button>
+                                </div>
 
-                                    <div className="flex gap-4 pt-2">
-                                        <button
-                                            type="button"
-                                            onClick={handleCancelCreate}
-                                            className="flex-1 py-4 rounded-2xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-black text-[11px] uppercase tracking-widest hover:bg-[var(--ide-bg-elevated)] hover:text-[var(--ide-text)] transition-all"
-                                        >
-                                            Dismiss
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={!projectName.trim()}
-                                            className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-black text-[11px] uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg shadow-indigo-500/20"
-                                        >
-                                            Next: Workshop &rarr;
-                                        </button>
+                                {createMode === "workshop" ? (
+                                    <form onSubmit={handleNextStep} className="space-y-6">
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-black text-[var(--ide-text-secondary)] uppercase tracking-widest ml-1">
+                                                Project Name
+                                            </label>
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                value={projectName}
+                                                onChange={(e) => setProjectName(e.target.value)}
+                                                placeholder="e.g. Neo-Commerce"
+                                                className="w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl px-6 py-4 text-[var(--ide-text)] font-bold text-lg focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/40 transition-all placeholder:text-[var(--ide-text-muted)]"
+                                                required
+                                            />
+                                        </div>
+
+                                        <label className="flex items-start gap-3 rounded-2xl border border-cyan-500/15 bg-cyan-500/5 px-4 py-4 cursor-pointer hover:bg-cyan-500/10 transition-all">
+                                            <input
+                                                type="checkbox"
+                                                checked={startWithSampleJson}
+                                                onChange={(e) => setStartWithSampleJson(e.target.checked)}
+                                                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/20 text-cyan-400 focus:ring-cyan-500/30"
+                                            />
+                                            <div>
+                                                <div className="text-[11px] font-black uppercase tracking-widest text-cyan-200">
+                                                    Start With Sample JSON
+                                                </div>
+                                                <p className="mt-1 text-xs text-cyan-100/70 leading-relaxed">
+                                                    Preload the idea workshop with an editable starter JSON brief instead of a blank input.
+                                                </p>
+                                            </div>
+                                        </label>
+
+                                        <div className="flex gap-4 pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleCancelCreate}
+                                                className="flex-1 py-4 rounded-2xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-black text-[11px] uppercase tracking-widest hover:bg-[var(--ide-bg-elevated)] hover:text-[var(--ide-text)] transition-all"
+                                            >
+                                                Dismiss
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={!projectName.trim()}
+                                                className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-black text-[11px] uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg shadow-indigo-500/20"
+                                            >
+                                                Next: Workshop &rarr;
+                                            </button>
+                                        </div>
+                                    </form>
+                                ) : (
+                                    <div className="space-y-5">
+                                        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 px-4 py-4">
+                                            <div className="text-[11px] font-black uppercase tracking-widest text-emerald-200">
+                                                Direct JSON import bypasses the workshop
+                                            </div>
+                                            <p className="mt-2 text-xs leading-relaxed text-emerald-100/70">
+                                                Paste a project JSON file and create the project directly. This path skips the analyze, decide, and refine pipeline.
+                                            </p>
+                                        </div>
+
+                                        <input
+                                            ref={importFileInputRef}
+                                            type="file"
+                                            accept=".json,application/json"
+                                            className="hidden"
+                                            onChange={handleImportFile}
+                                        />
+
+                                        <div className="flex flex-wrap gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={handleLoadSampleJson}
+                                                disabled={isLoadingSample}
+                                                className="rounded-xl bg-emerald-500/15 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-40"
+                                            >
+                                                {isLoadingSample ? "Loading..." : "Load Sample JSON"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => importFileInputRef.current?.click()}
+                                                className="rounded-xl border border-white/10 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-[var(--ide-text-secondary)] transition-all hover:bg-black/10 hover:text-[var(--ide-text)]"
+                                            >
+                                                Upload JSON File
+                                            </button>
+                                        </div>
+
+                                        <textarea
+                                            value={importJson}
+                                            onChange={(e) => setImportJson(e.target.value)}
+                                            placeholder="Paste JSON here, or load the sample and import directly."
+                                            spellCheck={false}
+                                            className="min-h-[340px] w-full rounded-2xl border border-white/10 bg-[#07131a] px-4 py-4 font-mono text-xs leading-6 text-cyan-50 placeholder:text-cyan-100/20 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500/40 transition-all"
+                                        />
+
+                                        <div className="flex gap-4 pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleCancelCreate}
+                                                className="flex-1 py-4 rounded-2xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-black text-[11px] uppercase tracking-widest hover:bg-[var(--ide-bg-elevated)] hover:text-[var(--ide-text)] transition-all"
+                                            >
+                                                Dismiss
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleImportProject}
+                                                disabled={!importJson.trim() || isImportingProject}
+                                                className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-[11px] uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg shadow-emerald-500/20"
+                                            >
+                                                {isImportingProject ? "Creating..." : "Create From JSON"}
+                                            </button>
+                                        </div>
                                     </div>
-                                </form>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -276,6 +453,7 @@ const DashboardView: React.FC = () => {
                         <div className="relative h-full w-full">
                             <IdeaWorkshop
                                 projectName={projectName || "New Project"}
+                                initialIdea={startWithSampleJson ? getSampleProjectIdeaJson(projectName || "New Project") : ""}
                                 fullScreen
                                 onRefined={handleCreateProjectFinal}
                                 onCancel={handleCancelCreate}
@@ -288,7 +466,6 @@ const DashboardView: React.FC = () => {
     );
 };
 
-// Project Card Sub-component
 const ProjectCard: React.FC<{
     project: ProjectSummary;
     index: number;
@@ -302,8 +479,6 @@ const ProjectCard: React.FC<{
             onClick={onOpen}
         >
             <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-indigo-500/[0.02] to-transparent pointer-events-none" />
-
-            {/* Glowing orb on hover */}
             <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full group-hover:bg-[#0ea5e9]/20 transition-all duration-700" />
 
             <div className="relative z-10 flex-1">

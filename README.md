@@ -1,103 +1,133 @@
-# 🚀 Akasha
+<div align="center">
+  <img src="https://raw.githubusercontent.com/MohaMedTArEk912/akasha/main/public/logo.png" alt="Akasha Logo" width="120" />
 
-**From zero to deployed SaaS — visually build & export production-ready full-stack applications.**
+  # 🚀 Akasha
 
-A web-based platform that lets you design pages, model data, define APIs, author logic flows, and generate a complete, deployable codebase — all from your browser.
+  **Build, Visualize, and Export Production-Ready Full-Stack SaaS Applications with AI-Powered Precision.**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![React](https://img.shields.io/badge/React-18-61dafb.svg)
-![Node](https://img.shields.io/badge/Node-18+-green.svg)
+  [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge)](https://github.com/MohaMedTArEk912/akasha)
+  [![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg?style=for-the-badge)](https://github.com/MohaMedTArEk912/akasha)
+  [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
+  [![React](https://img.shields.io/badge/React-18-61dafb.svg?style=for-the-badge&logo=react)](https://react.dev/)
+  [![Node](https://img.shields.io/badge/Node-18+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+  [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748.svg?style=for-the-badge&logo=prisma)](https://www.prisma.io/)
+
+  [View Demo](https://akasha-demo.vercel.app) • [Read Docs](docs/) • [Report Bug](https://github.com/MohaMedTArEk912/akasha/issues) • [Request Feature](https://github.com/MohaMedTArEk912/akasha/issues)
+
+</div>
 
 ---
 
-## ✨ Features
+## 🌟 Overview
 
-### 🎨 Visual Editor
-- **Drag & Drop Canvas** – Block-based page building with a nestable component tree
-- **Responsive Viewport** – Switch between Desktop (1280 px), Tablet (768 px), and Mobile (375 px) with a live dimension readout
-- **Style Inspector** – Per-block editing of layout, spacing, typography, backgrounds, borders, and effects
-- **Tailwind CSS Integration** – Classes mapped to visual controls; raw class editing available
-- **Live Code Preview** – Side-by-side Monaco editor showing generated React/JSX with syntax highlighting
+**Akasha** is a revolutionary web-based platform designed to bridge the gap between design and production. It empowers developers and architects to build complete, full-stack applications visually. From designing responsive UI components to modeling complex database relationships and authoring business logic via interactive flowcharts, Akasha handles the heavy lifting of boilerplate generation.
 
-### 🧩 Block System
-- **30+ Built-in Blocks** – Container, Text, Image, Button, Input, Form, Link, Video, List, Table, Card, Hero, Navbar, Footer, Sidebar, Modal, Accordion, Tabs, Badge, Avatar, Progress, Select, Checkbox, Radio, Textarea, Divider, Spacer, Icon, Code, Custom HTML
-- **Data Bindings** – Bind any block property to variables, API responses, component state, or props
-- **Event Handlers** – Attach logic flows to DOM events (onClick, onChange, onSubmit, onFocus, onBlur, onMouseEnter, onMouseLeave, onKeyDown, onKeyUp, onScroll, onLoad)
-- **Read-Only Regions** – Generated `@akasha-block` markers in the code editor are visually highlighted and protected
+> "From zero to a deployable, production-ready codebase — without leaving your browser."
 
-### 🛠️ Full-Stack Code Generation
+---
 
-Akasha generates a **complete, production-grade codebase** you can `npm install && npm start`:
+## 📖 Table of Contents
 
-| Layer | Output |
-|-------|--------|
-| **Frontend** | React 18 + TypeScript + Tailwind CSS, per-page components, auth context & guards, API hooks, client-side routing |
-| **Backend** | NestJS + TypeScript, per-model CRUD modules (controller → service → DTO), JWT authentication (register/login/profile), RBAC with `RolesGuard` + `@Roles()` decorator |
-| **Database** | Prisma schema with models, fields, relations, enums; migration-ready |
-| **Seed Data** | `prisma/seed.ts` with bcrypt-hashed admin user + sample records per model |
-| **Tests** | Per-model end-to-end specs (supertest), auth e2e spec, Jest config |
-| **API Spec** | OpenAPI 3.0 JSON (Swagger-compatible) |
-| **Export** | Download everything as a single `.zip` |
+- [✨ Key Features](#-key-features)
+- [🛠️ Core Modules](#️-core-modules)
+- [🏗️ Technology Stack](#️-technology-stack)
+- [🚀 Quick Start](#-quick-start)
+- [📁 Project Structure](#-project-structure)
+- [📡 API Reference](#-api-reference)
+- [🛡️ Security & RBAC](#️-security--rbac)
+- [🗺️ Roadmap](#️-roadmap)
+- [🤝 Contributing](#-contributing)
+- [📝 License](#-license)
+- [🙏 Acknowledgments](#-acknowledgments)
 
-### 🔀 Logic Flow Engine
-- **Visual Node Graph** – 22 node types: Start, End, SetVariable, ApiCall, Condition, Loop, MapArray, FilterArray, Navigate, ShowToast, SetState, Emit, Log, Try/Catch, Delay, Parallel, Switch, Transform, Validate, Assign, FunctionCall, Return
-- **Logic Compiler** – Compiles node graphs into executable TypeScript functions
-- **Flow ↔ Event Binding** – Attach any flow to a block's DOM event from the inspector
+---
 
-### 📊 Data Modeling (ERD)
-- **Visual ERD Tab** – Create models, add typed fields (String, Int, Float, Boolean, DateTime, Json, Enum), define relations (OneToOne, OneToMany, ManyToMany)
-- **Field Constraints** – Required, unique, default values
-- **Relation Management** – Automatic foreign-key inference in generated Prisma schema
+## ✨ Key Features
 
-### 🌐 API Designer
-- **Endpoint Builder** – Define REST endpoints with method, path, auth requirement, RBAC roles
-- **Request/Response Body Editor** – Interactive schema editor for request and response shapes (field name, type, required flag, nested objects/arrays)
-- **Query & Path Parameters** – Full parameter schema support
-- **OpenAPI Export** – One-click OpenAPI 3.0 spec generation
+- 🎨 **Visual UI Builder**: Drag-and-drop React components with real-time Tailwind CSS styling and live code preview.
+- 🔀 **Visual Logic Engine**: Author complex business logic using a graph-based node system (Low-code/No-code).
+- 📊 **ERD & Data Modeling**: Design the database schema visually with support for relations, enums, and constraints.
+- ⚡ **Full-Stack Export**: Generate a complete project (React, NestJS, Prisma) in a single ZIP file.
+- 🔐 **Built-in Auth & RBAC**: Automated generation of JWT-based authentication and Role-Based Access Control.
+- 🐳 **Docker Ready**: One-click generation of Docker settings for seamless deployment.
+- 📄 **OpenAPI Integration**: Automatic Swagger/OpenAPI 3.0 documentation generation.
 
-### 📁 Project Management
-- **Workspace System** – Global workspace folder; multiple projects per workspace
-- **Disk Sync** – Bi-directional sync between in-memory state and the filesystem
-- **Virtual File System** – IDE-quality file tree with create/rename/delete for files and folders
-- **Import / Export** – Save and load projects as JSON snapshots
-- **Project Settings** – Theme, build options, SEO metadata
+---
 
-### ⌨️ Keyboard Shortcuts
+## 🛠️ Core Modules
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl + S` | Save / sync project to disk |
-| `Ctrl + G` | Generate all code (frontend + backend + database) |
-| `Ctrl + \` | Toggle sidebar |
-| `Ctrl + 1–5` | Switch tab — Canvas, Logic, API, ERD, Variables |
-| `Escape` | Deselect current block |
-| `Delete` | Archive selected block |
+### 1. Visual Editor (Canvas)
+- **Nestable Component Tree**: Manage complex UI hierarchies with ease.
+- **Responsive Controls**: Test designs across Desktop, Tablet, and Mobile viewports.
+- **State & Props Management**: Bind UI properties to variables or API responses.
+
+### 2. Logic Flow Engine
+- **Node Library**: 22+ node types including `ApiCall`, `Condition`, `Loop`, `Navigate`, and `SetVariable`.
+- **Compiler**: Transforms visual graphs into executable TypeScript functions.
+
+### 3. API Designer
+- **Endpoint Builder**: Define RESTful routes with custom methods and path parameters.
+- **Schema Editor**: Interactive editing for request and response body shapes.
+
+### 4. Database (ERD) Designer
+- **Prisma Integration**: Generates a clean `schema.prisma` from the visual ERD.
+- **Relation Mapping**: Handles One-to-One, One-to-Many, and Many-to-Many relations automatically.
+
+---
+
+## 🏗️ Technology Stack
+
+### The Platform (Internal)
+Built with stability and speed in mind to provide a seamless designer experience.
+
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | React 18, TypeScript, Tailwind CSS, Zustand, Vite |
+| **Backend** | Node.js, Express, Prisma, fs-extra |
+| **Database** | SQLite (Prototyping) |
+| **Editors** | Monaco Editor, React-Flow |
+
+### The Generated Output (Production)
+The code you export is structured for high-scale production environments.
+
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | React 18, TypeScript, Tailwind, AuthContext |
+| **Backend** | NestJS (Modular Architecture) |
+| **Database** | Prisma + PostgreSQL / MySQL |
+| **Security** | JWT, Passport, Bcrypt, RBAC Guards |
+| **Testing** | Jest, Supertest (E2E) |
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+- **Node.js** (v18 or higher)
+- **npm** or **yarn**
+- **Git**
 
-- **Node.js** ≥ 18
-- **npm**
+### Installation
 
-### Install & Run
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/MohaMedTArEk912/akasha.git
+   cd akasha
+   ```
 
+2. **Install all dependencies (Root, Client, and Server):**
+   ```bash
+   npm run install:all
+   ```
+
+3. **Start in Development mode:**
+   ```bash
+   npm run dev
+   ```
+   *This starts the Client (Vite) on port `5173` and the Server (Express) on port `3001` concurrently.*
+
+### Building for Production
 ```bash
-# Clone
-git clone https://github.com/MohaMedTArEk912/akasha.git
-cd akasha
-
-# Install dependencies (Client & Server)
-npm run install:all
-
-# Development mode (concurrently runs client & server)
-npm run dev
-
-# — or — production build
 npm run build
 ```
 
@@ -105,301 +135,93 @@ npm run build
 
 ## 📁 Project Structure
 
-```
+```bash
 akasha/
-├── client/                      # React Frontend (Vite)
-│   ├── src/
-│   │   ├── components/          # UI Components & Visual Editors
-│   │   ├── context/             # Global State
-│   │   ├── hooks/               # Custom Hooks
-│   │   ├── stores/              # Zustand Stores
-│   │   ├── App.tsx              # Root Component
-│   │   └── main.tsx             # Entry Point
-│   ├── index.html
-│   ├── package.json
-│   ├── tailwind.config.js
-│   └── vite.config.ts
-│
-├── server/                      # Express Backend API
-│   ├── src/
-│   │   ├── routes/              # API Endpoints
-│   │   ├── services/            # Business Logic
-│   │   ├── utils/               # Helpers
-│   │   └── server.ts            # Entry Point
-│   ├── prisma/                  # Database Schema & Migrations
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── package.json                 # Root orchestration scripts
-└── README.md
+├── 📂 client/              # React Frontend (Vite)
+│   ├── 📂 src/
+│   │   ├── 📂 components/  # UI Elements & Visual Editor Panels
+│   │   ├── 📂 stores/      # Zustand Global State
+│   │   └── 📄 App.tsx      # Main Layout & Routing
+│   └── 📄 tailwind.config.ts
+├── 📂 server/              # Express Backend API
+│   ├── 📂 src/
+│   │   ├── 📂 routes/      # Control Tower for API Endpoints
+│   │   ├── 📂 services/    # Business Logic & Code Generation
+│   │   └── 📄 server.ts    # Server Entry Point
+│   └── 📂 prisma/          # Database Schema
+├── 📄 docker-compose.yml   # Container Configuration
+├── 📄 package.json         # Root Scripts & Dependencies
+└── 📄 README.md            # You are here!
 ```
 
 ---
 
 ## 📡 API Reference
 
-## 📡 API Reference
-
-The embedded Express server exposes **46 RESTful endpoints** on `localhost:3001`.
-
-
-<details>
-<summary><strong>Health</strong></summary>
+The Akasha bridge exposes a set of management APIs to interact with the project state.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Server health check |
+| `GET`  | `/api/project` | Fetch current project state and workspace details. |
+| `POST` | `/api/project/sync/now` | Manually sync in-memory changes to the local disk. |
+| `POST` | `/api/generate/zip` | Compile the project and initiate a ZIP download. |
+| `POST` | `/api/models` | Create a new data model in the ERD. |
+| `GET`  | `/api/files/content` | Read the raw generated code for a specific file. |
 
-</details>
-
-<details>
-<summary><strong>Workspace</strong> (5 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/workspace` | Get workspace status + project list |
-| `POST` | `/api/workspace` | Set global workspace path |
-| `GET` | `/api/workspace/pick-folder` | Open native folder picker |
-| `GET` | `/api/workspace/projects/:id` | Load a project by ID |
-| `DELETE` | `/api/workspace/projects/:id` | Delete a project |
-
-</details>
-
-<details>
-<summary><strong>Project</strong> (11 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/project` | Get current project |
-| `POST` | `/api/project` | Create new project |
-| `PATCH` | `/api/project` | Rename project |
-| `POST` | `/api/project/import` | Import from JSON |
-| `GET` | `/api/project/export` | Export as JSON |
-| `POST` | `/api/project/reset` | Reset project |
-| `POST` | `/api/project/install` | Run `npm install` (client + server) |
-| `POST` | `/api/project/sync/root` | Set sync root + initial sync |
-| `POST` | `/api/project/sync/now` | Manual sync to disk |
-| `POST` | `/api/project/sync/from_disk` | Pull disk changes into memory |
-| `PUT` | `/api/project/settings` | Update project settings |
-
-</details>
-
-<details>
-<summary><strong>Blocks</strong> (4 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/blocks` | Add a block |
-| `PUT` | `/api/blocks/:id` | Update block property / binding / event |
-| `DELETE` | `/api/blocks/:id` | Archive a block |
-| `PUT` | `/api/blocks/:id/move` | Move / reorder a block |
-
-</details>
-
-<details>
-<summary><strong>Pages</strong> (4 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/pages` | Add a page |
-| `PUT` | `/api/pages/:id` | Update a page |
-| `DELETE` | `/api/pages/:id` | Archive a page |
-| `GET` | `/api/pages/:id/content` | Read page `.tsx` from disk |
-
-</details>
-
-<details>
-<summary><strong>Data Models</strong> (9 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/models` | List all models |
-| `POST` | `/api/models` | Create a model |
-| `PUT` | `/api/models/:id` | Update a model |
-| `DELETE` | `/api/models/:id` | Archive a model |
-| `POST` | `/api/models/:id/fields` | Add a field |
-| `PUT` | `/api/models/:id/fields/:fid` | Update a field |
-| `DELETE` | `/api/models/:id/fields/:fid` | Delete a field |
-| `POST` | `/api/models/:id/relations` | Add a relation |
-| `DELETE` | `/api/models/:id/relations/:rid` | Delete a relation |
-
-</details>
-
-<details>
-<summary><strong>API Endpoints</strong> (4 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/endpoints` | List all endpoints |
-| `POST` | `/api/endpoints` | Create an endpoint |
-| `PUT` | `/api/endpoints/:id` | Update an endpoint |
-| `DELETE` | `/api/endpoints/:id` | Archive an endpoint |
-
-</details>
-
-<details>
-<summary><strong>Logic Flows</strong> (4 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/logic` | List all logic flows |
-| `POST` | `/api/logic` | Create a flow |
-| `PUT` | `/api/logic/:id` | Update a flow |
-| `DELETE` | `/api/logic/:id` | Archive a flow |
-
-</details>
-
-<details>
-<summary><strong>Variables</strong> (4 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/variables` | List all variables |
-| `POST` | `/api/variables` | Create a variable |
-| `PUT` | `/api/variables/:id` | Update a variable |
-| `DELETE` | `/api/variables/:id` | Archive a variable |
-
-</details>
-
-<details>
-<summary><strong>Code Generation</strong> (5 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/generate/frontend` | Generate React + Auth + Hooks |
-| `POST` | `/api/generate/backend` | Generate NestJS + Prisma + JWT + RBAC + Tests |
-| `POST` | `/api/generate/database` | Generate Prisma schema |
-| `GET` | `/api/generate/zip` | Download project as ZIP |
-| `GET` | `/api/generate/openapi` | Generate OpenAPI 3.0 spec |
-
-</details>
-
-<details>
-<summary><strong>File System</strong> (7 routes)</summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/files` | List directory (`?path=`) |
-| `POST` | `/api/files` | Create a file |
-| `POST` | `/api/files/folder` | Create a folder |
-| `PUT` | `/api/files/rename` | Rename file / folder |
-| `DELETE` | `/api/files/delete` | Delete file / folder |
-| `GET` | `/api/files/content` | Read file content (`?path=`) |
-| `PUT` | `/api/files/content` | Write file content |
-
-</details>
+*Full documentation available in the [API spec](docs/API.md).*
 
 ---
 
-## 🧪 Development
+## 🛡️ Security & RBAC
 
-### Scripts
-
-### Scripts
-
-```bash
-# Root
-npm run dev            # Concurrent dev mode (Client + Server)
-npm run build          # Production build
-npm run install:all    # Install all JS dependencies
-
-# Client
-cd client
-npm run dev            # Vite dev server
-
-# Server
-cd server
-npm run dev            # Nodemon server
-```
-
-### Environment
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `RUST_LOG` | `warn` | Tracing level (`info`, `debug`, `trace`) |
+Akasha takes security seriously both for the platform and your generated apps:
+- **JWT Protection**: All exported production APIs include built-in JWT validation.
+- **RBAC (Role-Based Access Control)**: Define roles (e.g., `Admin`, `User`, `Guest`) visually and apply them to endpoints.
+- **Prisma Guards**: Automated data validation at the ORM level.
+- **Sanitization**: Code generation includes auto-sanitization to prevent injection attacks.
 
 ---
 
-## 📊 Technology Stack
+## 🗺️ Roadmap
 
-### Application (what you run)
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18 + TypeScript + Tailwind CSS |
-| **Backend** | Node.js + Express |
-| **Database** | SQLite (via Prisma ORM) |
-| **Bundler** | Vite 5 |
-| **Editor** | Monaco Editor |
-
-### Generated output (what you export)
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18 + TypeScript + Tailwind CSS |
-| **Backend** | NestJS + TypeScript |
-| **ORM** | Prisma |
-| **Database** | PostgreSQL |
-| **Auth** | JWT (passport-jwt) + bcrypt |
-| **RBAC** | Custom `RolesGuard` + `@Roles()` decorator |
-| **Tests** | Jest + supertest (e2e) |
-| **API docs** | OpenAPI 3.0 / Swagger |
+- [x] **v1.0** — Visual Canvas, ERD Designer, and NestJS Generator.
+- [ ] **v1.1** — Live Deployment to Vercel/DigitalOcean.
+- [ ] **v1.2** — Python (FastAPI) Backend support.
+- [ ] **v1.5** — AI-Assistant for UI Ideation and Auto-Logic.
+- [ ] **v2.0** — Native Mobile App (React Native) export support.
 
 ---
-
-## 🔧 Configuration
-
-### Server
-- **Port**: 3001 (API)
-- **Database**: `server/prisma/dev.db` (SQLite)
-
-### Client
-- **Port**: 5173 (Vite Dev Server)
-
----
-
-
-
-
-## 🚀 Production Build
-
-```bash
-npm run build
-```
-
-
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+We welcome contributions of all kinds!
 
-### Guidelines
-- **Rust** – `cargo fmt` + `cargo clippy`
-- **TypeScript** – Strict mode, no `any`
-- **Commits** – Clear, descriptive messages
+1. **Fork** the repository.
+2. **Create** your feature branch (`git checkout -b feature/CoolFeature`).
+3. **Commit** your changes (`git commit -m 'feat: add some cool feature'`).
+4. **Push** to the branch (`git push origin feature/CoolFeature`).
+5. **Open** a Pull Request.
+
+Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 
 ---
 
 ## 📝 License
 
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-[Axum](https://github.com/tokio-rs/axum) · [React](https://react.dev/) · [Tailwind CSS](https://tailwindcss.com/) · [Monaco Editor](https://microsoft.github.io/monaco-editor/) · [SQLite](https://www.sqlite.org/) · [NestJS](https://nestjs.com/) · [Prisma](https://www.prisma.io/)
+- **React Flow** for the logic engine visualization.
+- **Monaco Editor** for the high-fidelity code preview.
+- **Prisma** for the incredible ORM experience.
+- Special thanks to the **Open-Source Community** for inspiring this vision.
 
 ---
 
-<p align="center">
-  <strong>Build & export production-ready full-stack SaaS applications — visually.</strong>
-</p>
-
-<p align="center">
-  Made with ❤️ by Mohamed Tarek
-</p>
+<div align="center">
+  <sub>Made with ❤️ by <b>Mohamed Tarek</b></sub><br/>
+  <sup>© 2026 Akasha Platform. All rights reserved.</sup>
+</div>

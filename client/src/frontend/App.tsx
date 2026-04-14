@@ -9,7 +9,7 @@ import "./index.css";
 
 // Components
 import IDELayout from "./components/layout/IDELayout";
-import DashboardView from "./pages/DashboardView";
+import DashboardLanding from "./pages/DashboardLanding";
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import FloatingBot from "./components/features/Bot/FloatingBot";
 
@@ -45,7 +45,7 @@ const App: React.FC = () => {
       <ErrorBoundary>
         <ThemeProvider>
           <ToastProvider>
-            <DashboardView />
+            <DashboardLanding />
           </ToastProvider>
         </ThemeProvider>
       </ErrorBoundary>

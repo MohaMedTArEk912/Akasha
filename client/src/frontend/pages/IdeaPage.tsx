@@ -11,6 +11,25 @@ import IdeaWorkshop from "./IdeaWorkshop";
 
 const API_BASE = "http://localhost:3001/api";
 
+function getGeneratePlanErrorMessage(err: unknown): string {
+    if (axios.isAxiosError(err)) {
+        const serverError = err.response?.data;
+        if (typeof serverError?.error === "string" && serverError.error.trim()) {
+            return serverError.error;
+        }
+
+        if (err.response?.status === 400) {
+            return "Please add a project idea before generating a plan.";
+        }
+
+        if (err.response?.status && err.response.status >= 500) {
+            return "The AI could not produce a usable plan right now. Please try again.";
+        }
+    }
+
+    return err instanceof Error ? err.message : "Failed to generate plan. Please try again.";
+}
+
 const IdeaPage: React.FC = () => {
     const { project } = useProjectStore();
     const { error: showToastError } = useToast();
@@ -31,7 +50,7 @@ const IdeaPage: React.FC = () => {
             await generateStructuredIdea();
         } catch (err) {
             console.error("Failed to generate structured plan:", err);
-            showToastError("Failed to generate plan. The AI returned invalid data. Please try again.");
+            showToastError(getGeneratePlanErrorMessage(err));
         } finally {
             setGeneratingPlan(false);
         }
@@ -58,7 +77,7 @@ const IdeaPage: React.FC = () => {
             setGeneratingPlan(false);
         } catch (err) {
             console.error("Failed to save refined idea or generate plan:", err);
-            showToastError("Failed to generate plan. The AI returned invalid JSON. Please try again.");
+            showToastError(getGeneratePlanErrorMessage(err));
             setGeneratingPlan(false);
         }
     };

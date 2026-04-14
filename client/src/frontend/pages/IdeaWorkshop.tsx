@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { httpApi } from '../hooks/useHttpApi';
 import StructuredAiResponseCard from '../components/ui/StructuredAiResponse';
 import { normalizeAiResponse, type StructuredAiResponse } from '../utils/aiResponse';
+import { getSampleProjectIdeaJson } from '../utils/projectTemplates';
 
 interface IdeaWorkshopProps {
     projectName: string;
@@ -684,6 +685,20 @@ export default function IdeaWorkshop({
             return;
         }
         appendTemplateContent(FULL_IDEA_TEMPLATE);
+    };
+
+    const applySampleJsonTemplate = () => {
+        const sampleJson = getSampleProjectIdeaJson(projectName);
+        if (!idea.trim()) {
+            setIdea(sampleJson);
+            return;
+        }
+
+        if (idea.trim() === sampleJson.trim()) {
+            return;
+        }
+
+        appendTemplateContent(sampleJson);
     };
 
     const runAnalyze = async () => {
@@ -1729,7 +1744,7 @@ export default function IdeaWorkshop({
                             <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/8 p-4 space-y-3">
                                 <div>
                                     <div className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Templates</div>
-                                    <p className="mt-1 text-[11px] text-cyan-100/70">Kickstart with guided sections.</p>
+                                    <p className="mt-1 text-[11px] text-cyan-100/70">Kickstart with guided sections or a starter JSON brief.</p>
                                 </div>
                                 <button
                                     onClick={applyFullTemplate}
@@ -1737,6 +1752,13 @@ export default function IdeaWorkshop({
                                     className="w-full h-9 rounded-xl text-xs font-bold bg-cyan-500/20 border border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/30 transition-all"
                                 >
                                     Insert Full Template
+                                </button>
+                                <button
+                                    onClick={applySampleJsonTemplate}
+                                    type="button"
+                                    className="w-full h-9 rounded-xl text-xs font-bold bg-white/8 border border-white/15 text-white/80 hover:bg-white/12 transition-all"
+                                >
+                                    Insert Sample JSON
                                 </button>
                             </div>
                         </div>
@@ -1746,7 +1768,7 @@ export default function IdeaWorkshop({
                                 <div className="text-xl">💡</div>
                                 <div className="text-sm text-indigo-200">
                                     <strong className="block text-indigo-400 mb-1">Write with structure, then let AI sharpen it.</strong>
-                                    Include problem, user, value, MVP scope, and constraints. Better input gives stronger analysis and better final docs.
+                                    Include problem, user, value, MVP scope, and constraints. Plain text or JSON both work here. Better input gives stronger analysis and better final docs.
                                 </div>
                             </div>
 
@@ -1835,74 +1857,78 @@ export default function IdeaWorkshop({
                 {phase === 'discussion' && analysis && (
                     <div
                         className={`h-full min-h-0 animate-fade-in ${
-                            fullScreen ? 'grid grid-cols-1 xl:grid-cols-[1.1fr,0.9fr] gap-4' : 'flex flex-col space-y-6'
+                            fullScreen ? 'grid h-full items-stretch grid-cols-1 xl:grid-cols-[1.1fr,0.9fr] gap-4' : 'flex flex-col space-y-6'
                         }`}
                     >
                         <div
                             className={`space-y-4 ${
-                                fullScreen ? 'min-h-0 min-w-0 overflow-y-auto custom-scrollbar pr-1' : 'shrink-0'
+                                fullScreen ? 'h-full min-h-0 min-w-0 overflow-y-auto custom-scrollbar pr-1' : 'shrink-0'
                             }`}
                         >
-                            <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/5 rounded-2xl p-5 relative overflow-hidden">
-                                <div className="absolute -inset-4 bg-indigo-500/5 blur-xl" />
-                                <div className="relative z-10">
-                                    <div className="text-xs font-black text-[var(--ide-text-secondary)] uppercase tracking-widest mb-2">
-                                        Viability Score
+                            <div className="h-full min-h-0 rounded-3xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4 md:p-5 flex flex-col gap-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                                <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/5 rounded-2xl p-5 relative overflow-hidden">
+                                    <div className="absolute -inset-4 bg-indigo-500/5 blur-xl" />
+                                    <div className="relative z-10">
+                                        <div className="text-xs font-black text-[var(--ide-text-secondary)] uppercase tracking-widest mb-2">
+                                            Viability Score
+                                        </div>
+                                        <div className={`text-5xl font-black ${getScoreColor(Number(analysis.score || 0))}`}>
+                                            {analysis.score ?? 0}
+                                        </div>
+                                        <p className="text-xs text-[var(--ide-text-muted)] mt-3 italic">
+                                            "{analysis.summary || 'No summary provided.'}"
+                                        </p>
                                     </div>
-                                    <div className={`text-5xl font-black ${getScoreColor(Number(analysis.score || 0))}`}>
-                                        {analysis.score ?? 0}
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4">
+                                        <div className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2">Strengths</div>
+                                        <ul className="space-y-1.5">
+                                            {(analysis.strengths || []).map((s: string, i: number) => (
+                                                <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
+                                                    <span className="text-emerald-500/50 mt-0.5">•</span>
+                                                    {s}
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
-                                    <p className="text-xs text-[var(--ide-text-muted)] mt-3 italic">
-                                        "{analysis.summary || 'No summary provided.'}"
-                                    </p>
-                                </div>
-                            </div>
 
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4">
-                                    <div className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2">Strengths</div>
-                                    <ul className="space-y-1.5">
-                                        {(analysis.strengths || []).map((s: string, i: number) => (
-                                            <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
-                                                <span className="text-emerald-500/50 mt-0.5">•</span>
-                                                {s}
-                                            </li>
+                                    <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-4">
+                                        <div className="text-xs font-black text-rose-400 uppercase tracking-widest mb-2">Risks</div>
+                                        <ul className="space-y-1.5">
+                                            {(analysis.weaknesses || []).map((w: string, i: number) => (
+                                                <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
+                                                    <span className="text-rose-500/50 mt-0.5">•</span>
+                                                    {w}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-2xl p-4">
+                                    <div className="text-xs font-black text-cyan-400 uppercase tracking-widest mb-2">Questions</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(analysis.questions || []).map((q: string, i: number) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => handleQuickPrompt(q)}
+                                                className="px-2.5 py-1 bg-cyan-500/10 text-cyan-200 text-[11px] rounded-lg border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
+                                            >
+                                                {q}
+                                            </button>
                                         ))}
-                                    </ul>
+                                    </div>
                                 </div>
 
-                                <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-4">
-                                    <div className="text-xs font-black text-rose-400 uppercase tracking-widest mb-2">Risks</div>
-                                    <ul className="space-y-1.5">
-                                        {(analysis.weaknesses || []).map((w: string, i: number) => (
-                                            <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
-                                                <span className="text-rose-500/50 mt-0.5">•</span>
-                                                {w}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                <div className="flex-1 min-h-[420px]">
+                                    {renderProgressiveConceptPreview()}
                                 </div>
                             </div>
-
-                            <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-2xl p-4">
-                                <div className="text-xs font-black text-cyan-400 uppercase tracking-widest mb-2">Questions</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {(analysis.questions || []).map((q: string, i: number) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => handleQuickPrompt(q)}
-                                            className="px-2.5 py-1 bg-cyan-500/10 text-cyan-200 text-[11px] rounded-lg border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
-                                        >
-                                            {q}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {renderProgressiveConceptPreview()}
                         </div>
 
-                        <div className="min-h-0 min-w-0 flex flex-col gap-4">
+                        <div className="min-h-0 min-w-0 flex h-full flex-col gap-4">
                             {renderFeatureDecisionBoard()}
                             {renderChatPanel()}
                         </div>

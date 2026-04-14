@@ -19,6 +19,109 @@ export interface ProjectSchema {
     components: BlockSchema[];
 }
 
+export interface ProjectImportDocument {
+    version: string;
+    project: {
+        name: string;
+        description?: string;
+        settings?: Record<string, unknown>;
+    };
+    pages: ProjectImportPage[];
+    blocks: ProjectImportBlock[];
+    components?: ProjectImportBlock[];
+    variables?: ProjectImportVariable[];
+    data_models?: ProjectImportDataModel[];
+    logic_flows?: ProjectImportLogicFlow[];
+    apis?: ProjectImportApi[];
+    use_cases?: ProjectImportUseCase[];
+}
+
+export interface ProjectImportPage {
+    id: string;
+    name: string;
+    path: string;
+    root_block_id?: string;
+    is_dynamic?: boolean;
+    archived?: boolean;
+    meta?: Record<string, unknown>;
+}
+
+export interface ProjectImportBlock {
+    id: string;
+    block_type: string;
+    name: string;
+    parent_id?: string | null;
+    page_id?: string | null;
+    order?: number;
+    properties?: Record<string, unknown>;
+    styles?: Record<string, string | number | boolean>;
+    responsive_styles?: Record<string, Record<string, string | number | boolean>>;
+    bindings?: Record<string, unknown>;
+    event_handlers?: Array<Record<string, unknown>>;
+    classes?: string[];
+    children?: string[];
+    archived?: boolean;
+}
+
+export interface ProjectImportVariable {
+    id?: string;
+    name: string;
+    variable_type: string;
+    scope?: string;
+    default_value?: unknown;
+    archived?: boolean;
+}
+
+export interface ProjectImportDataModel {
+    id?: string;
+    name: string;
+    fields?: unknown[];
+    relations?: unknown[];
+    timestamps?: boolean;
+    soft_delete?: boolean;
+    archived?: boolean;
+}
+
+export interface ProjectImportLogicFlow {
+    id?: string;
+    name: string;
+    description?: string;
+    trigger?: Record<string, unknown>;
+    nodes?: unknown[];
+    edges?: unknown[];
+    context?: string;
+    archived?: boolean;
+}
+
+export interface ProjectImportApi {
+    id?: string;
+    method: string;
+    path: string;
+    name: string;
+    description?: string;
+    request_body?: unknown;
+    response_body?: unknown;
+    query_params?: Record<string, unknown>[];
+    path_params?: Record<string, unknown>[];
+    permissions?: string[];
+    logic_flow_id?: string;
+    archived?: boolean;
+}
+
+export interface ProjectImportUseCase {
+    id?: string;
+    name: string;
+    description?: string;
+    actors?: string[];
+    preconditions?: string;
+    postconditions?: string;
+    steps?: Array<Record<string, unknown>>;
+    priority?: string;
+    status?: string;
+    category?: string;
+    archived?: boolean;
+}
+
 export interface InstallStep {
     target: string;
     success: boolean;

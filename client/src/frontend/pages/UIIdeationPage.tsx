@@ -1,17 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { setBuilderActive } from "../stores/projectStore";
 import BuilderWorkspace from "../components/features/VisualBuilder/workspace/BuilderWorkspace";
-import ArchitectForm from "../components/features/UIIdeation/ArchitectForm";
-import PagesList from "../components/features/UIIdeation/PagesList";
-import AIDesignCopilotPanel from "../components/features/VisualBuilder/AIDesignCopilotPanel";
+import UXRootPlanner, { type UXRootPlannerTab } from "../components/features/UIIdeation/UXRootPlanner";
 
 import { useProjectStore } from "../hooks/useProjectStore";
 
-type UiDesignTab = "workspace" | "document" | "pages" | "builder";
+type UiDesignTab = UXRootPlannerTab | "builder";
 
 const UIIdeationPage: React.FC = () => {
     const { project } = useProjectStore();
-    const [activeTab, setActiveTab] = useState<UiDesignTab>("workspace");
+    const [activeTab, setActiveTab] = useState<UiDesignTab>("product");
 
     useEffect(() => {
         setBuilderActive(activeTab === "builder");
@@ -74,24 +72,24 @@ const UIIdeationPage: React.FC = () => {
 
                         <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1">
                             <button
-                                onClick={() => setActiveTab("document")}
+                                onClick={() => setActiveTab("product")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                                    activeTab === "document"
+                                    activeTab === "product"
                                         ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
                                         : "text-white/50 hover:text-white hover:bg-white/10"
                                 }`}
                             >
-                                Design System
+                                Product Definition
                             </button>
                             <button
-                                onClick={() => setActiveTab("workspace")}
+                                onClick={() => setActiveTab("flows")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                                    activeTab === "workspace"
+                                    activeTab === "flows"
                                         ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"
                                         : "text-white/50 hover:text-white hover:bg-white/10"
                                 }`}
                             >
-                                AI Workspace
+                                User Flows
                             </button>
                             <button
                                 onClick={() => setActiveTab("pages")}
@@ -103,6 +101,26 @@ const UIIdeationPage: React.FC = () => {
                             >
                                 Pages
                             </button>
+                            <button
+                                onClick={() => setActiveTab("specs")}
+                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                    activeTab === "specs"
+                                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/20"
+                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                }`}
+                            >
+                                Page Specs
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("export")}
+                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                    activeTab === "export"
+                                        ? "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-lg shadow-fuchsia-500/20"
+                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                }`}
+                            >
+                                Wireframe Export
+                            </button>
                         </div>
 
                         <button
@@ -113,24 +131,9 @@ const UIIdeationPage: React.FC = () => {
                         </button>
                     </div>
                 </div>
-
-
-
-                {activeTab === "workspace" && (
+                {activeTab !== "builder" && (
                     <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl overflow-hidden" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
-                        <AIDesignCopilotPanel onOpenInspector={() => setActiveTab("builder")} />
-                    </div>
-                )}
-
-                {activeTab === "document" && (
-                    <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl overflow-hidden" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
-                        <ArchitectForm onOpenBuilder={() => setActiveTab("builder")} />
-                    </div>
-                )}
-
-                {activeTab === "pages" && (
-                    <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl overflow-hidden" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
-                        <PagesList onOpenBuilder={() => setActiveTab("builder")} />
+                        <UXRootPlanner tab={activeTab} onTabChange={setActiveTab} onOpenBuilder={() => setActiveTab("builder")} />
                     </div>
                 )}
             </div>

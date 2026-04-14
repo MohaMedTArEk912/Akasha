@@ -15,6 +15,7 @@ import {
   RelationSchema,
 } from "../types/api";
 import type { UiBuilderGenerateRequest, UiBuilderGenerateResponse } from "../types/uiBuilder";
+import { getSampleProjectTemplateJson } from "../utils/projectImportTemplate";
 
 const API_BASE_URL = "http://localhost:3001/api";
 
@@ -68,6 +69,13 @@ export const httpApi = {
     }
     return res.data;
   },
+  getProjectImportTemplate: async (
+    name?: string,
+  ): Promise<Record<string, unknown>> => {
+    // Keep sample JSON local-first so the create flow works even if the backend
+    // template route is unavailable or the server has not been restarted yet.
+    return JSON.parse(getSampleProjectTemplateJson(name));
+  },
   renameProject: async (name: string, projectId?: string): Promise<ProjectSchema> => {
     const targetId = projectId || activeProjectId;
     if (!targetId) throw new Error("Rename requires a project ID");
@@ -112,10 +120,21 @@ export const httpApi = {
     const res = await client.get(`/project/${activeProjectId}`);
     return res.data;
   },
-  importProjectJson: async (_json: string): Promise<ProjectSchema> => {
-    throw new Error("Import not implemented");
+  importProjectJson: async (_json: string, name?: string): Promise<ProjectSchema> => {
+    const res = await client.post("/project/import", {
+      json: _json,
+      ...(name?.trim() ? { name: name.trim() } : {}),
+    });
+    if (res.data && res.data.id) {
+      activeProjectId = res.data.id;
+    }
+    return res.data;
   },
-  exportProjectJson: async () => "{}",
+  exportProjectJson: async (): Promise<string> => {
+    if (!activeProjectId) throw new Error("No active project");
+    const res = await client.get(`/project/${activeProjectId}/export`);
+    return JSON.stringify(res.data, null, 2);
+  },
   setProjectRoot: async (_path: string) => true,
   syncToDisk: async () => {
     if (!activeProjectId) return false;

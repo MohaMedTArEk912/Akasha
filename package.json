@@ -1,7 +1,7 @@
 {
-    "name": "akasha-ai-chat",
+    "name": "akasha-platform",
     "version": "1.0.0",
-    "description": "Simple AI chat app using OpenRouter + Express",
+    "description": "WorkSpace for Akasha Platform",
     "main": "server.js",
     "scripts": {
         "start": "cd server && npm start",

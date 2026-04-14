@@ -5,6 +5,7 @@
  */
 
 import { api } from "../hooks/useApi";
+import { AxiosError } from "axios";
 import { ProjectSchema, BlockSchema, PageSchema, InstallResult } from "../types/api";
 import type { UiBuilderGenerateResponse, UiBuilderMode } from "../types/uiBuilder";
 import { BLOCK_REGISTRY } from "../components/features/VisualBuilder/hooks/craft/blockRegistry";
@@ -231,6 +232,9 @@ export async function initWorkspace(): Promise<void> {
                     sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
                     sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
                 }
+            } else if (savedProjectId) {
+                sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
+                sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
             }
         }
     } catch (err) {
@@ -568,16 +572,20 @@ export async function createProject(name: string, description?: string): Promise
         // If workspace is set, we automatically configure the sync root 
         // as a subfolder within the workspace
         if (state.workspacePath && !project.root_path) {
-            const projectPath = `${state.workspacePath}/${name}`.replace(/\\/g, '/');
-            await api.setProjectRoot(projectPath);
-            // Reload the specific project by ID to get updated root_path
-            const refreshedProject = await api.loadProjectById(project.id);
-            if (refreshedProject) {
-                project = refreshedProject;
-            }
+            try {
+                const projectPath = `${state.workspacePath}/${name}`.replace(/\\/g, '/');
+                await api.setProjectRoot(projectPath);
+                // Reload the specific project by ID to get updated root_path
+                const refreshedProject = await api.loadProjectById(project.id);
+                if (refreshedProject) {
+                    project = refreshedProject;
+                }
 
-            // AUTO-INSTALL DEPENDENCIES
-            await installProjectDependencies();
+                // AUTO-INSTALL DEPENDENCIES
+                await installProjectDependencies();
+            } catch (syncError) {
+                console.warn('Project created, but workspace sync failed:', syncError);
+            }
         }
 
         updateState(() => ({
@@ -588,6 +596,8 @@ export async function createProject(name: string, description?: string): Promise
             loadingMessage: null,
             openPageIds: allActivePageIds(project),
         }));
+        sessionStorage.setItem(SESSION_PROJECT_ID_KEY, project.id);
+        sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
         await initWorkspace(); // Refresh projects list
     } catch (err) {
         updateState(() => ({ error: String(err) }));
@@ -650,6 +660,23 @@ export async function openProject(id: string): Promise<void> {
             })();
         }
     } catch (err) {
+        if (err instanceof AxiosError && err.response?.status === 404) {
+            // The selected project no longer exists on the backend.
+            // Keep the app usable and clear stale session state instead of throwing.
+            if (sessionStorage.getItem(SESSION_PROJECT_ID_KEY) === id) {
+                sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
+                sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+            }
+
+            updateState(prev => ({
+                project: null,
+                isDashboardActive: true,
+                error: "Project not found. It may have been deleted.",
+                projects: prev.projects.filter((project) => project.id !== id),
+            }));
+            return;
+        }
+
         updateState(() => ({ error: String(err) }));
         throw err;
     } finally {
@@ -738,22 +765,52 @@ export async function loadProject(): Promise<void> {
 /**
  * Import a project from JSON
  */
-export async function importProject(json: string): Promise<void> {
+export async function importProject(json: string, name?: string): Promise<void> {
     updateState(() => ({ loading: true, error: null }));
 
     try {
-        const project = await api.importProjectJson(json);
+        let project = await api.importProjectJson(json, name);
+
+        if (state.workspacePath && !project.root_path) {
+            try {
+                const projectPath = `${state.workspacePath}/${project.name}`.replace(/\\/g, '/');
+                await api.setProjectRoot(projectPath);
+                const refreshedProject = await api.loadProjectById(project.id);
+                if (refreshedProject) {
+                    project = refreshedProject;
+                }
+
+                await installProjectDependencies();
+            } catch (syncError) {
+                console.warn('Project imported, but workspace sync failed:', syncError);
+            }
+        }
+
         updateState(() => ({
             project,
             selectedPageId: getFirstActivePageId(project),
+            isDashboardActive: false,
+            activePage: "dashboard",
+            loadingMessage: null,
             openPageIds: allActivePageIds(project),
         }));
+        sessionStorage.setItem(SESSION_PROJECT_ID_KEY, project.id);
+        sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+        await initWorkspace();
     } catch (err) {
         updateState(() => ({ error: String(err) }));
         throw err;
     } finally {
-        updateState(() => ({ loading: false }));
+        updateState(prev => ({
+            loading: false,
+            loadingMessage: prev.installError ? prev.loadingMessage : null
+        }));
     }
+}
+
+export async function getProjectImportTemplate(name?: string): Promise<string> {
+    const template = await api.getProjectImportTemplate(name);
+    return JSON.stringify(template, null, 2);
 }
 
 /**
