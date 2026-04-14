@@ -757,8 +757,279 @@ function normalizeApis(rawApis: JsonRecord[]): NormalizedApi[] {
     }));
 }
 
+function textFromUnknown(value: unknown): string {
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") {
+        return String(value);
+    }
+    if (isRecord(value)) {
+        const preferred = [
+            value.title,
+            value.name,
+            value.summary,
+            value.description,
+            value.value,
+            value.text,
+            value.content,
+        ];
+        for (const entry of preferred) {
+            const text = textFromUnknown(entry);
+            if (text) return text;
+        }
+    }
+    return "";
+}
+
+function listFromUnknown(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => textFromUnknown(item))
+            .map((item) => item.trim())
+            .filter(Boolean);
+    }
+    const single = textFromUnknown(value);
+    return single ? [single] : [];
+}
+
+function extractJsonObjectFromText(raw: string): string | null {
+    const text = raw.trim();
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) return null;
+    return text.slice(start, end + 1);
+}
+
+function cleanPrdSummary(value: unknown): string {
+    const raw = textFromUnknown(value);
+    if (!raw) return "";
+
+    const stripped = raw
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+
+    const possibleJson = extractJsonObjectFromText(stripped);
+    if (possibleJson) {
+        const parsed = parseJsonValue<JsonRecord | null>(possibleJson, null);
+        if (parsed && isRecord(parsed)) {
+            const nestedSummary = textFromUnknown(parsed.summary);
+            if (nestedSummary) return nestedSummary;
+        }
+    }
+
+    return stripped;
+}
+
+function looksLikePrdPayload(source: JsonRecord): boolean {
+    return (
+        "title" in source &&
+        (
+            "target_audience" in source ||
+            "core_value_proposition" in source ||
+            "problem_statement" in source ||
+            "key_features" in source ||
+            "user_flows" in source ||
+            "implementation_checklist" in source
+        )
+    );
+}
+
+function toPrdNormalizedPayload(source: JsonRecord): NormalizedImportPayload {
+    const title = asString(source.title, "Imported Product Vision");
+    const summary = cleanPrdSummary(source.summary);
+
+    const sectionDefs: Array<{ key: keyof JsonRecord; heading: string }> = [
+        { key: "target_audience", heading: "Target Audience" },
+        { key: "core_value_proposition", heading: "Core Value Proposition" },
+        { key: "problem_statement", heading: "Problem Statement" },
+        { key: "decision_summary", heading: "Decision Summary" },
+        { key: "key_features", heading: "Key Features" },
+        { key: "user_flows", heading: "User Flows" },
+        { key: "technical_architecture", heading: "Technical Architecture" },
+        { key: "data_api_requirements", heading: "Data & API Requirements" },
+        { key: "milestones", heading: "Milestones" },
+        { key: "success_metrics", heading: "Success Metrics" },
+        { key: "risks", heading: "Risks" },
+        { key: "implementation_checklist", heading: "Implementation Checklist" },
+        { key: "open_questions", heading: "Open Questions" },
+    ];
+
+    const blocks: NormalizedBlock[] = [];
+    const rootRef = "vision-root";
+    const pageRef = "vision-home";
+
+    blocks.push({
+        ref: rootRef,
+        scope: "page",
+        blockType: "canvas",
+        name: "Page Root",
+        pageRef,
+        parentRef: null,
+        order: 0,
+        properties: {},
+        styles: { minHeight: "100%", background: "#f8fafc", padding: "24px" },
+        responsiveStyles: {},
+        classes: [],
+        eventHandlers: [],
+        bindings: {},
+        archived: false,
+        childrenRefs: [],
+        sourceIndex: 0,
+    });
+
+    const sectionChildren: string[] = [];
+    let sectionOrder = 0;
+
+    const introHeadingRef = "vision-title";
+    const introSummaryRef = "vision-summary";
+    blocks.push({
+        ref: introHeadingRef,
+        scope: "page",
+        blockType: "heading",
+        name: "Vision Title",
+        pageRef,
+        parentRef: rootRef,
+        order: sectionOrder++,
+        properties: { text: title, level: 1 },
+        styles: { fontSize: "36px", fontWeight: "800", color: "#0f172a" },
+        responsiveStyles: {},
+        classes: [],
+        eventHandlers: [],
+        bindings: {},
+        archived: false,
+        childrenRefs: [],
+        sourceIndex: 1,
+    });
+    sectionChildren.push(introHeadingRef);
+
+    if (summary) {
+        blocks.push({
+            ref: introSummaryRef,
+            scope: "page",
+            blockType: "paragraph",
+            name: "Vision Summary",
+            pageRef,
+            parentRef: rootRef,
+            order: sectionOrder++,
+            properties: { text: summary },
+            styles: { fontSize: "16px", color: "#334155" },
+            responsiveStyles: {},
+            classes: [],
+            eventHandlers: [],
+            bindings: {},
+            archived: false,
+            childrenRefs: [],
+            sourceIndex: 2,
+        });
+        sectionChildren.push(introSummaryRef);
+    }
+
+    let blockIndex = 3;
+    for (const section of sectionDefs) {
+        const lines = listFromUnknown(source[section.key]);
+        if (lines.length === 0) continue;
+
+        const headingRef = `vision-${section.key}-heading`;
+        const paragraphRef = `vision-${section.key}-text`;
+
+        blocks.push({
+            ref: headingRef,
+            scope: "page",
+            blockType: "heading",
+            name: `${section.heading} Heading`,
+            pageRef,
+            parentRef: rootRef,
+            order: sectionOrder++,
+            properties: { text: section.heading, level: 2 },
+            styles: { fontSize: "24px", fontWeight: "700", color: "#0f172a", marginTop: "20px" },
+            responsiveStyles: {},
+            classes: [],
+            eventHandlers: [],
+            bindings: {},
+            archived: false,
+            childrenRefs: [],
+            sourceIndex: blockIndex++,
+        });
+        sectionChildren.push(headingRef);
+
+        blocks.push({
+            ref: paragraphRef,
+            scope: "page",
+            blockType: "paragraph",
+            name: `${section.heading} Content`,
+            pageRef,
+            parentRef: rootRef,
+            order: sectionOrder++,
+            properties: { text: lines.map((line) => `- ${line}`).join("\n") },
+            styles: { fontSize: "15px", color: "#334155" },
+            responsiveStyles: {},
+            classes: [],
+            eventHandlers: [],
+            bindings: {},
+            archived: false,
+            childrenRefs: [],
+            sourceIndex: blockIndex++,
+        });
+        sectionChildren.push(paragraphRef);
+    }
+
+    const rootBlock = blocks[0];
+    if (rootBlock) {
+        rootBlock.childrenRefs = sectionChildren;
+    }
+
+    const userFlows = listFromUnknown(source.user_flows);
+    const useCases: NormalizedUseCase[] = userFlows.map((flow, index) => ({
+        name: `User Flow ${index + 1}`,
+        description: flow,
+        actors: ["User"],
+        preconditions: "",
+        postconditions: "",
+        steps: [{ order: 1, description: flow }],
+        priority: "medium",
+        status: "draft",
+        category: "Product Vision",
+        archived: false,
+    }));
+
+    return {
+        version: "1.0.0",
+        project: {
+            name: title,
+            description: summary || "Imported product vision",
+            settings: {
+                source_format: "product_vision_prd",
+            },
+        },
+        pages: [
+            {
+                ref: pageRef,
+                name: "Product Vision",
+                path: "/",
+                rootBlockRef: rootRef,
+                isDynamic: false,
+                meta: { title: `${title} - Product Vision` },
+                archived: false,
+                sourceIndex: 0,
+            },
+        ],
+        blocks,
+        components: [],
+        logicFlows: [],
+        dataModels: [],
+        variables: [],
+        useCases,
+        apis: [],
+    };
+}
+
 function normalizeImportPayload(rawPayload: unknown): NormalizedImportPayload {
     const source = extractImportRoot(rawPayload);
+
+    if (looksLikePrdPayload(source)) {
+        return toPrdNormalizedPayload(source);
+    }
+
     const projectNode = isRecord(source.project) ? source.project : source;
 
     return {

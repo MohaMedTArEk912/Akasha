@@ -1,5 +1,3 @@
-const PROJECT_TEMPLATE_VERSION = "akasha.project-template.v1";
-
 function slugifyFileName(value: string): string {
     return value
         .toLowerCase()
@@ -13,87 +11,59 @@ export function getSampleProjectTemplateJson(projectName?: string): string {
 
     return JSON.stringify(
         {
-            template_version: PROJECT_TEMPLATE_VERSION,
-            notes: "Edit this JSON, then import it from the New Project dialog.",
-            name: resolvedName,
-            description: "A starter project imported from a JSON template.",
-            settings: {
-                theme: {
-                    primary_color: "#0ea5e9",
-                },
-            },
-            pages: [
-                {
-                    name: "Home",
-                    path: "/",
-                    meta: {
-                        title: `${resolvedName} Home`,
-                        description: "Landing page for the project",
-                    },
-                    blocks: [
-                        {
-                            type: "section",
-                            name: "Hero Section",
-                            styles: {
-                                padding: "48px",
-                            },
-                            children: [
-                                {
-                                    type: "heading",
-                                    name: "Hero Title",
-                                    properties: {
-                                        text: `Welcome to ${resolvedName}`,
-                                        level: 1,
-                                    },
-                                },
-                                {
-                                    type: "paragraph",
-                                    name: "Hero Copy",
-                                    properties: {
-                                        text: "Replace this text with your product value proposition.",
-                                    },
-                                },
-                                {
-                                    type: "button",
-                                    name: "Primary CTA",
-                                    properties: {
-                                        text: "Get Started",
-                                    },
-                                },
-                            ],
-                        },
-                    ],
-                },
-                {
-                    name: "About",
-                    path: "/about",
-                    meta: {
-                        title: `About ${resolvedName}`,
-                    },
-                    blocks: [
-                        {
-                            type: "section",
-                            name: "About Section",
-                            children: [
-                                {
-                                    type: "heading",
-                                    name: "About Heading",
-                                    properties: {
-                                        text: `About ${resolvedName}`,
-                                        level: 2,
-                                    },
-                                },
-                                {
-                                    type: "paragraph",
-                                    name: "About Copy",
-                                    properties: {
-                                        text: "Describe the product, company, or workflow here.",
-                                    },
-                                },
-                            ],
-                        },
-                    ],
-                },
+            title: resolvedName,
+            summary:
+                "Describe the product vision in plain language. Include what the system does, who it serves, and why it matters.",
+            target_audience: [
+                "Primary users (e.g. patients, doctors, nurses)",
+                "Secondary users (e.g. admins, finance, support)",
+            ],
+            core_value_proposition: [
+                "What key value this product delivers",
+                "How it improves current workflows",
+            ],
+            problem_statement: [
+                "What is broken today",
+                "What pain points must be solved first",
+            ],
+            decision_summary: [],
+            key_features: [
+                "Feature 1",
+                "Feature 2",
+                "Feature 3",
+            ],
+            user_flows: [
+                "User flow 1",
+                "User flow 2",
+            ],
+            technical_architecture: [
+                "Frontend",
+                "Backend",
+                "Database",
+                "Integrations",
+            ],
+            data_api_requirements: [
+                "Entities and data model notes",
+                "API endpoint requirements",
+            ],
+            milestones: [
+                "Milestone 1",
+                "Milestone 2",
+            ],
+            success_metrics: [
+                "KPI 1",
+                "KPI 2",
+            ],
+            risks: [
+                "Risk 1",
+                "Risk 2",
+            ],
+            implementation_checklist: [
+                "Task 1",
+                "Task 2",
+            ],
+            open_questions: [
+                "Question 1",
             ],
         },
         null,
@@ -104,7 +74,7 @@ export function getSampleProjectTemplateJson(projectName?: string): string {
 export function downloadSampleProjectTemplate(projectName?: string): string {
     const json = getSampleProjectTemplateJson(projectName);
     const resolvedName = projectName?.trim() || "sample-project";
-    const fileName = `${slugifyFileName(resolvedName)}.project-template.json`;
+    const fileName = `${slugifyFileName(resolvedName)}.product-vision.json`;
     const blob = new Blob([json], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");

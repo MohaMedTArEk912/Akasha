@@ -155,6 +155,42 @@ function normalizePagePath(path: string): string {
     return `/${slug}`;
 }
 
+function extractIdeaSeedFromImportJson(rawJson: string, fallbackProjectDescription?: string | null): string {
+    try {
+        const parsed = JSON.parse(rawJson) as Record<string, unknown>;
+
+        const pick = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+        const listToText = (value: unknown): string => {
+            if (!Array.isArray(value)) return "";
+            const lines = value
+                .map((item) => (typeof item === "string" ? item.trim() : ""))
+                .filter(Boolean);
+            return lines.join("\n");
+        };
+
+        const descriptionFromProjectNode = (() => {
+            const projectNode = parsed.project;
+            if (projectNode && typeof projectNode === "object" && !Array.isArray(projectNode)) {
+                return pick((projectNode as Record<string, unknown>).description);
+            }
+            return "";
+        })();
+
+        const candidates = [
+            pick(parsed.summary),
+            pick(parsed.description),
+            descriptionFromProjectNode,
+            listToText(parsed.problem_statement),
+            listToText(parsed.core_value_proposition),
+            fallbackProjectDescription?.trim() || "",
+        ].filter(Boolean);
+
+        return candidates.join("\n\n").slice(0, 8000);
+    } catch {
+        return (fallbackProjectDescription || "").trim();
+    }
+}
+
 export async function installProjectDependencies(): Promise<boolean> {
     updateState(() => ({
         loadingMessage: "Installing dependencies (client + server)...",
@@ -766,7 +802,7 @@ export async function loadProject(): Promise<void> {
  * Import a project from JSON
  */
 export async function importProject(json: string, name?: string): Promise<void> {
-    updateState(() => ({ loading: true, error: null }));
+    updateState(() => ({ loading: true, error: null, loadingMessage: "Importing project from JSON..." }));
 
     try {
         let project = await api.importProjectJson(json, name);
@@ -783,6 +819,21 @@ export async function importProject(json: string, name?: string): Promise<void> 
                 await installProjectDependencies();
             } catch (syncError) {
                 console.warn('Project imported, but workspace sync failed:', syncError);
+            }
+        }
+
+        // Automatically generate AI structured plan after a successful import.
+        const ideaSeed = extractIdeaSeedFromImportJson(json, project.description);
+        if (ideaSeed) {
+            updateState(() => ({ loadingMessage: "Generating AI Structured Plan..." }));
+            try {
+                const enrichedProject = await api.generateStructuredIdea(project.id, ideaSeed);
+                if (enrichedProject) {
+                    project = enrichedProject;
+                }
+            } catch (structuredError) {
+                // Import should still succeed if AI enrichment fails.
+                console.warn("Project imported, but structured plan generation failed:", structuredError);
             }
         }
 
