@@ -23,6 +23,9 @@ router.get('/chat-history', ctrl.getChatHistory);
 router.get('/ideas', ctrl.getIdeas);
 router.get('/best-idea', ctrl.getBestIdea);
 router.post('/submit-idea', ctrl.submitIdea);
+router.get('/top-ideas', ctrl.getTopIdeas);
+router.post('/trigger-pipeline', ctrl.triggerPipeline);
+router.get('/pipeline-result', ctrl.getPipelineResult);
 
 // Simple Chat (merged from server.js)
 router.post('/simple-chat', ctrl.simpleChat);

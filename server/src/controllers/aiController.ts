@@ -407,24 +407,101 @@ export async function submitIdea(req: Request, res: Response) {
     try {
         const member = await prisma.teamMember.findFirst({ where: { sessionId }, include: { team: true } });
         if (!member) return res.status(403).json({ error: 'Unauthorized' });
-        const newIdea = await prisma.teamIdea.create({ data: { teamId: member.teamId, username: member.username, content: idea } });
+        const newIdea = await prisma.teamIdea.create({ data: { teamId: member.teamId, username: member.username, content: idea, pipelineStatus: "pending" } });
         res.json({ ...newIdea, idea, evaluation: null });
 
         // Background AI Evaluation
         try {
-            const prompt = `You are a professional innovation evaluator.\nEvaluate the startup idea for Feasibility (1-10), Innovation (1-10), MarketPotential (1-10).\nRespond ONLY in JSON matching this structure exactly (no markdown formatting, no comments):\n{\n  "feasibility": 8,\n  "innovation": 7,\n  "marketPotential": 9,\n  "overallScore": 8.0,\n  "strengths": ["point1", "point2"],\n  "weaknesses": ["point1", "point2"],\n  "summary": "short paragraph",\n  "recommendedNextSteps": ["step1", "step2", "step3"]\n}\n\nSTARTUP IDEA TO EVALUATE:\n${idea}`;
-            const llmProvider = getLLMProvider();
-            const response = await llmProvider.chat({
-                model: 'google/gemma-3-4b-it:free',
-                temperature: 0.2,
-                messages: [{ role: 'user', content: prompt }]
+            const { lightScoreIdea } = await import('../ai/ideaPipeline.js');
+            const evaluation = await lightScoreIdea(idea);
+            await prisma.teamIdea.update({ 
+                where: { id: newIdea.id }, 
+                data: { 
+                    evaluation: JSON.stringify(evaluation),
+                    pipelineStatus: "none"
+                } 
             });
-            let rawJson = response.trim() || "{}";
-            if (rawJson.startsWith('```json')) rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
-            if (rawJson.startsWith('```')) rawJson = rawJson.replace(/```/g, '').trim();
-            const evaluation = JSON.parse(rawJson);
-            await prisma.teamIdea.update({ where: { id: newIdea.id }, data: { evaluation: JSON.stringify(evaluation) } });
         } catch (err: any) { console.error('Evaluation generated error:', err.message); }
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+}
+
+export async function getTopIdeas(req: Request, res: Response) {
+    const { sessionId, limit = '3' } = req.query;
+    if (!sessionId || typeof sessionId !== 'string') return res.status(400).json({ error: 'Missing sessionId' });
+    try {
+        const member = await prisma.teamMember.findFirst({ where: { sessionId }, include: { team: true } });
+        if (!member) return res.json([]);
+        
+        const ideas = await prisma.teamIdea.findMany({ where: { teamId: member.teamId } });
+        const parsedIdeas = ideas.map((i: any) => ({ ...i, idea: i.content, evaluation: i.evaluation ? JSON.parse(i.evaluation) : null }));
+        
+        // Sort by final_score (fallback to overallScore, fallback to 0) descending
+        parsedIdeas.sort((a, b) => {
+            const scoreA = a.evaluation?.final_score ?? a.evaluation?.overallScore ?? 0;
+            const scoreB = b.evaluation?.final_score ?? b.evaluation?.overallScore ?? 0;
+            return scoreB - scoreA;
+        });
+
+        res.json(parsedIdeas.slice(0, parseInt(limit as string, 10)));
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+}
+
+export async function triggerPipeline(req: Request, res: Response) {
+    const { ideaId, sessionId } = req.body;
+    if (!ideaId || !sessionId) return res.status(400).json({ error: 'Missing data' });
+    try {
+        const member = await prisma.teamMember.findFirst({ where: { sessionId }, include: { team: true } });
+        if (!member || member.role !== 'admin') return res.status(403).json({ error: 'Only admins can trigger pipeline' });
+        
+        const idea = await prisma.teamIdea.findUnique({ where: { id: ideaId, teamId: member.teamId } });
+        if (!idea) return res.status(404).json({ error: 'Idea not found' });
+
+        await prisma.teamIdea.update({ where: { id: ideaId }, data: { pipelineStatus: 'running' } });
+        res.json({ success: true, message: 'Pipeline started in background' });
+
+        // Background process
+        try {
+            const { runFullPipeline } = await import('../ai/ideaPipeline.js');
+            const result = await runFullPipeline(idea.content);
+            
+            await prisma.ideaPipeline.create({
+                data: {
+                    teamId: member.teamId,
+                    ideaId: idea.id,
+                    result: JSON.stringify(result)
+                }
+            });
+            await prisma.teamIdea.update({ where: { id: ideaId }, data: { pipelineStatus: 'done' } });
+        } catch (err: any) {
+            console.error('Pipeline failed:', err.message);
+            await prisma.teamIdea.update({ where: { id: ideaId }, data: { pipelineStatus: 'error' } });
+        }
+
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+}
+
+export async function getPipelineResult(req: Request, res: Response) {
+    const { sessionId, ideaId } = req.query;
+    if (!sessionId || typeof sessionId !== 'string') return res.status(400).json({ error: 'Missing sessionId' });
+    try {
+        const member = await prisma.teamMember.findFirst({ where: { sessionId } });
+        if (!member) return res.status(403).json({ error: 'Unauthorized' });
+
+        let whereClause: any = { teamId: member.teamId };
+        if (ideaId && typeof ideaId === 'string') {
+            whereClause.ideaId = ideaId;
+        }
+
+        const pipelines = await prisma.ideaPipeline.findMany({ 
+            where: whereClause,
+            orderBy: { createdAt: 'desc' },
+            take: 1
+        });
+
+        if (pipelines.length === 0) return res.json(null);
+        
+        const p = pipelines[0];
+        res.json({ ...p, result: JSON.parse(p.result) });
     } catch (err: any) { res.status(500).json({ error: err.message }); }
 }
 
