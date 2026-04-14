@@ -729,7 +729,7 @@ export async function exportProjectPayload(projectId: string) {
       description: project.description || "",
       settings: parseJsonValue<Record<string, unknown>>(project.settings, {}),
     },
-    pages: project.pages.map((page) => toPageSchema(page, project.blocks)),
+    pages: project.pages.map((page: any) => toPageSchema(page, project.blocks)),
     blocks: toProjectSchema(
       project,
       project.pages,
@@ -740,7 +740,7 @@ export async function exportProjectPayload(projectId: string) {
     ).blocks,
     variables: project.variables.map(toVariableSchema),
     data_models: project.dataModels.map(toDataModelSchema),
-    logic_flows: project.logicFlows.map((flow) => ({
+    logic_flows: project.logicFlows.map((flow: any) => ({
       ...toLogicFlowSchema(flow),
       nodes: parseJsonValue<unknown[]>(flow.nodes, []),
       trigger: parseJsonValue<JsonRecord>(flow.trigger, { type: "manual" }),

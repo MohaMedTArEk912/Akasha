@@ -916,13 +916,13 @@ export async function exportProjectDocument(projectId: string) {
       description: project.description || "",
       settings: parseJsonValue<Record<string, unknown>>(project.settings, {}),
     },
-    pages: project.pages.map((page) => {
+    pages: project.pages.map((page: any) => {
       const meta = parseJsonValue<Record<string, unknown>>(page.meta, {});
       const rootBlockId =
         typeof meta.root_block_id === "string" && meta.root_block_id
           ? meta.root_block_id
           : project.blocks.find(
-              (block) =>
+              (block: any) =>
                 String(block.pageId) === String(page.idRoot) &&
                 !block.parentId &&
                 !block.archived,
@@ -930,11 +930,11 @@ export async function exportProjectDocument(projectId: string) {
 
       const blocks = project.blocks
         .filter(
-          (block) =>
+          (block: any) =>
             String(block.pageId) === String(page.idRoot) && block.id !== rootBlockId,
         )
-        .sort((left, right) => left.order - right.order)
-        .map((block) => ({
+        .sort((left: any, right: any) => left.order - right.order)
+        .map((block: any) => ({
           id: block.id,
           ref: block.id,
           block_type: block.blockType,
@@ -965,7 +965,7 @@ export async function exportProjectDocument(projectId: string) {
         blocks,
       };
     }),
-    variables: project.variables.map((variable) => ({
+    variables: project.variables.map((variable: any) => ({
       id: variable.id,
       name: variable.name,
       variable_type: variable.type,
@@ -974,7 +974,7 @@ export async function exportProjectDocument(projectId: string) {
         : null,
       is_secret: variable.isSecret || false,
     })),
-    data_models: project.dataModels.map((model) => {
+    data_models: project.dataModels.map((model: any) => {
       const schema = parseJsonValue<{ fields?: unknown[]; relations?: unknown[] }>(
         model.schema,
         {},
@@ -990,14 +990,14 @@ export async function exportProjectDocument(projectId: string) {
         archived: model.archived || false,
       };
     }),
-    logic_flows: project.logicFlows.map((flow) => ({
+    logic_flows: project.logicFlows.map((flow: any) => ({
       id: flow.id,
       name: flow.name,
       trigger: parseJsonValue<JsonObject>(flow.trigger, { type: "manual" }),
       nodes: parseJsonValue<unknown[]>(flow.nodes, []),
       archived: flow.archived || false,
     })),
-    use_cases: project.useCases.map((useCase) => ({
+    use_cases: project.useCases.map((useCase: any) => ({
       id: useCase.id,
       name: useCase.name,
       description: useCase.description || "",
