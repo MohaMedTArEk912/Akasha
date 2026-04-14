@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
-import fs from 'fs-extra';
-import path from 'path';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 
 async function getProjectRoot(projectId: string) {
     const project = await prisma.project.findUnique({ where: { id: projectId } });
@@ -26,10 +26,10 @@ export async function listDiagrams(req: Request, res: Response) {
 
         if (!fs.existsSync(diagramsDir)) { res.json([]); return; }
 
-        const files = await fs.readdir(diagramsDir);
-        const diagrams = files
-            .filter(f => f.endsWith('.drawio') || f.endsWith('.xml'))
-            .map(f => ({
+            const files = await fs.readdir(diagramsDir);
+            const diagrams = files
+                .filter(f => f.endsWith('.drawio') || f.endsWith('.xml') || f.endsWith('.excalidraw'))
+                .map(f => ({
                 name: f,
                 path: path.join(diagramsDir, f),
                 last_modified: fs.statSync(path.join(diagramsDir, f)).mtimeMs

@@ -164,6 +164,7 @@ model Team {
   joinRequests JoinRequest[]
   chats        TeamChat[]
   ideas        TeamIdea[]
+  pipelines    IdeaPipeline[]
 }
 
 model TeamMember {
@@ -201,11 +202,24 @@ model TeamChat {
 }
 
 model TeamIdea {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  teamId     String   @db.ObjectId
-  team       Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  username   String
-  content    String
-  evaluation String? // JSON string
-  createdAt  DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamId         String   @db.ObjectId
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  username       String
+  content        String
+  evaluation     String?  // JSON string: {feasibility, innovation, marketPotential, overallScore, final_score, ...}
+  pipelineStatus String   @default("none") // none | pending | running | done | error
+  createdAt      DateTime @default(now())
+}
+
+model IdeaPipeline {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  teamId      String   @db.ObjectId
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  ideaId      String   @db.ObjectId // The TeamIdea this pipeline ran on
+  result      String   // JSON: {idea, categories, features, requirements, use_cases, verification}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([teamId])
 }

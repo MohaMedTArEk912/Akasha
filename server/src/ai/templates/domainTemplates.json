@@ -1,0 +1,92 @@
+{
+  "identity_security": {
+    "keywords": ["login", "auth", "security", "permissions", "roles", "sso", "mfa", "rbac", "identity"],
+    "features": [
+      "Role-Based Access Control (RBAC)",
+      "Multi-Factor Authentication (MFA)",
+      "Single Sign-On (SSO) Integration",
+      "Audit Logging",
+      "Password Policy Enforcement"
+    ]
+  },
+  "ecommerce": {
+    "keywords": ["shop", "store", "buy", "sell", "cart", "checkout", "product", "inventory", "payment"],
+    "features": [
+      "Product Catalog Management",
+      "Shopping Cart & Checkout Flow",
+      "Payment Gateway Integration",
+      "Order Tracking",
+      "Inventory Management"
+    ]
+  },
+  "healthcare": {
+    "keywords": ["patient", "doctor", "health", "hospital", "clinic", "medical", "appointment", "prescription"],
+    "features": [
+      "Patient Record Management",
+      "Appointment Scheduling",
+      "Telehealth Integration",
+      "Prescription Tracking",
+      "HIPAA Compliance Tools"
+    ]
+  },
+  "library": {
+    "keywords": ["book", "library", "borrow", "lend", "catalog", "reader", "publication", "checkout"],
+    "features": [
+      "Digital Catalog Search",
+      "Borrowing & Due Date Tracking",
+      "Member Accounts & Fines",
+      "Reservation System",
+      "Barcode/RFID Integration"
+    ]
+  },
+  "ai_productivity": {
+    "keywords": ["ai", "bot", "assistant", "generate", "smart", "summarize", "automation", "workflow", "copilot"],
+    "features": [
+      "AI Prompt Management",
+      "Document Summarization",
+      "Smart Auto-completion",
+      "Context-Aware Chatbot",
+      "Task Automation Engine"
+    ]
+  },
+  "crm_marketing": {
+    "keywords": ["customer", "lead", "sales", "marketing", "campaign", "email", "tracking"],
+    "features": [
+      "Lead Pipeline Management",
+      "Customer Interaction History",
+      "Email Campaign Automation",
+      "Sales Activity Dashboard",
+      "Contact Segmentation"
+    ]
+  },
+  "admin_dashboard": {
+    "keywords": ["admin", "dashboard", "analytics", "manage", "overview", "metrics", "reports", "settings"],
+    "features": [
+      "KPI & Metrics Overview",
+      "User Management Hub",
+      "System Configuration",
+      "Data Export/Reports",
+      "Activity Feed"
+    ]
+  },
+  "project_workspace": {
+    "keywords": ["project", "task", "team", "collab", "sprint", "kanban", "agile", "workspace"],
+    "features": [
+      "Kanban Task Boards",
+      "Sprint Management",
+      "Real-time Document Collaboration",
+      "Time Tracking",
+      "Team Member Assignment"
+    ]
+  },
+  "supply_chain": {
+    "keywords": ["supply", "chain", "logistics", "shipping", "freight", "warehouse", "delivery", "vendor"],
+    "features": [
+      "Vendor Management",
+      "Shipment Tracking",
+      "Warehouse Inventory Sync",
+      "Purchase Order Generation",
+      "Fleet Management"
+    ]
+  }
+}
