@@ -14,7 +14,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3001'],
+    credentials: true,
+}));
 app.use(express.json());
 
 // Determine operational mode (Web vs Tauri-replacement)
@@ -60,6 +63,8 @@ import apiHistoryRouter from './routes/apiHistory.js';
 app.use('/api/api-history', apiHistoryRouter);
 import aiRouter from './routes/ai.js';
 app.use('/api/ai', aiRouter);
+import githubRouter from './routes/github.js';
+app.use('/api/github', githubRouter);
 
 // Initialize servers
 async function startServer() {

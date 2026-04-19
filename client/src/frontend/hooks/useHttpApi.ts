@@ -21,6 +21,7 @@ const API_BASE_URL = "http://localhost:3001/api";
 
 const client = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
 });
 
 // State to track current project context (since HTTP is stateless)
@@ -643,6 +644,46 @@ export const httpApi = {
     if (featureQueue) payload.featureQueue = featureQueue;
     if (understanding) payload.understanding = understanding;
     const res = await client.post("/ai/refine-idea", payload);
+    return res.data;
+  },
+
+  // ─── GitHub Integration ─────────────────────────
+  githubStatus: async () => {
+    const res = await client.get("/github/status");
+    return res.data;
+  },
+  githubRepos: async (page?: number, perPage?: number) => {
+    const res = await client.get("/github/repos", {
+      params: { page: page || 1, per_page: perPage || 30, sort: "updated" },
+    });
+    return res.data;
+  },
+  githubCreateRepo: async (name: string, description?: string, isPrivate?: boolean) => {
+    const res = await client.post("/github/repos", {
+      name,
+      description: description || "",
+      private: isPrivate ?? false,
+    });
+    return res.data;
+  },
+  githubRepoContents: async (owner: string, repo: string, path?: string, ref?: string) => {
+    const res = await client.get(`/github/repos/${owner}/${repo}/contents`, {
+      params: { path: path || "", ref: ref || "" },
+    });
+    return res.data;
+  },
+  githubRepoCommits: async (owner: string, repo: string, sha?: string) => {
+    const res = await client.get(`/github/repos/${owner}/${repo}/commits`, {
+      params: { per_page: 30, sha: sha || "" },
+    });
+    return res.data;
+  },
+  githubRepoBranches: async (owner: string, repo: string) => {
+    const res = await client.get(`/github/repos/${owner}/${repo}/branches`);
+    return res.data;
+  },
+  githubDisconnect: async () => {
+    const res = await client.post("/github/disconnect");
     return res.data;
   },
 };

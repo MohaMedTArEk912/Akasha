@@ -381,6 +381,19 @@ export interface ProjectSettings {
     };
     ideaDetails?: StructuredIdeaDetails;
     uiArchitectPlan?: UiArchitectSavedPlan;
+    github_repo?: {
+        owner: string;
+        name: string;
+        full_name: string;
+        default_branch: string;
+    };
+    github_repos?: {
+        owner: string;
+        name: string;
+        full_name: string;
+        default_branch: string;
+        is_default?: boolean;
+    }[];
 }
 
 export interface FileEntry {

@@ -15,7 +15,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { setActivePage, installProjectDependencies, clearInstallStatus, toggleTerminal } from "../../stores/projectStore";
+import { setActivePage, installProjectDependencies, clearInstallStatus, toggleTerminal, goBackPage } from "../../stores/projectStore";
 import type { FeaturePage } from "../../stores/projectStore";
 
 
@@ -58,8 +58,10 @@ const FEATURE_PAGES: FeaturePageDef[] = [
  * Main IDE Layout — Feature Page Architecture
  */
 const IDELayout: React.FC = () => {
-    const { project, activePage, loading, loadingMessage, installLog, installError, terminalOpen, builderActive } = useProjectStore();
+    const { project, activePage, loading, loadingMessage, installLog, installError, terminalOpen, builderActive, pageHistory } = useProjectStore();
     const [settingsOpen, setSettingsOpen] = useState(false);
+    
+    const canGoBack = pageHistory && pageHistory.length > 0;
 
     // Global keyboard shortcut: toggle terminal
     useEffect(() => {
@@ -104,6 +106,17 @@ const IDELayout: React.FC = () => {
 
                 {/* Left: App name */}
                 <div className="flex items-center gap-3 relative z-10" data-tauri-drag-region>
+                    {canGoBack && (
+                        <button 
+                            onClick={goBackPage}
+                            className="bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors w-6 h-6 flex items-center justify-center rounded-md border border-white/5 hover:border-white/20 press-effect"
+                            title="Go Back"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                    )}
                     <div className="relative group flex items-center justify-center">
                         <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
                         <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />

@@ -41,6 +41,9 @@ interface ProjectState {
     /** Page IDs that are open as tabs (VS Code-style). */
     openPageIds: string[];
 
+    /** History of recently visited feature pages */
+    pageHistory: FeaturePage[];
+
     // Workspace state
     workspacePath: string | null;
     projects: ProjectSchema[];
@@ -70,6 +73,7 @@ const initialState: ProjectState = {
     terminalOpen: false,
     builderActive: false,
     openPageIds: [],
+    pageHistory: [],
     diffView: null,
 };
 
@@ -631,6 +635,7 @@ export async function createProject(name: string, description?: string): Promise
             activePage: "dashboard",
             loadingMessage: null,
             openPageIds: allActivePageIds(project),
+            pageHistory: [],
         }));
         sessionStorage.setItem(SESSION_PROJECT_ID_KEY, project.id);
         sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
@@ -672,6 +677,7 @@ export async function openProject(id: string): Promise<void> {
             isDashboardActive: false,
             activePage: "dashboard",
             openPageIds: allActivePageIds(project),
+            pageHistory: [],
         }));
 
         // ── Persist to sessionStorage so refresh re-opens this project ──
@@ -742,7 +748,8 @@ export function closeProject(): void {
         isDashboardActive: true,
         selectedBlockId: null,
         selectedPageId: null,
-        inspectorOpen: true
+        inspectorOpen: true,
+        pageHistory: []
     }));
 
     // ── Clear session so refresh goes to dashboard ──
@@ -844,6 +851,7 @@ export async function importProject(json: string, name?: string): Promise<void> 
             activePage: "dashboard",
             loadingMessage: null,
             openPageIds: allActivePageIds(project),
+            pageHistory: [],
         }));
         sessionStorage.setItem(SESSION_PROJECT_ID_KEY, project.id);
         sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
@@ -1444,10 +1452,39 @@ export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "d
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";
-    updateState(() => ({ activePage: page, editMode }));
+    updateState((prev) => {
+        if (prev.activePage === page) return { editMode };
+
+        let newHistory = [...prev.pageHistory, prev.activePage];
+        // Keep max 50 items in history to avoid memory bloat
+        if (newHistory.length > 50) newHistory = newHistory.slice(newHistory.length - 50);
+
+        return { activePage: page, editMode, pageHistory: newHistory };
+    });
 
     // ── Persist active page to sessionStorage ──
     sessionStorage.setItem(SESSION_ACTIVE_PAGE_KEY, page);
+}
+
+/**
+ * Return to the previous feature page
+ */
+export function goBackPage(): void {
+    updateState((prev) => {
+        if (prev.pageHistory.length === 0) return {};
+
+        const newHistory = [...prev.pageHistory];
+        const prevPage = newHistory.pop()!;
+        const editMode: "visual" | "code" = prevPage === "code" ? "code" : "visual";
+
+        sessionStorage.setItem(SESSION_ACTIVE_PAGE_KEY, prevPage);
+
+        return {
+            activePage: prevPage,
+            editMode,
+            pageHistory: newHistory
+        };
+    });
 }
 
 /**
