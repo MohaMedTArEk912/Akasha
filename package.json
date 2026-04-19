@@ -6,7 +6,8 @@
     "scripts": {
         "start": "cd server && npm start",
         "dev": "cross-env NODE_OPTIONS=\"--no-deprecation\" concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-        "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+        "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+        "build": "npm run build --prefix server && npm run build --prefix client"
     },
     "dependencies": {
         "cors": "^2.8.5",

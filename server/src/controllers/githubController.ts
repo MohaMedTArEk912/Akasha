@@ -30,7 +30,7 @@ function getSessionId(req: Request): string | null {
     // Read from cookie header manually (no cookie-parser dependency)
     const cookies = req.headers.cookie || '';
     const match = cookies.match(/gh_session=([^;]+)/);
-    return match ? match[1] : null;
+    return match?.[1] ?? null;
 }
 
 function setSessionCookie(res: Response, sessionId: string): void {
