@@ -1,7 +1,7 @@
 {
     "name": "akasha-platform",
     "version": "1.0.0",
-    "description": "WorkSpace for Akasha Platform",
+    "description": "Web app workspace for the Akasha platform",
     "main": "server.js",
     "scripts": {
         "start": "cd server && npm start",

@@ -1,227 +1,115 @@
+# Akasha
+
 <div align="center">
-  <img src="https://raw.githubusercontent.com/MohaMedTArEk912/akasha/main/public/logo.png" alt="Akasha Logo" width="120" />
+   <img src="https://raw.githubusercontent.com/MohaMedTArEk912/akasha/main/public/logo.png" alt="Akasha Logo" width="120" />
 
-  # 🚀 Akasha
+   **Akasha is a browser-based AI workspace for designing, organizing, and generating web applications.**
 
-  **Build, Visualize, and Export Production-Ready Full-Stack SaaS Applications with AI-Powered Precision.**
-
-  [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge)](https://github.com/MohaMedTArEk912/akasha)
-  [![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg?style=for-the-badge)](https://github.com/MohaMedTArEk912/akasha)
-  [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
-  [![React](https://img.shields.io/badge/React-18-61dafb.svg?style=for-the-badge&logo=react)](https://react.dev/)
-  [![Node](https://img.shields.io/badge/Node-18+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
-  [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748.svg?style=for-the-badge&logo=prisma)](https://www.prisma.io/)
-
-  [View Demo](https://akasha-demo.vercel.app) • [Read Docs](docs/) • [Report Bug](https://github.com/MohaMedTArEk912/akasha/issues) • [Request Feature](https://github.com/MohaMedTArEk912/akasha/issues)
-
+   [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge)](https://github.com/MohaMedTArEk912/akasha)
+   [![Platform](https://img.shields.io/badge/platform-Web-brightgreen.svg?style=for-the-badge)](https://github.com/MohaMedTArEk912/akasha)
+   [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
+   [![React](https://img.shields.io/badge/React-18-61dafb.svg?style=for-the-badge&logo=react)](https://react.dev/)
+   [![Node](https://img.shields.io/badge/Node-18+-green.svg?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+   [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue.svg?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 </div>
 
----
+## Overview
 
-## 🌟 Overview
+Akasha is a full-stack web app for planning and generating product ideas inside one browser workspace. It combines a visual UI builder, a project ideation flow, API and data-model editors, diagramming, and source-code views so you can move from concept to implementation without switching tools.
 
-**Akasha** is a revolutionary web-based platform designed to bridge the gap between design and production. It empowers developers and architects to build complete, full-stack applications visually. From designing responsive UI components to modeling complex database relationships and authoring business logic via interactive flowcharts, Akasha handles the heavy lifting of boilerplate generation.
+The repository is web-first. There is no native desktop runtime here, and the remaining responsive viewport labels such as desktop, tablet, and mobile are design-preview modes inside the app.
 
-> "From zero to a deployable, production-ready codebase — without leaving your browser."
+## What the app does
 
----
+- Shapes product ideas into structured pages, use cases, and implementation notes.
+- Builds UI layouts visually with responsive preview modes.
+- Models APIs, data structures, and logic flows.
+- Tracks generated source code and project state.
+- Talks to the backend over HTTP from the browser.
+- Supports AI-assisted workflows through the server layer.
 
-## 📖 Table of Contents
+## Tech Stack
 
-- [✨ Key Features](#-key-features)
-- [🛠️ Core Modules](#️-core-modules)
-- [🏗️ Technology Stack](#️-technology-stack)
-- [🚀 Quick Start](#-quick-start)
-- [📁 Project Structure](#-project-structure)
-- [📡 API Reference](#-api-reference)
-- [🛡️ Security & RBAC](#️-security--rbac)
-- [🗺️ Roadmap](#️-roadmap)
-- [🤝 Contributing](#-contributing)
-- [📝 License](#-license)
-- [🙏 Acknowledgments](#-acknowledgments)
+| Area | Stack |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand |
+| UI/Editor Tooling | Craft.js, DnD Kit, Monaco Editor, Radix UI |
+| Backend | Node.js, Express, TypeScript |
+| Data / Storage | MongoDB, filesystem-backed project data |
+| AI / Integrations | OpenAI-compatible client, Qwen support, Git/GitHub integrations |
 
----
+## Local Setup
 
-## ✨ Key Features
+### Requirements
 
-- 🎨 **Visual UI Builder**: Drag-and-drop React components with real-time Tailwind CSS styling and live code preview.
-- 🔀 **Visual Logic Engine**: Author complex business logic using a graph-based node system (Low-code/No-code).
-- 📊 **ERD & Data Modeling**: Design the database schema visually with support for relations, enums, and constraints.
-- ⚡ **Full-Stack Export**: Generate a complete project (React, NestJS, Prisma) in a single ZIP file.
-- 🔐 **Built-in Auth & RBAC**: Automated generation of JWT-based authentication and Role-Based Access Control.
-- 🐳 **Docker Ready**: One-click generation of Docker settings for seamless deployment.
-- 📄 **OpenAPI Integration**: Automatic Swagger/OpenAPI 3.0 documentation generation.
+- Node.js 18 or newer
+- npm
+- Git
 
----
+### Install
 
-## 🛠️ Core Modules
+```bash
+npm run install:all
+```
 
-### 1. Visual Editor (Canvas)
-- **Nestable Component Tree**: Manage complex UI hierarchies with ease.
-- **Responsive Controls**: Test designs across Desktop, Tablet, and Mobile viewports.
-- **State & Props Management**: Bind UI properties to variables or API responses.
+### Run in development
 
-### 2. Logic Flow Engine
-- **Node Library**: 22+ node types including `ApiCall`, `Condition`, `Loop`, `Navigate`, and `SetVariable`.
-- **Compiler**: Transforms visual graphs into executable TypeScript functions.
+```bash
+npm run dev
+```
 
-### 3. API Designer
-- **Endpoint Builder**: Define RESTful routes with custom methods and path parameters.
-- **Schema Editor**: Interactive editing for request and response body shapes.
+This starts the web client on `http://localhost:5173` and the API server on `http://localhost:3001`.
 
-### 4. Database (ERD) Designer
-- **Prisma Integration**: Generates a clean `schema.prisma` from the visual ERD.
-- **Relation Mapping**: Handles One-to-One, One-to-Many, and Many-to-Many relations automatically.
+### Build
 
----
-
-## 🏗️ Technology Stack
-
-### The Platform (Internal)
-Built with stability and speed in mind to provide a seamless designer experience.
-
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, Zustand, Vite |
-| **Backend** | Node.js, Express, Prisma, fs-extra |
-| **Database** | SQLite (Prototyping) |
-| **Editors** | Monaco Editor, React-Flow |
-
-### The Generated Output (Production)
-The code you export is structured for high-scale production environments.
-
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React 18, TypeScript, Tailwind, AuthContext |
-| **Backend** | NestJS (Modular Architecture) |
-| **Database** | Prisma + PostgreSQL / MySQL |
-| **Security** | JWT, Passport, Bcrypt, RBAC Guards |
-| **Testing** | Jest, Supertest (E2E) |
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js** (v18 or higher)
-- **npm** or **yarn**
-- **Git**
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/MohaMedTArEk912/akasha.git
-   cd akasha
-   ```
-
-2. **Install all dependencies (Root, Client, and Server):**
-   ```bash
-   npm run install:all
-   ```
-
-3. **Start in Development mode:**
-   ```bash
-   npm run dev
-   ```
-   *This starts the Client (Vite) on port `5173` and the Server (Express) on port `3001` concurrently.*
-
-### Building for Production
 ```bash
 npm run build
 ```
 
----
+## Scripts
 
-## 📁 Project Structure
+| Script | Description |
+| --- | --- |
+| `npm run dev` | Starts the client and server together in development mode. |
+| `npm run install:all` | Installs dependencies for the root, client, and server packages. |
 
-```bash
-akasha/
-├── 📂 client/              # React Frontend (Vite)
-│   ├── 📂 src/
-│   │   ├── 📂 components/  # UI Elements & Visual Editor Panels
-│   │   ├── 📂 stores/      # Zustand Global State
-│   │   └── 📄 App.tsx      # Main Layout & Routing
-│   └── 📄 tailwind.config.ts
-├── 📂 server/              # Express Backend API
-│   ├── 📂 src/
-│   │   ├── 📂 routes/      # Control Tower for API Endpoints
-│   │   ├── 📂 services/    # Business Logic & Code Generation
-│   │   └── 📄 server.ts    # Server Entry Point
-│   └── 📂 prisma/          # Database Schema
-├── 📄 docker-compose.yml   # Container Configuration
-├── 📄 package.json         # Root Scripts & Dependencies
-└── 📄 README.md            # You are here!
+## Project Structure
+
+```text
+WorkSpace/
+├── client/              # Web client (Vite + React)
+│   └── src/frontend/     # App UI, pages, components, stores, hooks
+├── server/               # HTTP API and project services
+│   └── src/              # Routes, controllers, services, server entry
+├── docs/                 # Product and UI documentation
+├── public/               # Static assets served by the app
+├── Qwen/                 # Local AI helper/runtime assets
+├── docker-compose.yml    # Local container setup
+└── README.md             # Project overview and setup
 ```
 
----
+## Main Areas
 
-## 📡 API Reference
+- Dashboard and project setup.
+- UI ideation and visual builder workflow.
+- Use case, API, database, and diagram editors.
+- Source-code inspection and generated project output.
+- Project sync, Git, and GitHub workflows.
 
-The Akasha bridge exposes a set of management APIs to interact with the project state.
+## Configuration
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET`  | `/api/project` | Fetch current project state and workspace details. |
-| `POST` | `/api/project/sync/now` | Manually sync in-memory changes to the local disk. |
-| `POST` | `/api/generate/zip` | Compile the project and initiate a ZIP download. |
-| `POST` | `/api/models` | Create a new data model in the ERD. |
-| `GET`  | `/api/files/content` | Read the raw generated code for a specific file. |
+Copy `.env.example` to `.env` and configure the values needed by the server. The codebase already expects browser-based access to the API, so keep the client and server origins aligned with your local or deployed web URL.
 
-*Full documentation available in the [API spec](docs/API.md).*
+## Notes
 
----
+- The app is designed to run in the browser.
+- Responsive preview modes are part of the product UI, not a desktop app target.
+- Desktop-specific references have been removed from the repo where they were only historical leftovers.
 
-## 🛡️ Security & RBAC
+## License
 
-Akasha takes security seriously both for the platform and your generated apps:
-- **JWT Protection**: All exported production APIs include built-in JWT validation.
-- **RBAC (Role-Based Access Control)**: Define roles (e.g., `Admin`, `User`, `Guest`) visually and apply them to endpoints.
-- **Prisma Guards**: Automated data validation at the ORM level.
-- **Sanitization**: Code generation includes auto-sanitization to prevent injection attacks.
-
----
-
-## 🗺️ Roadmap
-
-- [x] **v1.0** — Visual Canvas, ERD Designer, and NestJS Generator.
-- [ ] **v1.1** — Live Deployment to Vercel/DigitalOcean.
-- [ ] **v1.2** — Python (FastAPI) Backend support.
-- [ ] **v1.5** — AI-Assistant for UI Ideation and Auto-Logic.
-- [ ] **v2.0** — Native Mobile App (React Native) export support.
-
----
-
-## 🤝 Contributing
-
-We welcome contributions of all kinds!
-
-1. **Fork** the repository.
-2. **Create** your feature branch (`git checkout -b feature/CoolFeature`).
-3. **Commit** your changes (`git commit -m 'feat: add some cool feature'`).
-4. **Push** to the branch (`git push origin feature/CoolFeature`).
-5. **Open** a Pull Request.
-
-Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- **React Flow** for the logic engine visualization.
-- **Monaco Editor** for the high-fidelity code preview.
-- **Prisma** for the incredible ORM experience.
-- Special thanks to the **Open-Source Community** for inspiring this vision.
-
----
+MIT. See [LICENSE](LICENSE).
 
 <div align="center">
-  <sub>Made with ❤️ by <b>Mohamed Tarek</b></sub><br/>
-  <sup>© 2026 Akasha Platform. All rights reserved.</sup>
+   <sub>Made with care by Mohamed Tarek</sub>
 </div>

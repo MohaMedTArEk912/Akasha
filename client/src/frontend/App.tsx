@@ -1,7 +1,7 @@
 /**
  * Akasha — Main Application - React version
  * 
- * Desktop-First Visual Full-Stack IDE
+ * Web-Based Visual Full-Stack IDE
  */
 
 import React, { useEffect } from "react";

@@ -6,25 +6,23 @@ interface WindowControlsProps {
 }
 
 /**
- * Premium Window Controls - macOS Traffic Light Style
- * 
- * Optimized for Tauri v2 with proper permissions.
+ * Decorative header controls styled like macOS traffic lights.
+ * The buttons stay inert in the web app.
  */
 const WindowControls: React.FC<WindowControlsProps> = ({ className = "" }) => {
     const [isMaximized] = useState(false);
     const [isHovering, setIsHovering] = useState(false);
-    // Removed Tauri window event listeners
 
     const handleMinimize = async () => {
-        console.warn("Window controls not available in web mode");
+        console.warn("Window controls are not available in the web app");
     };
 
     const handleToggleMaximize = async () => {
-        console.warn("Window controls not available in web mode");
+        console.warn("Window controls are not available in the web app");
     };
 
     const handleClose = async () => {
-        console.warn("Window controls not available in web mode");
+        console.warn("Window controls are not available in the web app");
     };
 
     return (

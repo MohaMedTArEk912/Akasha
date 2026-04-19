@@ -20,9 +20,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Determine operational mode (Web vs Tauri-replacement)
-
-
 app.use(express.static(path.join(__dirname, '../../public')));
 
 

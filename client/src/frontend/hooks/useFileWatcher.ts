@@ -1,11 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 
 /**
- * Hook to watch for file system changes using polling
- * This is a simple implementation that polls the filesystem at intervals
- * 
- * On a desktop app with Tauri, you could use the filesystem watcher API
- * when available, but this works cross-platform
+ * Hook to watch for file system changes using polling.
+ * This keeps the web app in sync with filesystem-backed project data.
  */
 export function useFileWatcher(
     rootPath: string | undefined,

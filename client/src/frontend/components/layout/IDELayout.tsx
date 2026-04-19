@@ -93,7 +93,6 @@ const IDELayout: React.FC = () => {
             {!builderActive && (
             <header
                 className="h-10 bg-[#050508] border-b border-white/[0.04] flex items-center justify-between px-4 select-none flex-shrink-0 relative overflow-hidden"
-                data-tauri-drag-region
             >
                 {/* Background glow effects */}
                 <div className="absolute top-0 left-1/4 w-1/4 h-full bg-indigo-500-[0.02] blur-xl pointer-events-none" />
@@ -105,7 +104,7 @@ const IDELayout: React.FC = () => {
                 }} />
 
                 {/* Left: App name */}
-                <div className="flex items-center gap-3 relative z-10" data-tauri-drag-region>
+                <div className="flex items-center gap-3 relative z-10">
                     {canGoBack && (
                         <button 
                             onClick={goBackPage}
@@ -121,22 +120,22 @@ const IDELayout: React.FC = () => {
                         <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
                         <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />
                     </div>
-                    <span className="text-[11px] font-black tracking-[0.2em] text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]" data-tauri-drag-region>
+                    <span className="text-[11px] font-black tracking-[0.2em] text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
                         AKASHA
                     </span>
                     <div className="w-[1px] h-3.5 bg-white/[0.08]" />
                     <div className="px-2 py-0.5 rounded-md bg-white/[0.02] border border-white/[0.04] flex items-center">
-                        <span className="text-[9px] font-semibold text-white/50 tracking-wider uppercase" data-tauri-drag-region>
+                        <span className="text-[9px] font-semibold text-white/50 tracking-wider uppercase">
                             {project?.name || ""}
                         </span>
                     </div>
                 </div>
 
                 {/* Center: Feature Page Name */}
-                <div className="flex-1 flex justify-center items-center relative z-10" data-tauri-drag-region>
+                <div className="flex-1 flex justify-center items-center relative z-10">
                     <div className="px-4 py-1 rounded-full bg-white/[0.02] border border-white/[0.03] flex items-center gap-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-indigo-100/70" data-tauri-drag-region>
+                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-indigo-100/70">
                             {FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard"}
                         </span>
                     </div>

@@ -1,9 +1,8 @@
 /**
  * DragDropContext – Custom pointer-based drag-and-drop system
  *
- * This replaces the unreliable HTML5 Drag-and-Drop API which doesn't work
- * properly in Tauri's WebView2 on Windows. Uses mousedown/mousemove/mouseup
- * events which are universally supported.
+ * This replaces the unreliable HTML5 Drag-and-Drop API with pointer events
+ * that behave consistently in the browser.
  */
 
 import React, {

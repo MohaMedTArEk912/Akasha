@@ -1,9 +1,5 @@
 .git
 node_modules
-desktop/node_modules
-desktop/target
-desktop/dist
-desktop/gen
 tmp
 temp
 *.log
