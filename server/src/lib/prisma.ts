@@ -32,7 +32,6 @@ export type PrismaLikeClient = {
 	project: ModelDelegate;
 	page: ModelDelegate;
 	block: ModelDelegate;
-	variable: ModelDelegate;
 	dataModel: ModelDelegate;
 	apiEndpoint: ModelDelegate;
 	logicFlow: ModelDelegate;
@@ -56,7 +55,6 @@ const MODEL_CONFIG: Record<string, ModelConfig> = {
 		relations: {
 			pages: { model: 'page', type: 'many', localField: 'id', foreignField: 'projectId' },
 			blocks: { model: 'block', type: 'many', localField: 'id', foreignField: 'projectId' },
-			variables: { model: 'variable', type: 'many', localField: 'id', foreignField: 'projectId' },
 			dataModels: { model: 'dataModel', type: 'many', localField: 'id', foreignField: 'projectId' },
 			apis: { model: 'apiEndpoint', type: 'many', localField: 'id', foreignField: 'projectId' },
 			logicFlows: { model: 'logicFlow', type: 'many', localField: 'id', foreignField: 'projectId' },
@@ -80,7 +78,6 @@ const MODEL_CONFIG: Record<string, ModelConfig> = {
 			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
 		},
 	},
-	variable: { collection: 'Variable', idField: 'id', relations: {} },
 	dataModel: { collection: 'DataModel', idField: 'id', relations: {} },
 	apiEndpoint: { collection: 'ApiEndpoint', idField: 'id', relations: {} },
 	logicFlow: { collection: 'LogicFlow', idField: 'id', relations: {} },

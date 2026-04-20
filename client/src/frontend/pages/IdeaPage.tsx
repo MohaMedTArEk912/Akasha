@@ -3,34 +3,29 @@
  */
 
 import React, { useState, useEffect } from "react";
+import useApi from "../hooks/useApi";
 import { useProjectStore } from "../hooks/useProjectStore";
 import { generateStructuredIdea } from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
-import axios from "axios";
 import IdeaWorkshop from "./IdeaWorkshop";
 
-const API_BASE = "http://localhost:3001/api";
-
 function getGeneratePlanErrorMessage(err: unknown): string {
-    if (axios.isAxiosError(err)) {
-        const serverError = err.response?.data;
-        if (typeof serverError?.error === "string" && serverError.error.trim()) {
-            return serverError.error;
-        }
-
-        if (err.response?.status === 400) {
+    if (err instanceof Error) {
+        const message = err.message;
+        if (message.includes("400")) {
             return "Please add a project idea before generating a plan.";
         }
-
-        if (err.response?.status && err.response.status >= 500) {
+        if (message.includes("500")) {
             return "The AI could not produce a usable plan right now. Please try again.";
         }
+        return message;
     }
 
-    return err instanceof Error ? err.message : "Failed to generate plan. Please try again.";
+    return "Failed to generate plan. Please try again.";
 }
 
 const IdeaPage: React.FC = () => {
+    const api = useApi();
     const { project } = useProjectStore();
     const { error: showToastError } = useToast();
     const [idea, setIdea] = useState("");
@@ -69,7 +64,7 @@ const IdeaPage: React.FC = () => {
         setIdea(refinedIdea);
         setActiveTab("document");
         try {
-            await axios.put(`${API_BASE}/project/${project.id}/idea`, { idea: refinedIdea });
+            await api.updateProjectDescription(refinedIdea, project.id);
             
             // Generate the structured plan immediately since they hit finalize
             setGeneratingPlan(true);

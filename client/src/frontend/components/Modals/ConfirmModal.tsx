@@ -149,14 +149,14 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                         <button
                             onClick={onCancel}
                             disabled={isLoading}
-                            className="flex-1 px-6 py-3.5 rounded-xl text-sm font-bold text-[var(--ide-text-secondary)] bg-[var(--ide-bg-elevated)] hover:bg-[var(--ide-bg-sidebar)] border border-[var(--ide-border)] hover:border-[var(--ide-border-strong)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-6 py-3.5 rounded-xl text-sm font-bold text-[var(--ide-text-secondary)] bg-[var(--ide-bg-elevated)] hover:bg-[var(--ide-bg-sidebar)] border border-[var(--ide-border)] hover:border-[var(--ide-border-strong)] transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                         >
                             {cancelText}
                         </button>
                         <button
                             onClick={onConfirm}
                             disabled={isLoading}
-                            className={`flex-1 px-6 py-3.5 rounded-xl text-sm font-bold text-white ${config.confirmBtn} transition-all duration-200 focus:outline-none focus:ring-2 ${config.ring} disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                            className={`flex-1 px-6 py-3.5 rounded-xl text-sm font-bold text-white ${config.confirmBtn} transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 ${config.ring} disabled:bg-gray-600 disabled:opacity-60 disabled:cursor-wait disabled:pointer-events-none flex items-center justify-center gap-2`}
                         >
                             {isLoading ? (
                                 <>

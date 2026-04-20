@@ -1,641 +1,939 @@
-/**
- * Use Cases Page
- *
- * Full-page manager for project use cases:
- * - Card grid with badges for priority & status
- * - Filter bar: search, status, priority, actor/role
- * - Create / Edit modal with all fields
- * - Delete confirmation modal
- */
+import { useState, useMemo, useEffect } from "react";
+import { useApi } from "../hooks/useApi";
+import { useProjectStore } from "../hooks/useProjectStore";
+import type { UseCaseSchema } from "../types/api";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import useApi from "../hooks/useApi";
-import type { UseCaseSchema, UseCaseStep } from "../types/api";
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Priority = "low" | "medium" | "high" | "critical";
+type Status = "draft" | "active" | "completed" | "archived";
 
-/* ━━━ Constants ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-const PRIORITIES = ["low", "medium", "high", "critical"] as const;
-const STATUSES = ["draft", "active", "completed", "archived"] as const;
-
-const PRIORITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-    low: { bg: "rgba(100,200,120,0.10)", text: "#6ee7b7", border: "rgba(100,200,120,0.25)" },
-    medium: { bg: "rgba(250,200,60,0.10)", text: "#fbbf24", border: "rgba(250,200,60,0.25)" },
-    high: { bg: "rgba(250,130,60,0.10)", text: "#fb923c", border: "rgba(250,130,60,0.25)" },
-    critical: { bg: "rgba(240,70,70,0.10)", text: "#f87171", border: "rgba(240,70,70,0.25)" },
-};
-
-const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-    draft: { bg: "rgba(160,160,180,0.10)", text: "#a1a1aa", border: "rgba(160,160,180,0.25)" },
-    active: { bg: "rgba(96,165,250,0.10)", text: "#60a5fa", border: "rgba(96,165,250,0.25)" },
-    completed: { bg: "rgba(52,211,153,0.10)", text: "#34d399", border: "rgba(52,211,153,0.25)" },
-    archived: { bg: "rgba(120,113,108,0.10)", text: "#78716c", border: "rgba(120,113,108,0.25)" },
-};
-
-/* ━━━ Badge ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-const Badge: React.FC<{ label: string; colors: { bg: string; text: string; border: string } }> = ({ label, colors }) => (
-    <span
-        style={{
-            background: colors.bg,
-            color: colors.text,
-            border: `1px solid ${colors.border}`,
-            padding: "2px 10px",
-            borderRadius: 20,
-            fontSize: 10,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            whiteSpace: "nowrap",
-        }}
-    >
-        {label}
-    </span>
-);
-
-/* ━━━ Toast ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-const Toast: React.FC<{ message: string | null; type?: "error" | "success"; onDismiss: () => void }> = ({ message, type = "error", onDismiss }) => {
-    useEffect(() => {
-        if (message) { const t = setTimeout(onDismiss, 4000); return () => clearTimeout(t); }
-    }, [message, onDismiss]);
-
-    if (!message) return null;
-    return (
-        <div
-            className={`fixed bottom-6 right-6 z-[300] max-w-md px-5 py-3 rounded-xl shadow-2xl border text-sm font-medium flex items-center gap-3 ${type === "error" ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}
-            style={{ animation: "uc-slideUp 0.3s ease-out" }}
-        >
-            <span className="flex-1">{message}</span>
-            <button onClick={onDismiss} className="opacity-60 hover:opacity-100">✕</button>
-        </div>
-    );
-};
-
-/* ━━━ Confirm Delete Modal ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-const ConfirmDeleteModal: React.FC<{
-    isOpen: boolean;
-    name: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-}> = ({ isOpen, name, onConfirm, onCancel }) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
-            <div className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-2xl shadow-2xl p-6 space-y-4" style={{ animation: "uc-scaleUp 0.2s ease-out" }}>
-                <h3 className="text-lg font-bold text-[var(--ide-text)]">Delete Use Case?</h3>
-                <p className="text-sm text-[var(--ide-text-secondary)]">
-                    Are you sure you want to delete <strong className="text-[var(--ide-text)]">"{name}"</strong>? This cannot be undone.
-                </p>
-                <div className="flex gap-3 pt-1">
-                    <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-semibold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] transition-all">Cancel</button>
-                    <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-xs uppercase tracking-wider transition-all">Delete</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-/* ━━━ Create/Edit Modal ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-interface FormData {
-    name: string;
-    description: string;
-    actors: string[];
-    preconditions: string;
-    postconditions: string;
-    steps: UseCaseStep[];
-    priority: string;
-    status: string;
-    category: string;
+interface UseCaseStep {
+  order: number;
+  description: string;
 }
 
-const EMPTY_FORM: FormData = {
-    name: "",
-    description: "",
-    actors: [],
-    preconditions: "",
-    postconditions: "",
-    steps: [{ order: 1, description: "" }],
-    priority: "medium",
-    status: "draft",
-    category: "",
+interface UseCase {
+  id: string;
+  name: string;
+  description: string;
+  actors: string[];
+  preconditions: string;
+  postconditions: string;
+  steps: UseCaseStep[];
+  priority: Priority;
+  status: Status;
+  category: string;
+  createdAt: string;
+}
+
+// ─── Data Source ─────────────────────────────────────────────────────────────
+const SEED: UseCase[] = [];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const uid = () => `uc-${Math.random().toString(36).slice(2, 8)}`;
+
+const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string; dot: string }> = {
+  critical: { label: "Critical", color: "#ff4560", bg: "rgba(255,69,96,0.12)", dot: "#ff4560" },
+  high:     { label: "High",     color: "#f5a623", bg: "rgba(245,166,35,0.12)", dot: "#f5a623" },
+  medium:   { label: "Medium",   color: "#00b4d8", bg: "rgba(0,180,216,0.12)", dot: "#00b4d8" },
+  low:      { label: "Low",      color: "#6bcb77", bg: "rgba(107,203,119,0.12)", dot: "#6bcb77" },
 };
 
-const UseCaseFormModal: React.FC<{
-    isOpen: boolean;
-    editingUseCase: UseCaseSchema | null;
-    onSave: (data: FormData) => void;
-    onCancel: () => void;
-}> = ({ isOpen, editingUseCase, onSave, onCancel }) => {
-    const [form, setForm] = useState<FormData>(EMPTY_FORM);
-    const [actorInput, setActorInput] = useState("");
-    const nameRef = useRef<HTMLInputElement>(null);
+const STATUS_META: Record<Status, { label: string; color: string; bg: string }> = {
+  active:    { label: "Active",    color: "#00d4ff", bg: "rgba(0,212,255,0.1)"  },
+  draft:     { label: "Draft",     color: "#8b9cba", bg: "rgba(139,156,186,0.1)" },
+  completed: { label: "Completed", color: "#6bcb77", bg: "rgba(107,203,119,0.1)" },
+  archived:  { label: "Archived",  color: "#5a6a82", bg: "rgba(90,106,130,0.1)"  },
+};
 
-    useEffect(() => {
-        if (isOpen) {
-            if (editingUseCase) {
-                setForm({
-                    name: editingUseCase.name,
-                    description: editingUseCase.description,
-                    actors: editingUseCase.actors || [],
-                    preconditions: editingUseCase.preconditions,
-                    postconditions: editingUseCase.postconditions,
-                    steps: editingUseCase.steps.length > 0 ? editingUseCase.steps : [{ order: 1, description: "" }],
-                    priority: editingUseCase.priority,
-                    status: editingUseCase.status,
-                    category: editingUseCase.category,
-                });
-            } else {
-                setForm(EMPTY_FORM);
-            }
-            setActorInput("");
-            setTimeout(() => nameRef.current?.focus(), 120);
-        }
-    }, [isOpen, editingUseCase]);
+// ─── Sub-Components ────────────────────────────────────────────────────────────
 
-    if (!isOpen) return null;
+const Badge = ({ text, color, bg }: { text: string; color: string; bg: string }) => (
+  <span style={{
+    display: "inline-flex", alignItems: "center", gap: 5,
+    padding: "3px 10px", borderRadius: 20, fontSize: 11,
+    fontFamily: "'Space Mono', monospace", letterSpacing: "0.04em",
+    color, background: bg, border: `1px solid ${color}33`,
+    fontWeight: 500, textTransform: "uppercase",
+  }}>
+    <span style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
+    {text}
+  </span>
+);
 
-    const set = (key: keyof FormData, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+const IconSearch = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+  </svg>
+);
 
-    const addActor = () => {
-        const trimmed = actorInput.trim();
-        if (trimmed && !form.actors.includes(trimmed)) {
-            set("actors", [...form.actors, trimmed]);
-        }
-        setActorInput("");
-    };
+const IconPlus = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
 
-    const removeActor = (actor: string) => set("actors", form.actors.filter(a => a !== actor));
+const IconClose = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>
+);
 
-    const addStep = () => set("steps", [...form.steps, { order: form.steps.length + 1, description: "" }]);
+const IconEdit = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
 
-    const updateStep = (index: number, desc: string) => {
-        const updated = [...form.steps];
-        updated[index] = { ...updated[index], description: desc };
-        set("steps", updated);
-    };
+const IconTrash = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+  </svg>
+);
 
-    const removeStep = (index: number) => {
-        const updated = form.steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i + 1 }));
-        set("steps", updated.length > 0 ? updated : [{ order: 1, description: "" }]);
-    };
+const IconUsers = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!form.name.trim()) return;
-        onSave({
-            ...form,
-            name: form.name.trim(),
-            steps: form.steps.filter(s => s.description.trim()),
-        });
-    };
+const IconSteps = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
 
-    const labelCls = "text-xs font-semibold text-[var(--ide-text-muted)] uppercase tracking-wide mb-1.5 block";
-    const inputCls = "w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-xl px-4 py-2.5 text-sm text-[var(--ide-text)] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all placeholder:text-[var(--ide-text-muted)]/50";
-    const selectCls = "bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--ide-text)] focus:outline-none focus:border-indigo-500/50 transition-all cursor-pointer";
+// ─── Card ─────────────────────────────────────────────────────────────────────
+const UseCaseCard = ({
+  uc, onEdit, onDelete,
+}: { uc: UseCase; onEdit: (u: UseCase) => void; onDelete: (id: string) => void }) => {
+  const [hovered, setHovered] = useState(false);
+  const pm = PRIORITY_META[uc.priority];
+  const sm = STATUS_META[uc.status];
 
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/65 backdrop-blur-md" onClick={onCancel} />
-            <div
-                className="relative w-full max-w-2xl bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-3xl shadow-2xl overflow-hidden flex flex-col"
-                style={{ animation: "uc-scaleUp 0.25s cubic-bezier(0.34,1.56,0.64,1)", maxHeight: "85vh" }}
-                onClick={e => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="px-6 py-5 flex items-center justify-between border-b border-[var(--ide-border)] shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </div>
-                        <h3 className="text-lg font-bold text-[var(--ide-text)]">
-                            {editingUseCase ? "Edit Use Case" : "New Use Case"}
-                        </h3>
-                    </div>
-                    <button onClick={onCancel} className="w-9 h-9 flex items-center justify-center hover:bg-[var(--ide-bg-sidebar)] rounded-lg text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-all">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                </div>
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: "relative",
+        background: hovered
+          ? "linear-gradient(135deg, rgba(0,212,255,0.04) 0%, rgba(10,21,32,0.95) 60%)"
+          : "rgba(10,21,32,0.85)",
+        border: `1px solid ${hovered ? "rgba(0,212,255,0.35)" : "rgba(0,212,255,0.1)"}`,
+        borderRadius: 12,
+        padding: "20px 22px",
+        cursor: "pointer",
+        transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)",
+        backdropFilter: "blur(12px)",
+        boxShadow: hovered
+          ? "0 0 0 1px rgba(0,212,255,0.12), 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(0,212,255,0.05)"
+          : "0 2px 8px rgba(0,0,0,0.3)",
+        transform: hovered ? "translateY(-2px)" : "none",
+        overflow: "hidden",
+      }}
+    >
+      {/* Accent line top */}
+      <div style={{
+        position: "absolute", top: 0, left: 22, right: 22, height: 1,
+        background: hovered ? `linear-gradient(90deg, transparent, ${pm.dot}88, transparent)` : "transparent",
+        transition: "all 0.3s ease",
+      }} />
 
-                {/* Body */}
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar">
-                    <div className="p-6 space-y-5">
-                        {/* Row: Name + Category */}
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="col-span-2">
-                                <label className={labelCls}>Name *</label>
-                                <input ref={nameRef} className={inputCls} value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. User Registration" required />
-                            </div>
-                            <div>
-                                <label className={labelCls}>Category</label>
-                                <input className={inputCls} value={form.category} onChange={e => set("category", e.target.value)} placeholder="e.g. Auth" />
-                            </div>
-                        </div>
-
-                        {/* Description */}
-                        <div>
-                            <label className={labelCls}>Description</label>
-                            <textarea className={inputCls + " resize-none"} rows={2} value={form.description} onChange={e => set("description", e.target.value)} placeholder="Brief description of this use case..." />
-                        </div>
-
-                        {/* Row: Priority + Status */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelCls}>Priority</label>
-                                <select className={selectCls + " w-full"} value={form.priority} onChange={e => set("priority", e.target.value)}>
-                                    {PRIORITIES.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={labelCls}>Status</label>
-                                <select className={selectCls + " w-full"} value={form.status} onChange={e => set("status", e.target.value)}>
-                                    {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Actors/Roles */}
-                        <div>
-                            <label className={labelCls}>Actors / Roles</label>
-                            <div className="flex gap-2 mb-2 flex-wrap">
-                                {form.actors.map(actor => (
-                                    <span key={actor} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 text-xs font-medium">
-                                        {actor}
-                                        <button type="button" onClick={() => removeActor(actor)} className="hover:text-red-400 transition-colors">✕</button>
-                                    </span>
-                                ))}
-                            </div>
-                            <div className="flex gap-2">
-                                <input
-                                    className={inputCls + " flex-1"}
-                                    value={actorInput}
-                                    onChange={e => setActorInput(e.target.value)}
-                                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addActor(); } }}
-                                    placeholder="Type a role and press Enter..."
-                                />
-                                <button type="button" onClick={addActor} className="px-4 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold hover:bg-indigo-600/30 transition-all">Add</button>
-                            </div>
-                        </div>
-
-                        {/* Preconditions + Postconditions */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className={labelCls}>Preconditions</label>
-                                <textarea className={inputCls + " resize-none"} rows={2} value={form.preconditions} onChange={e => set("preconditions", e.target.value)} placeholder="What must be true before..." />
-                            </div>
-                            <div>
-                                <label className={labelCls}>Postconditions</label>
-                                <textarea className={inputCls + " resize-none"} rows={2} value={form.postconditions} onChange={e => set("postconditions", e.target.value)} placeholder="What will be true after..." />
-                            </div>
-                        </div>
-
-                        {/* Steps */}
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <label className={labelCls + " mb-0"}>Steps</label>
-                                <button type="button" onClick={addStep} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">+ Add Step</button>
-                            </div>
-                            <div className="space-y-2">
-                                {form.steps.map((step, i) => (
-                                    <div key={i} className="flex items-start gap-2">
-                                        <span className="w-7 h-9 flex items-center justify-center text-xs font-bold text-[var(--ide-text-muted)] shrink-0">{i + 1}.</span>
-                                        <input
-                                            className={inputCls + " flex-1"}
-                                            value={step.description}
-                                            onChange={e => updateStep(i, e.target.value)}
-                                            placeholder={`Step ${i + 1} description...`}
-                                        />
-                                        {form.steps.length > 1 && (
-                                            <button type="button" onClick={() => removeStep(i)} className="w-9 h-9 flex items-center justify-center text-[var(--ide-text-muted)] hover:text-red-400 transition-colors shrink-0">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="sticky bottom-0 px-6 py-4 bg-[var(--ide-bg-panel)] border-t border-[var(--ide-border)] flex items-center justify-end gap-3 shrink-0">
-                        <button type="button" onClick={onCancel} className="px-5 py-2.5 text-xs font-semibold text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] transition-all">Cancel</button>
-                        <button
-                            type="submit"
-                            disabled={!form.name.trim()}
-                            className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-40"
-                        >
-                            {editingUseCase ? "Save Changes" : "Create Use Case"}
-                        </button>
-                    </div>
-                </form>
-            </div>
+      {/* Category tag */}
+      <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{
+          fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: "0.08em",
+          color: "rgba(0,212,255,0.5)", textTransform: "uppercase",
+        }}>
+          {uc.category}
+        </span>
+        <div style={{ display: "flex", gap: 6, opacity: hovered ? 1 : 0, transition: "opacity 0.2s" }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(uc); }}
+            style={{
+              background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
+              borderRadius: 6, color: "#00d4ff", cursor: "pointer", padding: "4px 8px",
+              display: "flex", alignItems: "center",
+            }}
+          ><IconEdit /></button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(uc.id); }}
+            style={{
+              background: "rgba(255,69,96,0.08)", border: "1px solid rgba(255,69,96,0.2)",
+              borderRadius: 6, color: "#ff4560", cursor: "pointer", padding: "4px 8px",
+              display: "flex", alignItems: "center",
+            }}
+          ><IconTrash /></button>
         </div>
-    );
+      </div>
+
+      {/* Title */}
+      <h3 style={{
+        margin: "0 0 8px", fontSize: 15, fontFamily: "'Outfit', sans-serif",
+        fontWeight: 600, color: "#e8f4f8", lineHeight: 1.35, letterSpacing: "-0.01em",
+      }}>{uc.name}</h3>
+
+      {/* Description */}
+      <p style={{
+        margin: "0 0 16px", fontSize: 12.5, color: "rgba(180,210,225,0.6)",
+        lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2,
+        WebkitBoxOrient: "vertical", overflow: "hidden",
+      }}>{uc.description}</p>
+
+      {/* Badges */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+        <Badge text={pm.label} color={pm.color} bg={pm.bg} />
+        <Badge text={sm.label} color={sm.color} bg={sm.bg} />
+      </div>
+
+      {/* Footer meta */}
+      <div style={{
+        borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: 12,
+        display: "flex", gap: 16, alignItems: "center",
+      }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(0,212,255,0.45)" }}>
+          <IconUsers />
+          <span style={{ color: "rgba(180,210,225,0.55)" }}>{uc.actors.length} actor{uc.actors.length !== 1 ? "s" : ""}</span>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(0,212,255,0.45)" }}>
+          <IconSteps />
+          <span style={{ color: "rgba(180,210,225,0.55)" }}>{uc.steps.length} steps</span>
+        </span>
+      </div>
+    </div>
+  );
 };
 
-/* ━━━ Main Page ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+// ─── Modal ─────────────────────────────────────────────────────────────────────
+const EMPTY: Omit<UseCase, "id" | "createdAt"> = {
+  name: "", description: "", actors: [],
+  preconditions: "", postconditions: "",
+  steps: [{ order: 1, description: "" }],
+  priority: "medium", status: "draft", category: "",
+};
 
-const UseCasesPage: React.FC = () => {
-    const api = useApi();
-    const [useCases, setUseCases] = useState<UseCaseSchema[]>([]);
-    const [loading, setLoading] = useState(true);
+const Modal = ({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial?: UseCase;
+  onSave: (uc: UseCase) => void;
+  onClose: () => void;
+}) => {
+  const [form, setForm] = useState<Omit<UseCase, "id" | "createdAt">>(
+    initial ? { ...initial } : { ...EMPTY }
+  );
+  const [actorInput, setActorInput] = useState("");
+  const [activeTab, setActiveTab] = useState<"core" | "flow" | "conditions">("core");
 
-    // Filters
-    const [searchQuery, setSearchQuery] = useState("");
-    const [filterStatus, setFilterStatus] = useState<string>("all");
-    const [filterPriority, setFilterPriority] = useState<string>("all");
-    const [filterActor, setFilterActor] = useState<string>("all");
+  const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
-    // Modals
-    const [showFormModal, setShowFormModal] = useState(false);
-    const [editingUseCase, setEditingUseCase] = useState<UseCaseSchema | null>(null);
-    const [deleteTarget, setDeleteTarget] = useState<UseCaseSchema | null>(null);
+  const addActor = () => {
+    if (actorInput.trim()) {
+      set("actors", [...form.actors, actorInput.trim()]);
+      setActorInput("");
+    }
+  };
 
-    // Toast
-    const [toast, setToast] = useState<{ message: string; type: "error" | "success" } | null>(null);
-    const showToast = (message: string, type: "error" | "success" = "error") => setToast({ message, type });
+  const addStep = () =>
+    set("steps", [...form.steps, { order: form.steps.length + 1, description: "" }]);
 
-    const loadUseCases = useCallback(async () => {
-        setLoading(true);
-        try {
-            const list = await api.listUseCases();
-            setUseCases(list);
-        } catch (err) {
-            console.error("Failed to load use cases:", err);
-        } finally {
-            setLoading(false);
-        }
-    }, [api]);
+  const updateStep = (i: number, val: string) => {
+    const steps = [...form.steps];
+    steps[i] = { ...steps[i], description: val };
+    set("steps", steps);
+  };
 
-    useEffect(() => { loadUseCases(); }, []);
+  const removeStep = (i: number) =>
+    set("steps", form.steps.filter((_, idx) => idx !== i).map((s, idx) => ({ ...s, order: idx + 1 })));
 
-    // All unique actors across use cases
-    const allActors = useMemo(() => {
-        const set = new Set<string>();
-        useCases.forEach(uc => (uc.actors || []).forEach(a => set.add(a)));
-        return Array.from(set).sort();
-    }, [useCases]);
+  const handleSave = () => {
+    if (!form.name.trim()) return;
+    onSave({
+      ...form,
+      id: initial?.id ?? uid(),
+      createdAt: initial?.createdAt ?? new Date().toISOString().split("T")[0],
+    });
+  };
 
-    // Filtered list
-    const filtered = useMemo(() => {
-        return useCases.filter(uc => {
-            if (searchQuery && !uc.name.toLowerCase().includes(searchQuery.toLowerCase()) && !uc.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            if (filterStatus !== "all" && uc.status !== filterStatus) return false;
-            if (filterPriority !== "all" && uc.priority !== filterPriority) return false;
-            if (filterActor !== "all" && !(uc.actors || []).includes(filterActor)) return false;
-            return true;
-        });
-    }, [useCases, searchQuery, filterStatus, filterPriority, filterActor]);
+  const inputStyle: React.CSSProperties = {
+    width: "100%", background: "rgba(0,212,255,0.04)",
+    border: "1px solid rgba(0,212,255,0.15)", borderRadius: 8,
+    color: "#e8f4f8", fontSize: 13, padding: "9px 12px",
+    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+    transition: "border-color 0.2s",
+  };
 
-    const handleCreate = () => {
-        setEditingUseCase(null);
-        setShowFormModal(true);
-    };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10.5, fontFamily: "'Space Mono', monospace",
+    letterSpacing: "0.08em", color: "rgba(0,212,255,0.55)",
+    textTransform: "uppercase", display: "block", marginBottom: 6,
+  };
 
-    const handleEdit = (uc: UseCaseSchema) => {
-        setEditingUseCase(uc);
-        setShowFormModal(true);
-    };
+  const tabs = [
+    { key: "core", label: "Core Info" },
+    { key: "flow", label: "Steps & Actors" },
+    { key: "conditions", label: "Conditions" },
+  ] as const;
 
-    const handleFormSave = async (data: FormData) => {
-        try {
-            if (editingUseCase) {
-                await api.updateUseCase(editingUseCase.id, data);
-                showToast(`Updated "${data.name}"`, "success");
-            } else {
-                await api.createUseCase(data);
-                showToast(`Created "${data.name}"`, "success");
-            }
-            setShowFormModal(false);
-            setEditingUseCase(null);
-            await loadUseCases();
-        } catch (err) {
-            showToast(`Failed: ${err}`);
-        }
-    };
-
-    const handleDeleteConfirm = async () => {
-        if (!deleteTarget) return;
-        try {
-            await api.deleteUseCase(deleteTarget.id);
-            showToast(`Deleted "${deleteTarget.name}"`, "success");
-            setDeleteTarget(null);
-            await loadUseCases();
-        } catch (err) {
-            showToast(`Failed to delete: ${err}`);
-        }
-    };
-
-    const selectCls = "bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--ide-text)] focus:outline-none focus:border-indigo-500/50 transition-all cursor-pointer";
-
-    return (
-        <div className="flex flex-col flex-1 overflow-hidden h-full bg-[var(--ide-bg)] page-enter">
-            {/* ─── Header ─────────────────────────────── */}
-            <div className="shrink-0 px-6 py-4 border-b border-[var(--ide-border)] bg-[var(--ide-chrome)] animate-slide-down">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h1 className="text-base font-bold text-[var(--ide-text)]">Use Cases</h1>
-                            <p className="text-xs text-[var(--ide-text-muted)]">{useCases.length} total · {filtered.length} shown</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={handleCreate}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-indigo-500/20"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                        New Use Case
-                    </button>
-                </div>
-
-                {/* Filter Bar */}
-                <div className="flex items-center gap-3 flex-wrap">
-                    {/* Search */}
-                    <div className="relative flex-1 min-w-[200px] max-w-sm">
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--ide-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" strokeWidth="2" /><path strokeLinecap="round" strokeWidth="2" d="m21 21-4.35-4.35" /></svg>
-                        <input
-                            className="w-full bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-lg pl-9 pr-3 py-1.5 text-xs text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/50 focus:outline-none focus:border-indigo-500/50 transition-all"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Search use cases..."
-                        />
-                    </div>
-
-                    {/* Status filter */}
-                    <select className={selectCls} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                        <option value="all">All Statuses</option>
-                        {STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                    </select>
-
-                    {/* Priority filter */}
-                    <select className={selectCls} value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
-                        <option value="all">All Priorities</option>
-                        {PRIORITIES.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-                    </select>
-
-                    {/* Actor filter */}
-                    {allActors.length > 0 && (
-                        <select className={selectCls} value={filterActor} onChange={e => setFilterActor(e.target.value)}>
-                            <option value="all">All Actors</option>
-                            {allActors.map(a => <option key={a} value={a}>{a}</option>)}
-                        </select>
-                    )}
-
-                    {/* Reset filters */}
-                    {(searchQuery || filterStatus !== "all" || filterPriority !== "all" || filterActor !== "all") && (
-                        <button
-                            onClick={() => { setSearchQuery(""); setFilterStatus("all"); setFilterPriority("all"); setFilterActor("all"); }}
-                            className="text-xs text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors"
-                        >
-                            ✕ Clear
-                        </button>
-                    )}
-                </div>
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 1000,
+      background: "rgba(2,8,18,0.85)", backdropFilter: "blur(8px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20,
+    }}>
+      <div style={{
+        background: "linear-gradient(145deg, #0d1f31 0%, #091628 100%)",
+        border: "1px solid rgba(0,212,255,0.2)",
+        borderRadius: 16, width: "100%", maxWidth: 620,
+        maxHeight: "90vh", display: "flex", flexDirection: "column",
+        boxShadow: "0 0 0 1px rgba(0,212,255,0.05), 0 24px 80px rgba(0,0,0,0.7)",
+        overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px 24px", borderBottom: "1px solid rgba(0,212,255,0.08)",
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.1em", marginBottom: 4 }}>
+              {initial ? "EDIT USE CASE" : "NEW USE CASE"}
             </div>
-
-            {/* ─── Content ────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                {loading ? (
-                    <div className="flex items-center justify-center h-full text-[var(--ide-text-muted)]">
-                        <span className="animate-pulse text-sm">Loading use cases...</span>
-                    </div>
-                ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-[var(--ide-text-muted)]">
-                        <svg className="w-16 h-16 mb-4 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        {useCases.length === 0 ? (
-                            <>
-                                <p className="text-sm font-medium mb-1">No use cases yet</p>
-                                <p className="text-xs mb-4">Click the button above to create your first use case</p>
-                                <button onClick={handleCreate} className="px-5 py-2 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold hover:bg-indigo-600/30 transition-all">
-                                    + New Use Case
-                                </button>
-                            </>
-                        ) : (
-                            <p className="text-sm">No use cases match your filters</p>
-                        )}
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {filtered.map(uc => (
-                            <UseCaseCard
-                                key={uc.id}
-                                useCase={uc}
-                                onEdit={() => handleEdit(uc)}
-                                onDelete={() => setDeleteTarget(uc)}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* ─── Modals ─────────────────────────────── */}
-            <UseCaseFormModal
-                isOpen={showFormModal}
-                editingUseCase={editingUseCase}
-                onSave={handleFormSave}
-                onCancel={() => { setShowFormModal(false); setEditingUseCase(null); }}
-            />
-
-            <ConfirmDeleteModal
-                isOpen={!!deleteTarget}
-                name={deleteTarget?.name || ""}
-                onConfirm={handleDeleteConfirm}
-                onCancel={() => setDeleteTarget(null)}
-            />
-
-            <Toast
-                message={toast?.message || null}
-                type={toast?.type}
-                onDismiss={() => setToast(null)}
-            />
-
-            {/* Scoped animations */}
-            <style>{`
-                @keyframes uc-scaleUp {
-                    from { opacity: 0; transform: scale(0.95) translateY(8px); }
-                    to { opacity: 1; transform: scale(1) translateY(0); }
-                }
-                @keyframes uc-slideUp {
-                    from { opacity: 0; transform: translateY(12px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
+            <h2 style={{ margin: 0, fontSize: 17, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#e8f4f8" }}>
+              {initial ? initial.name : "Define Interaction"}
+            </h2>
+          </div>
+          <button onClick={onClose} style={{
+            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8, color: "rgba(180,210,225,0.6)", cursor: "pointer",
+            padding: "6px 8px", display: "flex", alignItems: "center",
+          }}><IconClose /></button>
         </div>
-    );
-};
 
-/* ━━━ Use Case Card ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+        {/* Tabs */}
+        <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(0,212,255,0.08)", flexShrink: 0 }}>
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                padding: "12px 16px 10px", fontSize: 12.5,
+                fontFamily: "'Space Mono', monospace", letterSpacing: "0.03em",
+                color: activeTab === t.key ? "#00d4ff" : "rgba(180,210,225,0.45)",
+                borderBottom: `2px solid ${activeTab === t.key ? "#00d4ff" : "transparent"}`,
+                transition: "all 0.2s", marginBottom: -1,
+              }}
+            >{t.label}</button>
+          ))}
+        </div>
 
-const UseCaseCard: React.FC<{
-    useCase: UseCaseSchema;
-    onEdit: () => void;
-    onDelete: () => void;
-}> = ({ useCase, onEdit, onDelete }) => {
-    const stepCount = (useCase.steps || []).filter(s => s.description).length;
-
-    return (
-        <div
-            onClick={onEdit}
-            className="group relative bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] rounded-2xl p-5 cursor-pointer hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200 hover-lift hover-glow animate-scale-in"
-            style={{ animation: "uc-scaleUp 0.25s ease-out" }}
-        >
-            {/* Top row: badges */}
-            <div className="flex items-center gap-2 mb-3">
-                <Badge label={useCase.priority} colors={PRIORITY_COLORS[useCase.priority] || PRIORITY_COLORS.medium} />
-                <Badge label={useCase.status} colors={STATUS_COLORS[useCase.status] || STATUS_COLORS.draft} />
-                {useCase.category && (
-                    <span className="text-[10px] font-medium text-[var(--ide-text-muted)] bg-[var(--ide-bg-elevated)] px-2 py-0.5 rounded-full border border-[var(--ide-border)]">
-                        {useCase.category}
-                    </span>
-                )}
-                <div className="flex-1" />
-                <button
-                    onClick={e => { e.stopPropagation(); onDelete(); }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--ide-text-muted)] hover:text-red-400 transition-all"
-                    title="Delete"
-                >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
-            </div>
-
-            {/* Title */}
-            <h3 className="text-sm font-bold text-[var(--ide-text)] mb-1 truncate">{useCase.name}</h3>
-
-            {/* Description */}
-            {useCase.description && (
-                <p className="text-xs text-[var(--ide-text-secondary)] mb-3 line-clamp-2">{useCase.description}</p>
-            )}
-
-            {/* Actors */}
-            {useCase.actors && useCase.actors.length > 0 && (
-                <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-                    <svg className="w-3 h-3 text-[var(--ide-text-muted)] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                    {useCase.actors.map(actor => (
-                        <span key={actor} className="text-[10px] font-medium text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-full">
-                            {actor}
-                        </span>
+        {/* Body */}
+        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+          {/* ── Tab: Core ── */}
+          {activeTab === "core" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Name *</label>
+                <input style={inputStyle} value={form.name} placeholder="e.g. Reset Password"
+                  onChange={(e) => set("name", e.target.value)} />
+              </div>
+              <div>
+                <label style={labelStyle}>Description</label>
+                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 80 }}
+                  value={form.description} placeholder="Describe the goal of this interaction…"
+                  onChange={(e) => set("description", e.target.value)} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Category</label>
+                  <input style={inputStyle} value={form.category} placeholder="e.g. Auth"
+                    onChange={(e) => set("category", e.target.value)} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Priority</label>
+                  <select style={{ ...inputStyle, cursor: "pointer" }} value={form.priority}
+                    onChange={(e) => set("priority", e.target.value as Priority)}>
+                    {(["critical", "high", "medium", "low"] as Priority[]).map((p) => (
+                      <option key={p} value={p} style={{ background: "#0d1f31" }}>{PRIORITY_META[p].label}</option>
                     ))}
+                  </select>
                 </div>
-            )}
-
-            {/* Footer: steps count + date */}
-            <div className="flex items-center justify-between text-[10px] text-[var(--ide-text-muted)] pt-2 border-t border-[var(--ide-border)]/50">
-                <span>{stepCount > 0 ? `${stepCount} step${stepCount !== 1 ? 's' : ''}` : 'No steps'}</span>
-                <span>{new Date(useCase.updated_at).toLocaleDateString()}</span>
+                <div>
+                  <label style={labelStyle}>Status</label>
+                  <select style={{ ...inputStyle, cursor: "pointer" }} value={form.status}
+                    onChange={(e) => set("status", e.target.value as Status)}>
+                    {(["draft", "active", "completed", "archived"] as Status[]).map((s) => (
+                      <option key={s} value={s} style={{ background: "#0d1f31" }}>{STATUS_META[s].label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* ── Tab: Flow ── */}
+          {activeTab === "flow" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Actors */}
+              <div>
+                <label style={labelStyle}>Actors</label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <input style={{ ...inputStyle, flex: 1 }} value={actorInput}
+                    placeholder="Add actor role…"
+                    onChange={(e) => setActorInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addActor()} />
+                  <button onClick={addActor} style={{
+                    background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.25)",
+                    borderRadius: 8, color: "#00d4ff", cursor: "pointer", padding: "0 14px",
+                    fontSize: 18, display: "flex", alignItems: "center",
+                  }}>+</button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {form.actors.map((a, i) => (
+                    <span key={i} style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
+                      borderRadius: 20, padding: "4px 10px", fontSize: 12, color: "#00d4ff",
+                    }}>
+                      {a}
+                      <span onClick={() => set("actors", form.actors.filter((_, j) => j !== i))}
+                        style={{ cursor: "pointer", opacity: 0.6, fontSize: 14 }}>×</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Steps */}
+              <div>
+                <label style={labelStyle}>Sequential Steps</label>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {form.steps.map((s, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{
+                        width: 24, height: 24, borderRadius: "50%",
+                        background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.25)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontFamily: "'Space Mono', monospace",
+                        color: "#00d4ff", flexShrink: 0,
+                      }}>{s.order}</span>
+                      <input style={{ ...inputStyle, flex: 1 }} value={s.description}
+                        placeholder={`Step ${s.order} description…`}
+                        onChange={(e) => updateStep(i, e.target.value)} />
+                      {form.steps.length > 1 && (
+                        <button onClick={() => removeStep(i)} style={{
+                          background: "rgba(255,69,96,0.06)", border: "1px solid rgba(255,69,96,0.15)",
+                          borderRadius: 6, color: "#ff4560", cursor: "pointer", padding: "6px 8px",
+                          display: "flex", alignItems: "center",
+                        }}><IconTrash /></button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={addStep} style={{
+                  marginTop: 10, background: "rgba(0,212,255,0.05)",
+                  border: "1px dashed rgba(0,212,255,0.2)", borderRadius: 8,
+                  color: "rgba(0,212,255,0.5)", cursor: "pointer", padding: "8px 16px",
+                  fontSize: 12, fontFamily: "'Space Mono', monospace", width: "100%",
+                  transition: "all 0.2s",
+                }}>+ Add Step</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Tab: Conditions ── */}
+          {activeTab === "conditions" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={labelStyle}>Preconditions</label>
+                <div style={{
+                  fontSize: 11, color: "rgba(0,212,255,0.4)", marginBottom: 8,
+                  fontFamily: "'Space Mono', monospace",
+                }}>State that must be true before this interaction begins</div>
+                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
+                  value={form.preconditions} placeholder="e.g. User has a verified account. Service is running."
+                  onChange={(e) => set("preconditions", e.target.value)} />
+              </div>
+              <div>
+                <label style={labelStyle}>Postconditions</label>
+                <div style={{
+                  fontSize: 11, color: "rgba(0,212,255,0.4)", marginBottom: 8,
+                  fontFamily: "'Space Mono', monospace",
+                }}>Expected outcome after successful completion</div>
+                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
+                  value={form.postconditions} placeholder="e.g. Session is created. User is redirected to dashboard."
+                  onChange={(e) => set("postconditions", e.target.value)} />
+              </div>
+            </div>
+          )}
         </div>
-    );
+
+        {/* Footer */}
+        <div style={{
+          padding: "14px 24px", borderTop: "1px solid rgba(0,212,255,0.08)",
+          display: "flex", justifyContent: "flex-end", gap: 10, flexShrink: 0,
+        }}>
+          <button onClick={onClose} style={{
+            background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8, color: "rgba(180,210,225,0.6)", cursor: "pointer",
+            padding: "9px 20px", fontSize: 13, fontFamily: "inherit",
+          }}>Cancel</button>
+          <button onClick={handleSave} style={{
+            background: "linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(0,180,216,0.15) 100%)",
+            border: "1px solid rgba(0,212,255,0.4)", borderRadius: 8,
+            color: "#00d4ff", cursor: "pointer", padding: "9px 22px",
+            fontSize: 13, fontFamily: "inherit", fontWeight: 500,
+            boxShadow: "0 0 16px rgba(0,212,255,0.1)",
+          }}>
+            {initial ? "Save Changes" : "Create Use Case"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-export default UseCasesPage;
+// ─── Detail Drawer ─────────────────────────────────────────────────────────────
+const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onEdit: () => void }) => {
+  const pm = PRIORITY_META[uc.priority];
+  const sm = STATUS_META[uc.status];
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 900,
+      display: "flex", justifyContent: "flex-end",
+    }} onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 440, height: "100%", overflowY: "auto",
+          background: "linear-gradient(180deg, #0d1f31 0%, #091628 100%)",
+          borderLeft: "1px solid rgba(0,212,255,0.15)",
+          boxShadow: "-20px 0 60px rgba(0,0,0,0.6)",
+          padding: "28px 28px 40px",
+          display: "flex", flexDirection: "column", gap: 20,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ flex: 1, paddingRight: 12 }}>
+            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.1em", marginBottom: 6 }}>
+              {uc.category} · {uc.id.toUpperCase()}
+            </div>
+            <h2 style={{ margin: 0, fontSize: 18, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#e8f4f8", lineHeight: 1.3 }}>{uc.name}</h2>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <button onClick={onEdit} style={{
+              background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
+              borderRadius: 8, color: "#00d4ff", cursor: "pointer", padding: "7px 12px",
+              display: "flex", alignItems: "center", gap: 6, fontSize: 12,
+            }}><IconEdit /> Edit</button>
+            <button onClick={onClose} style={{
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 8, color: "rgba(180,210,225,0.5)", cursor: "pointer",
+              padding: "7px 9px", display: "flex", alignItems: "center",
+            }}><IconClose /></button>
+          </div>
+        </div>
+
+        {/* Badges */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Badge text={pm.label} color={pm.color} bg={pm.bg} />
+          <Badge text={sm.label} color={sm.color} bg={sm.bg} />
+        </div>
+
+        {/* Description */}
+        <p style={{ margin: 0, fontSize: 13.5, color: "rgba(180,210,225,0.65)", lineHeight: 1.7 }}>{uc.description}</p>
+
+        <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: 4 }} />
+
+        {/* Actors */}
+        <div>
+          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.08em", marginBottom: 10 }}>ACTORS</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {uc.actors.map((a, i) => (
+              <span key={i} style={{
+                background: "rgba(0,212,255,0.07)", border: "1px solid rgba(0,212,255,0.18)",
+                borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#a8d8ea",
+              }}>{a}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Steps */}
+        <div>
+          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.08em", marginBottom: 12 }}>FLOW — {uc.steps.length} STEPS</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {uc.steps.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 14 }}>
+                {/* Timeline line */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%",
+                    background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, fontFamily: "'Space Mono', monospace", color: "#00d4ff",
+                  }}>{s.order}</div>
+                  {i < uc.steps.length - 1 && (
+                    <div style={{ width: 1, flex: 1, minHeight: 16, background: "linear-gradient(180deg, rgba(0,212,255,0.25) 0%, rgba(0,212,255,0.05) 100%)", marginTop: 4 }} />
+                  )}
+                </div>
+                <div style={{ paddingBottom: i < uc.steps.length - 1 ? 14 : 0, paddingTop: 2 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: "rgba(180,210,225,0.75)", lineHeight: 1.6 }}>{s.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Conditions */}
+        {(uc.preconditions || uc.postconditions) && (
+          <>
+            <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: 4 }} />
+            {uc.preconditions && (
+              <div>
+                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(245,166,35,0.6)", letterSpacing: "0.08em", marginBottom: 8 }}>PRECONDITIONS</div>
+                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(180,210,225,0.6)", lineHeight: 1.6, background: "rgba(245,166,35,0.04)", border: "1px solid rgba(245,166,35,0.12)", borderRadius: 8, padding: "10px 12px" }}>{uc.preconditions}</p>
+              </div>
+            )}
+            {uc.postconditions && (
+              <div>
+                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(107,203,119,0.6)", letterSpacing: "0.08em", marginBottom: 8 }}>POSTCONDITIONS</div>
+                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(180,210,225,0.6)", lineHeight: 1.6, background: "rgba(107,203,119,0.04)", border: "1px solid rgba(107,203,119,0.12)", borderRadius: 8, padding: "10px 12px" }}>{uc.postconditions}</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+export default function UseCasesPage() {
+  const api = useApi();
+  const { project } = useProjectStore();
+  const [useCases, setUseCases] = useState<UseCase[]>(SEED);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<Status | "all">("all");
+  const [filterPriority, setFilterPriority] = useState<Priority | "all">("all");
+  const [filterActor, setFilterActor] = useState<string>("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<UseCase | undefined>();
+  const [drawerTarget, setDrawerTarget] = useState<UseCase | undefined>();
+
+  const fromApiUseCase = (uc: UseCaseSchema): UseCase => ({
+    id: uc.id,
+    name: uc.name,
+    description: uc.description || "",
+    actors: Array.isArray(uc.actors) ? uc.actors : [],
+    preconditions: uc.preconditions || "",
+    postconditions: uc.postconditions || "",
+    steps: Array.isArray(uc.steps) ? uc.steps : [],
+    priority: uc.priority,
+    status: uc.status,
+    category: uc.category || "",
+    createdAt: (uc.created_at || "").slice(0, 10),
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadUseCases = async () => {
+      if (!project?.id) {
+        setUseCases([]);
+        return;
+      }
+
+      try {
+        const rows = (await api.listUseCases()) as UseCaseSchema[];
+        if (!cancelled) {
+          setUseCases(Array.isArray(rows) ? rows.map(fromApiUseCase) : []);
+        }
+      } catch (err) {
+        console.error("Failed to load use cases:", err);
+        if (!cancelled) {
+          setUseCases([]);
+        }
+      }
+    };
+
+    void loadUseCases();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, project?.id]);
+
+  const allActors = useMemo(() =>
+    [...new Set(useCases.flatMap((uc) => uc.actors))].sort(),
+    [useCases]
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return useCases.filter((uc) => {
+      if (q && !uc.name.toLowerCase().includes(q) && !uc.description.toLowerCase().includes(q)) return false;
+      if (filterStatus !== "all" && uc.status !== filterStatus) return false;
+      if (filterPriority !== "all" && uc.priority !== filterPriority) return false;
+      if (filterActor !== "all" && !uc.actors.includes(filterActor)) return false;
+      return true;
+    });
+  }, [useCases, search, filterStatus, filterPriority, filterActor]);
+
+  const stats = useMemo(() => ({
+    total: useCases.length,
+    active: useCases.filter((u) => u.status === "active").length,
+    critical: useCases.filter((u) => u.priority === "critical").length,
+    draft: useCases.filter((u) => u.status === "draft").length,
+  }), [useCases]);
+
+  const handleSave = async (uc: UseCase) => {
+    try {
+      if (useCases.some((u) => u.id === uc.id)) {
+        const updated = (await api.updateUseCase(uc.id, {
+          name: uc.name,
+          description: uc.description,
+          actors: uc.actors,
+          preconditions: uc.preconditions,
+          postconditions: uc.postconditions,
+          steps: uc.steps,
+          priority: uc.priority,
+          status: uc.status,
+          category: uc.category,
+        })) as UseCaseSchema;
+
+        setUseCases((prev) => prev.map((u) => (u.id === uc.id ? fromApiUseCase(updated) : u)));
+      } else {
+        const created = (await api.createUseCase({
+          name: uc.name,
+          description: uc.description,
+          actors: uc.actors,
+          preconditions: uc.preconditions,
+          postconditions: uc.postconditions,
+          steps: uc.steps,
+          priority: uc.priority,
+          status: uc.status,
+          category: uc.category,
+        })) as UseCaseSchema;
+
+        setUseCases((prev) => [fromApiUseCase(created), ...prev]);
+      }
+
+      setModalOpen(false);
+      setEditTarget(undefined);
+    } catch (err) {
+      console.error("Failed to save use case:", err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteUseCase(id);
+      setUseCases((prev) => prev.filter((u) => u.id !== id));
+      if (drawerTarget?.id === id) setDrawerTarget(undefined);
+    } catch (err) {
+      console.error("Failed to delete use case:", err);
+    }
+  };
+
+  const openEdit = (uc: UseCase) => {
+    setEditTarget(uc);
+    setDrawerTarget(undefined);
+    setModalOpen(true);
+  };
+
+  const selectStyle: React.CSSProperties = {
+    background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.15)",
+    borderRadius: 8, color: "#a8d8ea", fontSize: 12.5,
+    padding: "8px 12px", cursor: "pointer", outline: "none",
+    fontFamily: "'Space Mono', monospace",
+  };
+
+  return (
+    <div style={{
+      height: "100%", overflowY: "auto", position: "relative",
+      background: "linear-gradient(135deg, #020c18 0%, #051525 50%, #020c18 100%)",
+      fontFamily: "'Outfit', 'Space Mono', sans-serif",
+      color: "#e8f4f8",
+    }}>
+      {/* Background grid */}
+      <div style={{
+        position: "fixed", inset: 0, pointerEvents: "none",
+        backgroundImage: `
+          linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px)
+        `,
+        backgroundSize: "48px 48px",
+      }} />
+
+      <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+
+        {/* ── Header ── */}
+        <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{
+                width: 6, height: 24, background: "linear-gradient(180deg, #00d4ff, rgba(0,212,255,0.2))",
+                borderRadius: 3,
+              }} />
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", color: "#e8f4f8" }}>
+                Use Cases
+              </h1>
+            </div>
+            <p style={{ margin: 0, fontSize: 13.5, color: "rgba(180,210,225,0.5)", paddingLeft: 16, fontFamily: "'Space Mono', monospace" }}>
+              {stats.total} total · {stats.active} active · {stats.critical} critical
+            </p>
+          </div>
+          <button
+            onClick={() => { setEditTarget(undefined); setModalOpen(true); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "linear-gradient(135deg, rgba(0,212,255,0.18) 0%, rgba(0,150,200,0.12) 100%)",
+              border: "1px solid rgba(0,212,255,0.35)", borderRadius: 10,
+              color: "#00d4ff", cursor: "pointer", padding: "10px 20px",
+              fontSize: 13.5, fontFamily: "inherit", fontWeight: 500,
+              boxShadow: "0 0 20px rgba(0,212,255,0.08), inset 0 1px 0 rgba(255,255,255,0.05)",
+              transition: "all 0.2s",
+            }}
+          >
+            <IconPlus /> New Use Case
+          </button>
+        </div>
+
+        {/* ── Stats ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+          {[
+            { label: "Total", value: stats.total, color: "#00d4ff" },
+            { label: "Active", value: stats.active, color: "#6bcb77" },
+            { label: "Critical", value: stats.critical, color: "#ff4560" },
+            { label: "Draft", value: stats.draft, color: "#8b9cba" },
+          ].map((s) => (
+            <div key={s.label} style={{
+              background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.08)",
+              borderRadius: 10, padding: "14px 18px",
+              borderTop: `2px solid ${s.color}33`,
+            }}>
+              <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(180,210,225,0.4)", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label.toUpperCase()}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: s.color, letterSpacing: "-0.02em", fontFamily: "'Outfit', sans-serif" }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Filters ── */}
+        <div style={{
+          display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24,
+          background: "rgba(0,212,255,0.02)", border: "1px solid rgba(0,212,255,0.08)",
+          borderRadius: 12, padding: "14px 16px",
+        }}>
+          {/* Search */}
+          <div style={{ flex: 1, minWidth: 200, position: "relative", display: "flex", alignItems: "center" }}>
+            <span style={{ position: "absolute", left: 12, color: "rgba(0,212,255,0.4)", display: "flex" }}><IconSearch /></span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search use cases…"
+              style={{
+                width: "100%", background: "rgba(0,212,255,0.04)",
+                border: "1px solid rgba(0,212,255,0.15)", borderRadius: 8,
+                color: "#e8f4f8", fontSize: 13, padding: "8px 12px 8px 36px",
+                outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          <select style={selectStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as Status | "all")}>
+            <option value="all" style={{ background: "#0d1f31" }}>All Statuses</option>
+            {(["draft", "active", "completed", "archived"] as Status[]).map((s) => (
+              <option key={s} value={s} style={{ background: "#0d1f31" }}>{STATUS_META[s].label}</option>
+            ))}
+          </select>
+
+          <select style={selectStyle} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value as Priority | "all")}>
+            <option value="all" style={{ background: "#0d1f31" }}>All Priorities</option>
+            {(["critical", "high", "medium", "low"] as Priority[]).map((p) => (
+              <option key={p} value={p} style={{ background: "#0d1f31" }}>{PRIORITY_META[p].label}</option>
+            ))}
+          </select>
+
+          <select style={selectStyle} value={filterActor} onChange={(e) => setFilterActor(e.target.value)}>
+            <option value="all" style={{ background: "#0d1f31" }}>All Actors</option>
+            {allActors.map((a) => (
+              <option key={a} value={a} style={{ background: "#0d1f31" }}>{a}</option>
+            ))}
+          </select>
+
+          {(search || filterStatus !== "all" || filterPriority !== "all" || filterActor !== "all") && (
+            <button onClick={() => { setSearch(""); setFilterStatus("all"); setFilterPriority("all"); setFilterActor("all"); }}
+              style={{
+                background: "rgba(255,69,96,0.07)", border: "1px solid rgba(255,69,96,0.2)",
+                borderRadius: 8, color: "#ff4560", cursor: "pointer", padding: "8px 14px",
+                fontSize: 11.5, fontFamily: "'Space Mono', monospace",
+              }}>Clear</button>
+          )}
+        </div>
+
+        {/* ── Grid ── */}
+        {filtered.length === 0 ? (
+          <div style={{
+            textAlign: "center", padding: "80px 0",
+            color: "rgba(180,210,225,0.3)", fontFamily: "'Space Mono', monospace", fontSize: 13,
+          }}>
+            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>◈</div>
+            No use cases match your filters.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+            {filtered.map((uc) => (
+              <div key={uc.id} onClick={() => setDrawerTarget(uc)}>
+                <UseCaseCard uc={uc} onEdit={openEdit} onDelete={handleDelete} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {modalOpen && (
+        <Modal
+          initial={editTarget}
+          onSave={handleSave}
+          onClose={() => { setModalOpen(false); setEditTarget(undefined); }}
+        />
+      )}
+
+      {/* Drawer */}
+      {drawerTarget && !modalOpen && (
+        <Drawer
+          uc={drawerTarget}
+          onClose={() => setDrawerTarget(undefined)}
+          onEdit={() => openEdit(drawerTarget)}
+        />
+      )}
+
+      {/* Font import */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 3px; }
+        input::placeholder, textarea::placeholder { color: rgba(0,212,255,0.25); }
+        select option { background: #0d1f31; color: #e8f4f8; }
+      `}</style>
+    </div>
+  );
+}

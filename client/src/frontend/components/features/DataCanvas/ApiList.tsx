@@ -8,6 +8,7 @@ import React, { useState, useEffect } from "react";
 import { addApi, archiveApi, addLogicFlow, setActivePage, updateEndpoint } from "../../../stores/projectStore";
 import { useProjectStore } from "../../../hooks/useProjectStore";
 import PromptModal from "../../ui/PromptModal";
+import ConfirmModal from "../../Modals/ConfirmModal";
 import { useToast } from "../../../context/ToastContext";
 import type { DataShape, ShapeField } from "../../../hooks/useApi";
 
@@ -248,6 +249,7 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
     });
     const [reqBody, setReqBody] = useState<DataShape | undefined>(api.request_body);
     const [resBody, setResBody] = useState<DataShape | undefined>(api.response_body);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
     const backendFlows = (project?.logic_flows || []).filter(
         (flow) => !flow.archived && flow.context === "backend"
     );
@@ -285,7 +287,6 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
     };
 
     const handleDelete = async () => {
-        if (!confirm(`Delete endpoint "${api.name}"?`)) return;
         try {
             await archiveApi(api.id);
             onDelete();
@@ -295,6 +296,19 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
 
     return (
         <>
+            <ConfirmModal
+                isOpen={confirmDeleteOpen}
+                title="Delete Endpoint"
+                message={`Are you sure you want to delete the endpoint "${api.name}"?`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    setConfirmDeleteOpen(false);
+                    handleDelete();
+                }}
+                onCancel={() => setConfirmDeleteOpen(false)}
+            />
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -330,7 +344,7 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
                                 className="p-2 text-[var(--ide-text-muted)] hover:text-[var(--ide-primary)] hover:bg-[var(--ide-primary)]/10 rounded transition-colors" title="Edit">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
-                            <button onClick={handleDelete}
+                            <button onClick={() => setConfirmDeleteOpen(true)}
                                 className="p-2 text-[var(--ide-text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Delete">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>

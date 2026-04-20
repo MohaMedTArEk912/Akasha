@@ -5,4 +5,4 @@ export const BLOCK_EVENTS = [
     "onFocus", "onBlur", "onMouseEnter", "onMouseLeave", "onKeyDown",
 ];
 
-export const BINDING_TYPES = ["variable", "api", "state", "prop"];
+export const BINDING_TYPES = ["api", "state", "prop"];

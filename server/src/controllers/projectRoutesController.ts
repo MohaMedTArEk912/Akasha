@@ -512,7 +512,6 @@ export async function generateStructuredIdea(req: Request, res: Response) {
       include: {
         pages: true,
         blocks: true,
-        variables: true,
         dataModels: true,
         logicFlows: true,
         apis: true,
@@ -630,7 +629,6 @@ export async function generateStructuredIdea(req: Request, res: Response) {
       include: {
         pages: true,
         blocks: true,
-        variables: true,
         dataModels: true,
         logicFlows: true,
         apis: true,
@@ -643,7 +641,6 @@ export async function generateStructuredIdea(req: Request, res: Response) {
         updatedProject,
         updatedProject.pages,
         updatedProject.blocks,
-        updatedProject.variables,
         updatedProject.dataModels,
         updatedProject.logicFlows,
         updatedProject.apis,

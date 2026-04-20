@@ -16,7 +16,6 @@ const EventsPanel: React.FC<EventsPanelProps> = ({ eventHandlers, bindings, prop
     const [newBindingProp, setNewBindingProp] = useState("");
 
     const logicFlows = project?.logic_flows.filter((lf) => !lf.archived) || [];
-    const variables = project?.variables.filter((v) => !v.archived) || [];
 
     const usedEvents = eventHandlers.map((h) => h.event);
     const availableEvents = BLOCK_EVENTS.filter((e) => !usedEvents.includes(e));
@@ -46,7 +45,7 @@ const EventsPanel: React.FC<EventsPanelProps> = ({ eventHandlers, bindings, prop
     const handleAddBinding = (propName: string) => {
         if (!propName) return;
         setProp((p: CraftBlockProps) => {
-            p.bindings = { ...p.bindings, [propName]: { type: "variable", value: "" } };
+            p.bindings = { ...p.bindings, [propName]: { type: "state", value: "" } };
         });
         setNewBindingProp("");
     };
@@ -160,25 +159,12 @@ const EventsPanel: React.FC<EventsPanelProps> = ({ eventHandlers, bindings, prop
                                     <option key={t} value={t}>{t}</option>
                                 ))}
                             </select>
-                            {binding.type === "variable" ? (
-                                <select
-                                    value={String(binding.value || "")}
-                                    onChange={(e) => handleBindingChange(propName, binding.type, e.target.value)}
-                                    className="flex-1 px-2 py-1 text-xs bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded text-[var(--ide-text)] focus:outline-none"
-                                >
-                                    <option value="">-- Select variable --</option>
-                                    {variables.map((v) => (
-                                        <option key={v.id} value={v.id}>{v.name}</option>
-                                    ))}
-                                </select>
-                            ) : (
                                 <input
                                     value={String(binding.value || "")}
                                     onChange={(e) => handleBindingChange(propName, binding.type, e.target.value)}
                                     placeholder="value / path"
                                     className="flex-1 px-2 py-1 text-xs bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded text-[var(--ide-text)] focus:outline-none focus:border-[var(--ide-primary)]"
                                 />
-                            )}
                         </div>
                     </div>
                 ))}

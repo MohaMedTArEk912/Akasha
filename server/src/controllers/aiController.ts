@@ -64,13 +64,125 @@ function normalizeStringArray(value: unknown, maxItems = 5): string[] {
 
 function extractJsonObject(raw: string): string {
     let text = raw.trim();
+    // Remove potential markdown code fences
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) {
+
+    if (!text) {
         throw new Error('No JSON object found in model output');
     }
-    return text.slice(start, end + 1);
+
+    // If the whole response is already JSON, return it directly.
+    if (text.startsWith('{') || text.startsWith('[')) {
+        try {
+            JSON.parse(text);
+            return text;
+        } catch {
+            // Continue with balanced object extraction.
+        }
+    }
+
+    let inString = false;
+    let escapeNext = false;
+    let depth = 0;
+    let start = -1;
+    let bestCandidate = '';
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+
+        if (escapeNext) {
+            escapeNext = false;
+            continue;
+        }
+        if (ch === '\\') {
+            escapeNext = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString) {
+            continue;
+        }
+
+        if (ch === '{') {
+            if (depth === 0) {
+                start = i;
+            }
+            depth += 1;
+            continue;
+        }
+
+        if (ch === '}' && depth > 0) {
+            depth -= 1;
+            if (depth === 0 && start >= 0) {
+                const candidate = text.slice(start, i + 1).trim();
+                try {
+                    JSON.parse(candidate);
+                    return candidate;
+                } catch {
+                    if (candidate.length > bestCandidate.length) {
+                        bestCandidate = candidate;
+                    }
+                }
+                start = -1;
+            }
+        }
+    }
+
+    if (bestCandidate) {
+        return bestCandidate;
+    }
+
+    throw new Error('No JSON object found in model output');
+}
+
+/**
+ * Attempts to repair and parse JSON from AI model output.
+ * If standard JSON.parse fails, it:
+ * 1. Performs basic regex cleanup (trailing commas)
+ * 2. Uses a secondary LLM pass (temperature 0) to fix the syntax.
+ */
+async function safeParseJson(raw: string): Promise<any> {
+    const jsonText = extractJsonObject(raw);
+    
+    // 1. Try direct parse
+    try {
+        return JSON.parse(jsonText);
+    } catch (err) {
+        // 2. Basic cleanup for common small mistakes (like trailing commas)
+        try {
+            const cleaned = jsonText
+                .replace(/,\s*([}\]])/g, '$1') // Remove trailing commas
+                .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":'); // Fix missing quotes on keys (basic)
+            return JSON.parse(cleaned);
+        } catch {
+            // 3. Last resort: LLM Repair
+            const llmProvider = getLLMProvider();
+            try {
+                const repaired = await llmProvider.chat({
+                    model: 'google/gemma-3-4b-it:free',
+                    temperature: 0,
+                    max_tokens: 3000,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You repair malformed JSON. Return ONLY valid JSON with the same keys and values. Do not add markdown fences or commentary.'
+                        },
+                        {
+                            role: 'user',
+                            content: jsonText
+                        }
+                    ]
+                });
+                return JSON.parse(extractJsonObject(repaired));
+            } catch (repairErr) {
+                console.error('[AI] JSON Repair failed:', repairErr);
+                throw new Error('AI output was malformed and repair failed.');
+            }
+        }
+    }
 }
 
 function buildSummaryFromAnswer(answer: string): string {
@@ -840,34 +952,6 @@ Rules:
         const fallbackAnalysis = buildFallbackIdeaAnalysis(idea);
         const llmProvider = getLLMProvider();
 
-        const parseJsonFromModelOutput = async (modelOutput: string) => {
-            const rawJson = extractJsonObject(modelOutput || '{}');
-            try {
-                return JSON.parse(rawJson);
-            } catch {
-                // If the model returns near-valid JSON (missing comma/trailing issue),
-                // ask for a strict JSON repair pass before giving up.
-                const repaired = await llmProvider.chat({
-                    model: 'google/gemma-3-4b-it:free',
-                    temperature: 0,
-                    max_tokens: 3000,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You repair malformed JSON. Return ONLY valid JSON with the same keys and values. Do not add markdown fences or commentary.'
-                        },
-                        {
-                            role: 'user',
-                            content: rawJson
-                        }
-                    ]
-                });
-
-                const repairedJson = extractJsonObject(repaired || rawJson);
-                return JSON.parse(repairedJson);
-            }
-        };
-
         const response = await llmProvider.chat({
             model: 'google/gemini-2.5-flash',
             temperature: 0.2,
@@ -880,7 +964,7 @@ Rules:
 
         let parsed: any = null;
         try {
-            parsed = await parseJsonFromModelOutput(response);
+            parsed = await safeParseJson(response);
         } catch (parseError: any) {
             console.warn('Idea analysis returned non-JSON output, using fallback seed:', parseError?.message || parseError);
             parsed = {};
@@ -1248,7 +1332,7 @@ Rules:
             ],
         });
 
-        const parsed = JSON.parse(extractJsonObject(modelOutput));
+        const parsed = await safeParseJson(modelOutput);
         const reviewedFeatureStatus = normalizedAction === 'approve'
             ? 'approved'
             : normalizedAction === 'reject'
@@ -1378,8 +1462,7 @@ Rules:
 
         let refinedDoc: RefinedIdeaDocument;
         try {
-            const jsonText = extractJsonObject(modelOutput);
-            const parsed = JSON.parse(jsonText);
+            const parsed = await safeParseJson(modelOutput);
             refinedDoc = normalizeRefinedIdeaDoc(parsed, modelOutput);
         } catch {
             refinedDoc = normalizeRefinedIdeaDoc({}, modelOutput);
@@ -1402,5 +1485,322 @@ Rules:
     } catch (err: any) {
         console.error('Idea refinement error:', err.message);
         res.status(500).json({ error: 'Failed to refine idea. ' + err.message });
+    }
+}
+
+// --- Database Schema Generation from Project Idea ---
+
+interface GeneratedField {
+    name: string;
+    field_type: string;
+    required: boolean;
+    unique: boolean;
+    primary_key: boolean;
+}
+
+interface GeneratedRelation {
+    name: string;
+    target_model: string;
+    relation_type: string;
+}
+
+interface GeneratedModel {
+    name: string;
+    fields: GeneratedField[];
+    relations: GeneratedRelation[];
+}
+
+function normalizeGeneratedModels(raw: unknown): GeneratedModel[] {
+    if (!raw || typeof raw !== 'object') return [];
+
+    let modelsArray: unknown[];
+    if (Array.isArray(raw)) {
+        modelsArray = raw;
+    } else if (Array.isArray((raw as any).models)) {
+        modelsArray = (raw as any).models;
+    } else {
+        return [];
+    }
+
+    return modelsArray
+        .map((item: any) => {
+            if (!item || typeof item !== 'object') return null;
+            const name = typeof item.name === 'string' ? item.name.trim() : '';
+            if (!name) return null;
+
+            const fields: GeneratedField[] = Array.isArray(item.fields)
+                ? item.fields
+                    .map((f: any) => {
+                        if (!f || typeof f !== 'object') return null;
+                        const fieldName = typeof f.name === 'string' ? f.name.trim() : '';
+                        if (!fieldName) return null;
+                        return {
+                            name: fieldName,
+                            field_type: typeof f.field_type === 'string' ? f.field_type.trim() : 'string',
+                            required: typeof f.required === 'boolean' ? f.required : true,
+                            unique: typeof f.unique === 'boolean' ? f.unique : false,
+                            primary_key: typeof f.primary_key === 'boolean' ? f.primary_key : false,
+                        };
+                    })
+                    .filter(Boolean) as GeneratedField[]
+                : [];
+
+            // Ensure every model has an id primary key
+            const hasId = fields.some(f => f.primary_key);
+            if (!hasId) {
+                fields.unshift({
+                    name: 'id',
+                    field_type: 'uuid',
+                    required: true,
+                    unique: true,
+                    primary_key: true,
+                });
+            }
+
+            const relations: GeneratedRelation[] = Array.isArray(item.relations)
+                ? item.relations
+                    .map((r: any) => {
+                        if (!r || typeof r !== 'object') return null;
+                        const rName = typeof r.name === 'string' ? r.name.trim() : '';
+                        const target = typeof r.target_model === 'string' ? r.target_model.trim() : '';
+                        if (!rName || !target) return null;
+                        return {
+                            name: rName,
+                            target_model: target,
+                            relation_type: typeof r.relation_type === 'string' ? r.relation_type.trim() : 'one-to-many',
+                        };
+                    })
+                    .filter(Boolean) as GeneratedRelation[]
+                : [];
+
+            return { name, fields, relations };
+        })
+        .filter(Boolean) as GeneratedModel[];
+}
+
+export async function generateSchemaFromIdea(req: Request, res: Response) {
+    const { projectId, mode = 'scratch' } = req.body;
+    if (!projectId || typeof projectId !== 'string') {
+        return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    try {
+        let parsedModels: GeneratedModel[] = [];
+        // 1. Load the project and its description (idea)
+        const project = await prisma.project.findUnique({ where: { id: projectId } });
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const ideaText = (project.description || '').trim();
+        if (!ideaText) {
+            return res.status(400).json({ error: 'No project idea/description found. Please add a project idea first.' });
+        }
+
+        // If scratch mode, delete existing models first
+        if (mode === 'scratch') {
+            await prisma.dataModel.deleteMany({ where: { projectId } });
+        }
+
+        // Load existing schema context if in fix mode
+        let existingSchemaContext = "";
+        if (mode === 'fix') {
+            const existingModels = await prisma.dataModel.findMany({ where: { projectId } });
+            if (existingModels.length > 0) {
+                const contextModels = existingModels.map(m => {
+                    let fields = [];
+                    let relations = [];
+                    try {
+                        const schema = typeof m.schema === 'string' ? JSON.parse(m.schema) : m.schema;
+                        fields = schema.fields || [];
+                        relations = schema.relations || [];
+                    } catch (e) {}
+                    return {
+                        name: m.name,
+                        fields,
+                        relations
+                    };
+                });
+                existingSchemaContext = `\n\nCURRENT EXISTING SCHEMA:\n${JSON.stringify({ models: contextModels }, null, 2)}`;
+            }
+        }
+
+        // 2. Send to LLM
+        const systemPrompt = `You are an expert database architect and domain modeler.
+Read the entire PROJECT IDEA document carefully. Identify the core domain, target users, specific workflows, and data requirements described in the document.
+
+Your task: Generate a comprehensive, highly-tailored relational database schema that perfectly supports the specific features, problem domain, and use cases described in the PROJECT IDEA.
+
+Return ONLY valid JSON matching this exact structure:
+{
+  "models": [
+    {
+      "name": "ModelName",
+      "fields": [
+        { "name": "id", "field_type": "uuid", "required": true, "unique": true, "primary_key": true },
+        { "name": "email", "field_type": "string", "required": true, "unique": true, "primary_key": false },
+        { "name": "name", "field_type": "string", "required": true, "unique": false, "primary_key": false },
+        { "name": "createdAt", "field_type": "datetime", "required": true, "unique": false, "primary_key": false }
+      ],
+      "relations": [
+        { "name": "posts", "target_model": "Post", "relation_type": "one-to-many" }
+      ]
+    }
+  ]
+}
+
+Rules:
+1. DEEP RELEVANCE MUST BE MAINTAINED: DO NOT generate generic tables like "Product", "Review", "Order" unless the idea explicitly describes an e-commerce store. Ensure ALL models are specifically tailored to the precise domain (e.g., if it's an ICU system, generate Patient, Admission, VitalSign, Doctor, Alert, etc.).
+2. Use PascalCase for model names (e.g., User, MedicalRecord, PatientObservation).
+3. Every model MUST have an "id" field with field_type "uuid", primary_key true, unique true.
+4. Valid field types: uuid, string, text, int, float, boolean, datetime, json. 
+5. Include createdAt and updatedAt timestamps for every model.
+6. For relations, include the appropriate foreign key fields in the models (e.g., patientId in a VitalSign model) AND include the mapping in the "relations" array.
+7. Valid relation_type values: one-to-one, one-to-many, many-to-many.
+8. Generate 5 to 15 models depending on the complexity of the specific domain. Be thorough but do not hallucinate unrelated business concerns.
+9. Consider the problem statement, core products, and features to ensure enough data fields are created for AI analytics, reports, notifications or whatever are core to the product.
+10. ABSOLUTELY NO MARKDOWN CODE FENCES (e.g., \`\`\`json). Just return the raw JSON output.
+
+${mode === 'fix' 
+  ? "MODE: CHECK FOR MISSING AND FIX. Analyze the provided CURRENT EXISTING SCHEMA against the PROJECT IDEA. Identify gaps (missing tables, missing fields, or incorrect relations). Return the COMPLETE IMPROVED SCHEMA (including both unchanged and new/fixed parts)." 
+  : "MODE: REGENERATE FROM SCRATCH. Ignore any previous schema and generate a completely new one based on the project idea."}`;
+
+        const llmProvider = getLLMProvider();
+        const modelOutput = await llmProvider.chat({
+            model: 'google/gemini-2.5-flash',
+            temperature: 0.2,
+            max_tokens: 3000,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `PROJECT IDEA:\n${ideaText.slice(0, 8000)}${existingSchemaContext}` },
+            ],
+        });
+
+        try {
+            const parsed = await safeParseJson(modelOutput);
+            parsedModels = normalizeGeneratedModels(parsed);
+        } catch (parseErr: any) {
+                        console.warn('Schema generation parse error. Attempting repair pass:', parseErr?.message || parseErr);
+                        try {
+                                const repairedOutput = await llmProvider.chat({
+                                        model: 'google/gemma-3-4b-it:free',
+                                        temperature: 0,
+                                        max_tokens: 3200,
+                                        messages: [
+                                                {
+                                                        role: 'system',
+                                                        content: `You convert malformed or non-JSON model output into strict valid JSON.
+Return ONLY valid JSON and nothing else.
+Required schema:
+{
+    "models": [
+        {
+            "name": "ModelName",
+            "fields": [
+                { "name": "id", "field_type": "uuid", "required": true, "unique": true, "primary_key": true }
+            ],
+            "relations": [
+                { "name": "items", "target_model": "OtherModel", "relation_type": "one-to-many" }
+            ]
+        }
+    ]
+}
+Rules:
+- Keep all meaningful domain details from the provided text.
+- Ensure every model has id(uuid, required, unique, primary_key=true).
+- field_type must be one of: uuid, string, text, int, float, boolean, datetime, json.
+- relation_type must be one of: one-to-one, one-to-many, many-to-many.
+- No markdown fences, no explanation, JSON only.`
+                                                },
+                                                {
+                                                        role: 'user',
+                                                        content: `PROJECT IDEA:\n${ideaText.slice(0, 8000)}${existingSchemaContext}\n\nMODEL OUTPUT TO REPAIR:\n${modelOutput.slice(0, 12000)}`
+                                                }
+                                        ]
+                                });
+
+                                const repairedParsed = await safeParseJson(repairedOutput);
+                                parsedModels = normalizeGeneratedModels(repairedParsed);
+                        } catch (repairErr: any) {
+                                console.error('Schema generation repair failed:', repairErr?.message || repairErr);
+                                return res.status(500).json({ error: 'AI returned invalid schema. Please try again.' });
+                        }
+        }
+
+        if (parsedModels.length === 0) {
+            return res.status(500).json({ error: 'AI generated no models. Please try again with a more detailed idea.' });
+        }
+
+        // 4. Create models in Prisma
+        // If in fix mode, we might want to update existing models instead of creating new ones or just delete and replace for simplicity?
+        // Deleting and replacing is simpler to maintain consistency with the AI output.
+        if (mode === 'fix') {
+            await prisma.dataModel.deleteMany({ where: { projectId } });
+        }
+
+        const createdModels: any[] = [];
+        // First pass: create all models so we have their IDs for relations
+        const modelIdMap: Record<string, string> = {};
+
+        for (const model of parsedModels) {
+            const schema = {
+                fields: model.fields,
+                relations: [],
+            };
+
+            const created = await prisma.dataModel.create({
+                data: {
+                    projectId,
+                    name: model.name,
+                    schema: JSON.stringify(schema),
+                },
+            });
+            modelIdMap[model.name] = created.id;
+            createdModels.push({
+                id: created.id,
+                name: model.name,
+                fields: model.fields,
+                relations: [],
+            });
+        }
+
+        // Second pass: update relations with actual model IDs
+        for (let i = 0; i < parsedModels.length; i++) {
+            const model = parsedModels[i];
+            if (!model || model.relations.length === 0) continue;
+
+            const resolvedRelations = model.relations
+                .filter(r => modelIdMap[r.target_model])
+                .map(r => ({
+                    id: `rel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    name: r.name,
+                    target_model_id: modelIdMap[r.target_model],
+                    relation_type: r.relation_type,
+                }));
+
+            if (resolvedRelations.length > 0) {
+                const currentModel = await prisma.dataModel.findUnique({
+                    where: { id: modelIdMap[model.name] },
+                });
+                if (currentModel) {
+                    const currentSchema = JSON.parse(currentModel.schema);
+                    currentSchema.relations = resolvedRelations;
+                    await prisma.dataModel.update({
+                        where: { id: modelIdMap[model.name] },
+                        data: { schema: JSON.stringify(currentSchema) },
+                    });
+                    createdModels[i].relations = resolvedRelations;
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            modelsCreated: createdModels.length,
+            models: createdModels,
+        });
+    } catch (err: any) {
+        console.error('Schema generation error:', err.message);
+        res.status(500).json({ error: 'Failed to generate schema: ' + err.message });
     }
 }

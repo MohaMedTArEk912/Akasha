@@ -44,8 +44,6 @@ import logicFlowsRouter from './routes/logicFlows.js';
 app.use('/api/logic-flows', logicFlowsRouter);
 import dataModelsRouter from './routes/dataModels.js';
 app.use('/api/data-models', dataModelsRouter);
-import variablesRouter from './routes/variables.js';
-app.use('/api/variables', variablesRouter);
 import diagramsRouter from './routes/diagrams.js';
 app.use('/api/diagrams', diagramsRouter);
 import codegenRouter from './routes/codegen.js';

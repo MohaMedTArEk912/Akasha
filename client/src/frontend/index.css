@@ -300,28 +300,53 @@ body,
 .input-modern {
     @apply h-11 rounded-xl px-4 text-sm transition-all duration-300;
     background: var(--ide-bg-elevated);
-    border: 1px solid var(--ide-border);
+    border: 1.5px solid var(--ide-border);
     color: var(--ide-text);
 }
 
 .input-modern:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.5);
+    border-color: rgb(99, 102, 241);
     background: var(--ide-bg-panel);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+    box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.15), inset 0 0 0 1px rgba(99, 102, 241, 0.1);
 }
 
 .input-modern:disabled {
-    @apply opacity-30 cursor-not-allowed;
+    @apply cursor-not-allowed;
+    background: var(--ide-bg-panel);
+    border-color: var(--ide-border);
+    opacity: 0.5;
 }
 
 .input-modern::placeholder {
-    color: var(--ide-text-muted);
+    color: var(--ide-text-secondary);
+    opacity: 0.7;
+}
+
+/* Error state */
+.input-modern[data-error="true"] {
+    border-color: rgb(239, 68, 68);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.input-modern[data-error="true"]:focus {
+    border-color: rgb(239, 68, 68);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.1);
+}
+
+/* Success state */
+.input-modern[data-success="true"] {
+    border-color: rgb(34, 197, 94);
+}
+
+.input-modern[data-success="true"]:focus {
+    border-color: rgb(34, 197, 94);
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.1);
 }
 
 select.input-modern {
     @apply appearance-none cursor-pointer pr-10;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(90,99,120,0.7)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(99,102,241,0.8)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 1rem center;
     background-size: 1.25rem;

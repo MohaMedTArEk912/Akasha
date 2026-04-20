@@ -1148,6 +1148,31 @@ export async function addDataModel(name: string): Promise<void> {
 }
 
 /**
+ * Generate database schema from project idea using AI
+ */
+export async function generateSchemaFromIdea(mode: "scratch" | "fix" = "scratch"): Promise<void> {
+    const projectId = state.project?.id;
+    if (!projectId) throw new Error("No active project");
+
+    const description = state.project?.description;
+    if (!description || !description.trim()) {
+        throw new Error("No project idea found. Please add a project idea first.");
+    }
+
+    updateState(() => ({ loading: true, error: null, loadingMessage: mode === "scratch" ? "Regenerating schema from scratch..." : "Improving schema..." }));
+    try {
+        await api.generateSchemaFromIdea(projectId, mode);
+        await loadProject();
+        isDirtyValue = true;
+    } catch (err) {
+        updateState(() => ({ error: String(err) }));
+        throw err;
+    } finally {
+        updateState(() => ({ loading: false, loadingMessage: null }));
+    }
+}
+
+/**
  * Add a new API endpoint
  */
 export async function addApi(
@@ -1271,43 +1296,7 @@ export async function deleteRelation(modelId: string, relationId: string): Promi
     isDirtyValue = true;
 }
 
-/**
- * Create a new variable
- */
-export async function createVariable(data: {
-    name: string;
-    var_type: string;
-    default_value?: unknown;
-    scope?: string;
-    page_id?: string;
-    description?: string;
-    persist?: boolean;
-}): Promise<void> {
-    await api.createVariable(data);
-    await loadProject();
-    isDirtyValue = true;
-}
 
-/**
- * Update a variable
- */
-export async function updateVariable(
-    id: string,
-    updates: { name?: string; var_type?: string; default_value?: unknown; scope?: string; description?: string; persist?: boolean }
-): Promise<void> {
-    await api.updateVariable(id, updates);
-    await loadProject();
-    isDirtyValue = true;
-}
-
-/**
- * Delete a variable
- */
-export async function deleteVariable(id: string): Promise<void> {
-    await api.deleteVariable(id);
-    await loadProject();
-    isDirtyValue = true;
-}
 
 /**
  * Generate frontend code
@@ -1490,13 +1479,12 @@ export function goBackPage(): void {
 /**
  * Legacy alias — maps old tab names to new feature pages
  */
-export function setActiveTab(tab: "canvas" | "logic" | "api" | "erd" | "variables"): void {
+export function setActiveTab(tab: "canvas" | "logic" | "api" | "erd"): void {
     const pageMap: Record<string, FeaturePage> = {
         canvas: "ui",
         logic: "usecases",
         api: "apis",
         erd: "database",
-        variables: "database",
     };
     setActivePage(pageMap[tab] || "ui");
 }

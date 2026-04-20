@@ -24,7 +24,6 @@ export async function getWorkspace(req: Request, res: Response) {
                 apis: [],
                 logic_flows: [],
                 data_models: [],
-                variables: [],
                 components: []
             }))
         });

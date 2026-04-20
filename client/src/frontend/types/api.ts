@@ -13,7 +13,6 @@ export interface ProjectSchema {
     apis: ApiSchema[];
     logic_flows: LogicFlowSchema[];
     data_models: DataModelSchema[];
-    variables: VariableSchema[];
     settings: ProjectSettings;
     root_path?: string;
     components: BlockSchema[];
@@ -29,7 +28,6 @@ export interface ProjectImportDocument {
     pages: ProjectImportPage[];
     blocks: ProjectImportBlock[];
     components?: ProjectImportBlock[];
-    variables?: ProjectImportVariable[];
     data_models?: ProjectImportDataModel[];
     logic_flows?: ProjectImportLogicFlow[];
     apis?: ProjectImportApi[];
@@ -63,14 +61,6 @@ export interface ProjectImportBlock {
     archived?: boolean;
 }
 
-export interface ProjectImportVariable {
-    id?: string;
-    name: string;
-    variable_type: string;
-    scope?: string;
-    default_value?: unknown;
-    archived?: boolean;
-}
 
 export interface ProjectImportDataModel {
     id?: string;
@@ -279,14 +269,6 @@ export interface RelationSchema {
     relation_type: string;
 }
 
-export interface VariableSchema {
-    id: string;
-    name: string;
-    variable_type: string;
-    scope: string;
-    default_value?: unknown;
-    archived: boolean;
-}
 
 export interface StructuredIdeaDetails {
     ideaMetadata?: {

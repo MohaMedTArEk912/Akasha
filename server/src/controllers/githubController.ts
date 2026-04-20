@@ -4,13 +4,41 @@
  * Handles:
  * - OAuth login redirect & callback (token exchange)
  * - GitHub API proxy calls: user, repos, contents, commits, branches
- * - In-memory token store keyed by session cookie
+ * - File-backed token store keyed by session cookie (persists across restarts)
  */
 
 import type { Request, Response } from 'express';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
-// ── In-memory token store (session-id → github access token) ──
-const tokenStore = new Map<string, string>();
+// ── Persistent token store (session-id → github access token) ──
+const SESSION_FILE = join(process.cwd(), '.akasha', 'github-sessions.json');
+
+function loadTokenStore(): Map<string, string> {
+    try {
+        if (existsSync(SESSION_FILE)) {
+            const raw = readFileSync(SESSION_FILE, 'utf-8');
+            const entries: [string, string][] = JSON.parse(raw);
+            return new Map(entries);
+        }
+    } catch {
+        // Corrupted file — start fresh
+    }
+    return new Map();
+}
+
+function saveTokenStore(): void {
+    try {
+        const dir = dirname(SESSION_FILE);
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        const entries = Array.from(tokenStore.entries());
+        writeFileSync(SESSION_FILE, JSON.stringify(entries), 'utf-8');
+    } catch (err) {
+        console.error('[GitHub] Failed to persist session store:', err);
+    }
+}
+
+const tokenStore = loadTokenStore();
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -81,6 +109,7 @@ export function login(req: Request, res: Response): void {
 
     // Store the state temporarily so we can verify it in callback
     tokenStore.set(`state:${state}`, 'pending');
+    saveTokenStore();
 
     const url = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
 
@@ -105,7 +134,10 @@ export async function callback(req: Request, res: Response): Promise<void> {
             res.status(403).send('Invalid state parameter');
             return;
         }
-        if (state) tokenStore.delete(`state:${state}`);
+        if (state) {
+            tokenStore.delete(`state:${state}`);
+            saveTokenStore();
+        }
 
         const clientId = getClientId();
         const clientSecret = getClientSecret();
@@ -134,6 +166,7 @@ export async function callback(req: Request, res: Response): Promise<void> {
         // Store the token with a new session ID
         const sessionId = generateSessionId();
         tokenStore.set(sessionId, tokenData.access_token);
+        saveTokenStore();
         setSessionCookie(res, sessionId);
 
         // Redirect back to the frontend with a success indicator
@@ -190,7 +223,10 @@ export async function getStatus(req: Request, res: Response): Promise<void> {
     } catch (error: any) {
         // Token might be expired/revoked
         const sid = getSessionId(req);
-        if (sid) tokenStore.delete(sid);
+        if (sid) {
+            tokenStore.delete(sid);
+            saveTokenStore();
+        }
         res.json({ connected: false, user: null });
     }
 }
@@ -314,7 +350,10 @@ export async function getBranches(req: Request, res: Response): Promise<void> {
  */
 export function disconnect(req: Request, res: Response): void {
     const sid = getSessionId(req);
-    if (sid) tokenStore.delete(sid);
+    if (sid) {
+        tokenStore.delete(sid);
+        saveTokenStore();
+    }
     // Clear cookie
     res.setHeader('Set-Cookie', 'gh_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
     res.json({ success: true });

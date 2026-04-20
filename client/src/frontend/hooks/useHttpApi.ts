@@ -5,7 +5,6 @@ import {
   PageSchema,
   LogicFlowSchema,
   DataModelSchema,
-  VariableSchema,
   ApiSchema,
   GitCommitInfo,
   GitStatus,
@@ -87,6 +86,21 @@ export const httpApi = {
     const res = await client.put(`/project/${targetId}`, {
       name,
       description: currentProject.description || "",
+      settings: currentProject.settings || {},
+    });
+    activeProjectId = targetId;
+    return res.data;
+  },
+  updateProjectDescription: async (description: string, projectId?: string): Promise<ProjectSchema> => {
+    const targetId = projectId || activeProjectId;
+    if (!targetId) throw new Error("Update description requires a project ID");
+
+    const current = await client.get(`/project/${targetId}`);
+    const currentProject = current.data as ProjectSchema;
+
+    const res = await client.put(`/project/${targetId}`, {
+      name: currentProject.name,
+      description,
       settings: currentProject.settings || {},
     });
     activeProjectId = targetId;
@@ -358,33 +372,6 @@ export const httpApi = {
   },
   archiveApi: async (_id: string) => true,
 
-  // ─── Variables ──────────────────────────────────
-  getVariables: async () => {
-    if (!activeProjectId) return [] as VariableSchema[];
-    const res = await client.get("/variables", {
-      params: { projectId: activeProjectId },
-    });
-    return res.data;
-  },
-  createVariable: async (data: any) => {
-    if (!activeProjectId) throw new Error("No active project");
-    const res = await client.post("/variables", {
-      projectId: activeProjectId,
-      ...data,
-    });
-    return res.data;
-  },
-  updateVariable: async (_id: string, _updates: any) => {
-    // We only implemented create/delete in backend variables.ts for now
-    // But let's assume we might add update later or use create to overwrite?
-    // Actually, schema supports update. I should add PUT to variables.ts if needed.
-    // For now, throw not implemented or just return true if strictly following backend capability.
-    throw new Error("Update Variable not implemented in backend yet");
-  },
-  deleteVariable: async (id: string) => {
-    await client.delete(`/variables/${id}`);
-    return true;
-  },
 
   // ─── Code Generation ────────────────────────────
   generateFrontend: async () => {
@@ -644,6 +631,10 @@ export const httpApi = {
     if (featureQueue) payload.featureQueue = featureQueue;
     if (understanding) payload.understanding = understanding;
     const res = await client.post("/ai/refine-idea", payload);
+    return res.data;
+  },
+  generateSchemaFromIdea: async (projectId: string, mode: "scratch" | "fix" = "scratch") => {
+    const res = await client.post("/ai/generate-schema", { projectId, mode });
     return res.data;
   },
 

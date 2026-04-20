@@ -44,4 +44,7 @@ router.post('/analyze-idea', ctrl.analyzeIdea);
 router.post('/review-idea-feature', ctrl.reviewIdeaFeature);
 router.post('/refine-idea', ctrl.refineIdea);
 
+// Database Schema Generation
+router.post('/generate-schema', ctrl.generateSchemaFromIdea);
+
 export default router;

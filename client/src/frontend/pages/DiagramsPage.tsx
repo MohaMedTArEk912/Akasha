@@ -388,8 +388,7 @@ const DiagramsPage: React.FC = () => {
   const stroke = theme === "dark" ? "#e2e8f0" : "#0f172a";
   const bg     = theme === "dark" ? "#1e293b" : "#f8fafc";
   const library = useMemo(() => buildLibrary(stroke, bg), [theme]);
-  // Current mode's library items — also memoized
-  const currentLibraryItems = useMemo(() => library[currentMode], [library, currentMode]);
+
 
   // ── Load diagrams ────────────────────────────────────
   useEffect(() => {

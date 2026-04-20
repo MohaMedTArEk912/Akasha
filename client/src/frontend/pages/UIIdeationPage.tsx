@@ -131,11 +131,9 @@ const UIIdeationPage: React.FC = () => {
                         </button>
                     </div>
                 </div>
-                {activeTab !== "builder" && (
-                    <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl overflow-hidden" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
-                        <UXRootPlanner tab={activeTab} onTabChange={setActiveTab} onOpenBuilder={() => setActiveTab("builder")} />
+                <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl overflow-hidden" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
+                        <UXRootPlanner tab={activeTab} onTabChange={(t) => setActiveTab(t)} onOpenBuilder={() => setActiveTab("builder")} />
                     </div>
-                )}
             </div>
 
              <style>{`

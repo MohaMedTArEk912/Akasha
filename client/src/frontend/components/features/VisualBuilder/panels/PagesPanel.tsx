@@ -2,12 +2,14 @@ import React, { useState } from "react";
 import { useProjectStore } from "../../../../hooks/useProjectStore";
 import { addPage, archivePage, selectPage, updatePage } from "../../../../stores/projectStore";
 import { useToast } from "../../../../context/ToastContext";
+import ConfirmModal from "../../../Modals/ConfirmModal";
 
 const PagesPanel: React.FC = () => {
     const { project, selectedPageId } = useProjectStore();
     const toast = useToast();
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [renameValue, setRenameValue] = useState("");
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
     const pages = project?.pages.filter((p) => !p.archived) || [];
 
@@ -45,19 +47,30 @@ const PagesPanel: React.FC = () => {
         setRenamingId(null);
     };
 
-    const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`Delete page "${name}"? This cannot be undone.`)) return;
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
 
         try {
-            await archivePage(id);
-            toast.success(`"${name}" deleted`);
+            await archivePage(deleteTarget.id);
+            toast.success(`"${deleteTarget.name}" deleted`);
         } catch (err) {
             toast.error(`Delete failed: ${err}`);
         }
+        setDeleteTarget(null);
     };
 
     return (
         <div className="flex flex-col h-full">
+            <ConfirmModal
+                isOpen={!!deleteTarget}
+                title="Delete Page"
+                message={`Are you sure you want to delete the page "${deleteTarget?.name}"?`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={handleDelete}
+                onCancel={() => setDeleteTarget(null)}
+            />
             <div className="h-10 px-3 flex items-center justify-between border-b border-[var(--ide-border)] shrink-0">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--ide-text-muted)]">
                     Pages ({pages.length})
@@ -147,7 +160,7 @@ const PagesPanel: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                void handleDelete(page.id, page.name);
+                                                setDeleteTarget({ id: page.id, name: page.name });
                                             }}
                                             className="w-5 h-5 flex items-center justify-center rounded text-[var(--ide-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                             title="Delete"

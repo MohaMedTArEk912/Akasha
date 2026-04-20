@@ -53,12 +53,7 @@ type NormalizedDataModel = {
     archived: boolean;
 };
 
-type NormalizedVariable = {
-    name: string;
-    variableType: string;
-    defaultValue: unknown;
-    isSecret: boolean;
-};
+
 
 type NormalizedUseCase = {
     name: string;
@@ -99,7 +94,7 @@ type NormalizedImportPayload = {
     components: NormalizedBlock[];
     logicFlows: NormalizedLogicFlow[];
     dataModels: NormalizedDataModel[];
-    variables: NormalizedVariable[];
+
     useCases: NormalizedUseCase[];
     apis: NormalizedApi[];
 };
@@ -229,18 +224,7 @@ function toBlockSchema(block: any, pageIdByInternalId: Map<string, string>) {
     };
 }
 
-function toVariableSchema(variable: any) {
-    return {
-        id: variable.id,
-        name: variable.name,
-        variable_type: variable.type,
-        scope: "global",
-        default_value: variable.value
-            ? parseJsonValue(variable.value, null)
-            : null,
-        archived: false,
-    };
-}
+
 
 function toDataModelSchema(model: any) {
     const schema = parseJsonValue<JsonRecord>(model.schema, {});
@@ -319,7 +303,6 @@ export function toProjectSchema(
     project: any,
     pages: any[] = [],
     blocks: any[] = [],
-    variables: any[] = [],
     dataModels: any[] = [],
     logicFlows: any[] = [],
     apis: any[] = [],
@@ -366,7 +349,7 @@ export function toProjectSchema(
         apis: (apis || []).map(toApiSchema),
         logic_flows: (logicFlows || []).map(toLogicFlowSchema),
         data_models: (dataModels || []).map(toDataModelSchema),
-        variables: (variables || []).map(toVariableSchema),
+
         components: componentBlocks.map((block: any) =>
             toBlockSchema(block, pageIdByInternalId),
         ),
@@ -380,7 +363,7 @@ export async function serializeProjectById(projectId: string) {
         include: {
             pages: true,
             blocks: true,
-            variables: true,
+
             dataModels: true,
             apis: true,
             logicFlows: true,
@@ -393,7 +376,7 @@ export async function serializeProjectById(projectId: string) {
         project,
         project.pages,
         project.blocks,
-        project.variables,
+
         project.dataModels,
         project.logicFlows,
         project.apis,
@@ -415,7 +398,7 @@ export async function serializeProjectTransferById(projectId: string) {
         pages: project.pages,
         blocks: project.blocks,
         components: project.components,
-        variables: project.variables,
+
         data_models: project.data_models,
         logic_flows: project.logic_flows,
         apis: project.apis,
@@ -529,7 +512,7 @@ export function buildProjectImportSample(projectName?: string) {
                 order: 1,
                 properties: {
                     text:
-                        "Replace this text, add more pages, or extend the project with data models, APIs, variables, and logic flows.",
+                        "Replace this text, add more pages, or extend the project with data models, APIs, and logic flows.",
                 },
                 styles: {
                     fontSize: "16px",
@@ -544,16 +527,7 @@ export function buildProjectImportSample(projectName?: string) {
             },
         ],
         components: [],
-        variables: [
-            {
-                id: "api-base-url",
-                name: "API_BASE_URL",
-                variable_type: "string",
-                scope: "global",
-                default_value: "https://api.example.com",
-                archived: false,
-            },
-        ],
+
         data_models: [
             {
                 id: "user-model",
@@ -717,14 +691,6 @@ function normalizeDataModels(rawModels: JsonRecord[]): NormalizedDataModel[] {
     }));
 }
 
-function normalizeVariables(rawVariables: JsonRecord[]): NormalizedVariable[] {
-    return rawVariables.map((variable, index) => ({
-        name: asString(variable.name, `VARIABLE_${index + 1}`),
-        variableType: asString(variable.variable_type, "string"),
-        defaultValue: variable.default_value ?? null,
-        isSecret: Boolean(variable.isSecret),
-    }));
-}
 
 function normalizeUseCases(rawUseCases: JsonRecord[]): NormalizedUseCase[] {
     return rawUseCases.map((useCase, index) => ({
@@ -1017,7 +983,6 @@ function toPrdNormalizedPayload(source: JsonRecord): NormalizedImportPayload {
         components: [],
         logicFlows: [],
         dataModels: [],
-        variables: [],
         useCases,
         apis: [],
     };
@@ -1051,7 +1016,7 @@ function normalizeImportPayload(rawPayload: unknown): NormalizedImportPayload {
         dataModels: normalizeDataModels(
             asRecordArray(source.data_models ?? source.dataModels),
         ),
-        variables: normalizeVariables(asRecordArray(source.variables)),
+
         useCases: normalizeUseCases(
             asRecordArray(source.use_cases ?? source.useCases),
         ),
@@ -1282,20 +1247,6 @@ export async function importProjectFromPayload(rawPayload: unknown) {
                         })),
                     }),
                     archived: model.archived,
-                },
-            });
-        }),
-    );
-
-    await Promise.all(
-        payload.variables.map(async (variable) => {
-            await prisma.variable.create({
-                data: {
-                    projectId: project.id,
-                    name: variable.name,
-                    type: variable.variableType,
-                    value: JSON.stringify(variable.defaultValue),
-                    isSecret: variable.isSecret,
                 },
             });
         }),

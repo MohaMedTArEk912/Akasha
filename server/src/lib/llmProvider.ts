@@ -45,8 +45,8 @@ class OpenRouterProvider implements LLMProvider {
             const completion = await this.client.chat.completions.create({
                 model: options.model || 'google/gemma-3-4b-it:free',
                 messages: options.messages as any,
-                temperature: options.temperature || 0.3,
-                max_tokens: options.max_tokens || 2048,
+                temperature: options.temperature ?? 0.3,
+                max_tokens: options.max_tokens ?? 2048,
                 top_p: options.top_p,
             });
 

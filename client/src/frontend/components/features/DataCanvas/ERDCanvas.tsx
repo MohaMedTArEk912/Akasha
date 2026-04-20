@@ -5,11 +5,12 @@
  * Allows creating data models with fields and relations.
  */
 
-import React, { useState } from "react";
-import { addDataModel, addField, archiveDataModel, deleteField } from "../../../stores/projectStore";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { addDataModel, addField, archiveDataModel, deleteField, generateSchemaFromIdea } from "../../../stores/projectStore";
 import { useProjectStore } from "../../../hooks/useProjectStore";
 import { DataModelSchema, FieldSchema } from "../../../hooks/useApi";
 import PromptModal, { PromptField } from "../../ui/PromptModal";
+import ConfirmModal from "../../Modals/ConfirmModal";
 import { useToast } from "../../../context/ToastContext";
 
 const ERDCanvas: React.FC = () => {
@@ -17,6 +18,13 @@ const ERDCanvas: React.FC = () => {
     const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
     const [zoom, setZoom] = useState(1);
     const [promptOpen, setPromptOpen] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
+    const [showAiMenu, setShowAiMenu] = useState(false);
+    const [aiMode, setAiMode] = useState<"scratch" | "fix">("scratch");
+    const [deleteModelTarget, setDeleteModelTarget] = useState<{ id: string; name: string } | null>(null);
+    const [deleteFieldTarget, setDeleteFieldTarget] = useState<{ modelId: string; fieldName: string } | null>(null);
+    const [addFieldModelId, setAddFieldModelId] = useState<string | null>(null);
     const toast = useToast();
 
     const modelFields: PromptField[] = [
@@ -35,10 +43,71 @@ const ERDCanvas: React.FC = () => {
         setPromptOpen(true);
     };
 
+    const handleGenerateClick = () => {
+        if (!project?.description?.trim()) {
+            toast.error("No project idea found. Please add a project idea first on the Idea page.");
+            return;
+        }
+        setGenerateConfirmOpen(true);
+    };
+
+    const handleGenerateConfirm = async (modeOverride?: "scratch" | "fix") => {
+        const mode = modeOverride || aiMode;
+        setGenerateConfirmOpen(false);
+        setGenerating(true);
+        try {
+            await generateSchemaFromIdea(mode);
+            toast.success(mode === "scratch" 
+                ? "Database schema regenerated from scratch!" 
+                : "Database schema updated and fixed!");
+        } catch (err: any) {
+            const message = err?.response?.data?.error || err?.message || String(err);
+            toast.error(`AI Help failed: ${message}`);
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const handleDeleteModel = async () => {
+        if (!deleteModelTarget) return;
+        try {
+            await archiveDataModel(deleteModelTarget.id);
+            toast.success(`Model "${deleteModelTarget.name}" deleted`);
+        } catch (err) {
+            toast.error(`Failed to delete model: ${err}`);
+        }
+        setDeleteModelTarget(null);
+    };
+
+    const handleDeleteField = async () => {
+        if (!deleteFieldTarget) return;
+        try {
+            await deleteField(deleteFieldTarget.modelId, deleteFieldTarget.fieldName);
+        } catch (err) {
+            toast.error(`Failed to delete field: ${err}`);
+        }
+        setDeleteFieldTarget(null);
+    };
+
+    const handleAddField = async (values: Record<string, string>) => {
+        if (!addFieldModelId) return;
+        try {
+            await addField(
+                addFieldModelId,
+                values.name.trim(),
+                values.type as any,
+                values.required === "true"
+            );
+            toast.success(`Field "${values.name.trim()}" added`);
+        } catch (err) {
+            toast.error(`Failed to add field: ${err}`);
+        }
+    };
+
     return (
-        <div className="h-full flex flex-col bg-[var(--ide-bg)]">
+        <div className="flex-1 min-h-0 w-full flex flex-col bg-transparent">
             {/* ERD Toolbar */}
-            <div className="h-10 bg-[var(--ide-bg-sidebar)] border-b border-[var(--ide-border)] flex items-center px-4 gap-2">
+            <div className="h-10 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-4 gap-2">
                 <button
                     className="btn-ghost flex items-center gap-1 text-sm"
                     onClick={handleAddModel}
@@ -48,6 +117,82 @@ const ERDCanvas: React.FC = () => {
                     </svg>
                     Add Model
                 </button>
+                <div className="relative">
+                    <button
+                        className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-all ${
+                            generating
+                                ? "bg-[#28d89c]/10 text-[#28d89c] cursor-wait"
+                                : "bg-gradient-to-r from-[#28d89c]/10 to-teal-500/10 text-[#2dc7b2] hover:from-[#28d89c]/20 hover:to-teal-500/20 hover:text-[#9ff2cf] border border-[#28d89c]/10"
+                        }`}
+                        onClick={() => setShowAiMenu(!showAiMenu)}
+                        disabled={generating}
+                        title="AI assistant for your database schema"
+                    >
+                        {generating ? (
+                            <>
+                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                AI Thinking...
+                            </>
+                        ) : (
+                            <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                AI Help
+                                <svg className={`w-3 h-3 ml-0.5 transition-transform ${showAiMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </>
+                        )}
+                    </button>
+
+                    {showAiMenu && !generating && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowAiMenu(false)} />
+                            <div className="absolute top-full left-0 mt-2 w-64 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                                <button 
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-500/10 flex items-center gap-2 group transition-colors"
+                                    onClick={() => {
+                                        setAiMode("scratch");
+                                        handleGenerateClick(); // Opens modal
+                                        setShowAiMenu(false);
+                                    }}
+                                >
+                                    <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 group-hover:bg-red-500/30">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div className="font-medium text-[var(--ide-text)]">Regenerate from Scratch</div>
+                                        <div className="text-[10px] text-[var(--ide-text-muted)]">Delete all models and start over</div>
+                                    </div>
+                                </button>
+                                <button 
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#28d89c]/10 flex items-center gap-2 group transition-colors border-t border-white/5"
+                                    onClick={() => {
+                                        setAiMode("fix");
+                                        handleGenerateClick(); // Opens modal for fix too
+                                        setShowAiMenu(false);
+                                    }}
+                                >
+                                    <div className="w-8 h-8 rounded-lg bg-[#28d89c]/20 flex items-center justify-center text-[#28d89c] group-hover:bg-[#28d89c]/30">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div className="font-medium text-[var(--ide-text)]">Check and Fix Missing</div>
+                                        <div className="text-[10px] text-[var(--ide-text-muted)]">Improve current schema using AI</div>
+                                    </div>
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
                 <div className="w-px h-6 bg-[var(--ide-border)]" />
                 <button className="btn-ghost text-sm" onClick={() => setZoom(z => Math.min(z + 0.1, 2))}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,6 +211,7 @@ const ERDCanvas: React.FC = () => {
                 </span>
             </div>
 
+            {/* Modals */}
             <PromptModal
                 isOpen={promptOpen}
                 title="New Data Model"
@@ -80,6 +226,78 @@ const ERDCanvas: React.FC = () => {
                         toast.error(`Failed to create model: ${err}`);
                     }
                 }}
+            />
+
+            <PromptModal
+                isOpen={!!addFieldModelId}
+                title="Add Field"
+                fields={[
+                    { name: "name", label: "Field name", placeholder: "e.g. email, status", required: true },
+                    { 
+                        name: "type", 
+                        label: "Field type", 
+                        type: "select", 
+                        options: [
+                            { label: "String", value: "string" },
+                            { label: "Int", value: "int" },
+                            { label: "Float", value: "float" },
+                            { label: "Boolean", value: "boolean" },
+                            { label: "DateTime", value: "datetime" },
+                            { label: "UUID", value: "uuid" },
+                            { label: "Text", value: "text" },
+                        ],
+                        required: true 
+                    },
+                    {
+                        name: "required",
+                        label: "Required?",
+                        type: "select",
+                        options: [
+                            { label: "Yes", value: "true" },
+                            { label: "No", value: "false" }
+                        ],
+                        required: true
+                    }
+                ]}
+                confirmText="Add"
+                onClose={() => setAddFieldModelId(null)}
+                onSubmit={handleAddField}
+            />
+
+            <ConfirmModal
+                isOpen={generateConfirmOpen}
+                title={aiMode === "scratch" ? "Regenerate Schema" : "Improve Schema"}
+                message={aiMode === "scratch" 
+                    ? "This will DELETE ALL current models and recreate the entire database schema from your project idea. This cannot be undone. Proceed?"
+                    : "This will analyze your current models and add any missing fields or tables needed to support your project idea. Proceed?"
+                }
+                confirmText={aiMode === "scratch" ? "Delete & Regenerate" : "Check & Fix"}
+                cancelText="Cancel"
+                variant={aiMode === "scratch" ? "danger" : "default"}
+                onConfirm={() => handleGenerateConfirm(aiMode)}
+                onCancel={() => setGenerateConfirmOpen(false)}
+            />
+
+            <ConfirmModal
+                isOpen={!!deleteModelTarget}
+                title="Delete Model"
+                message={`Are you sure you want to delete the model "${deleteModelTarget?.name}"? This cannot be undone.`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteModel}
+                onCancel={() => setDeleteModelTarget(null)}
+            />
+
+            <ConfirmModal
+                isOpen={!!deleteFieldTarget}
+                title="Delete Field"
+                message={`Are you sure you want to delete the field "${deleteFieldTarget?.fieldName}"?`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteField}
+                onCancel={() => setDeleteFieldTarget(null)}
             />
 
             {/* ERD Canvas Area */}
@@ -100,7 +318,7 @@ const ERDCanvas: React.FC = () => {
                                     refY="3.5"
                                     orient="auto"
                                 >
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1" />
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="#28d89c" />
                                 </marker>
                             </defs>
                         </svg>
@@ -113,13 +331,23 @@ const ERDCanvas: React.FC = () => {
                                     model={model}
                                     selected={selectedModelId === model.id}
                                     onSelect={() => setSelectedModelId(model.id)}
+                                    onRequestDelete={() => setDeleteModelTarget({ id: model.id, name: model.name })}
+                                    onRequestDeleteField={(fieldName) => setDeleteFieldTarget({ modelId: model.id, fieldName })}
+                                    onRequestAddField={() => setAddFieldModelId(model.id)}
                                     position={{ x: (index % 3) * 300 + 50, y: Math.floor(index / 3) * 280 + 50 }}
                                 />
                             ))}
                         </div>
                     </div>
                 ) : (
-                    <EmptyERDState onAdd={handleAddModel} />
+                    <EmptyERDState 
+                        onAdd={handleAddModel} 
+                        onGenerate={(mode) => {
+                            if (mode) setAiMode(mode);
+                            handleGenerateClick();
+                        }} 
+                        generating={generating} 
+                    />
                 )}
             </div>
         </div>
@@ -131,21 +359,23 @@ interface ModelCardProps {
     model: DataModelSchema;
     selected: boolean;
     onSelect: () => void;
+    onRequestDelete: () => void;
+    onRequestDeleteField: (fieldName: string) => void;
+    onRequestAddField: () => void;
     position: { x: number; y: number };
 }
 
-const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect }) => {
-    const toast = useToast();
+const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect, onRequestDelete, onRequestDeleteField, onRequestAddField }) => {
     return (
         <div
-            className={`w-64 rounded-lg border overflow-hidden bg-ide-panel transition-all cursor-move ${selected
-                ? "border-[var(--ide-primary)] shadow-lg shadow-indigo-500/20"
-                : "border-[var(--ide-border)] hover:border-indigo-500/50"
+            className={`w-64 rounded-xl border overflow-hidden bg-black/40 backdrop-blur-xl transition-all cursor-move shadow-2xl ${selected
+                ? "border-[#28d89c] shadow-[#28d89c]/20"
+                : "border-white/10 hover:border-[#28d89c]/50"
                 }`}
             onClick={onSelect}
         >
             {/* Model Header */}
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 flex items-center gap-2">
+            <div className="bg-gradient-to-r from-emerald-500/20 to-teal-600/20 px-4 py-3 pb-2.5 border-b border-white/5 flex items-center gap-2">
                 <svg className="w-5 h-5 text-[var(--ide-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
                 </svg>
@@ -153,16 +383,9 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect }) => {
                 <button
                     className="p-1 text-white/60 hover:text-red-300 transition-colors rounded"
                     title="Delete model"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Delete model "${model.name}"? This cannot be undone.`)) {
-                            try {
-                                await archiveDataModel(model.id);
-                                toast.success(`Model "${model.name}" deleted`);
-                            } catch (err) {
-                                toast.error(`Failed to delete model: ${err}`);
-                            }
-                        }
+                        onRequestDelete();
                     }}
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,9 +395,16 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect }) => {
             </div>
 
             {/* Fields */}
-            <div className="divide-y divide-[var(--ide-border)]">
+            <div className="divide-y divide-white/5">
                 {model.fields.length > 0 ? (
-                    model.fields.map((field) => <FieldRow key={`${model.id}-${field.name}`} field={field} modelId={model.id} />)
+                    model.fields.map((field) => (
+                        <FieldRow
+                            key={`${model.id}-${field.name}`}
+                            field={field}
+                            modelId={model.id}
+                            onRequestDelete={() => onRequestDeleteField(field.name)}
+                        />
+                    ))
                 ) : (
                     <div className="px-4 py-3 text-xs text-[var(--ide-text-muted)] italic">
                         No fields defined
@@ -183,7 +413,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect }) => {
             </div>
 
             {/* Footer */}
-            <div className="px-4 py-2 bg-[var(--ide-bg-sidebar)] flex items-center justify-between text-xs text-[var(--ide-text-muted)]">
+            <div className="px-4 py-2 bg-black/20 flex items-center justify-between text-xs text-[var(--ide-text-muted)] border-t border-white/5">
                 <span className="flex items-center gap-1">
                     {model.timestamps && (
                         <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">timestamps</span>
@@ -193,14 +423,10 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect }) => {
                     )}
                 </span>
                 <button
-                    className="hover:text-[var(--ide-primary)] transition-colors"
-                    onClick={async (e) => {
+                    className="hover:text-[#28d89c] transition-colors"
+                    onClick={(e) => {
                         e.stopPropagation();
-                        try {
-                            await addField(model.id, "newField", "string", true);
-                        } catch (err) {
-                            toast.error(`Failed to add field: ${err}`);
-                        }
+                        onRequestAddField();
                     }}
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -216,10 +442,10 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect }) => {
 interface FieldRowProps {
     field: FieldSchema;
     modelId: string;
+    onRequestDelete: () => void;
 }
 
-const FieldRow: React.FC<FieldRowProps> = ({ field, modelId }) => {
-    const toast = useToast();
+const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
     const getTypeColor = (): string => {
         switch (field.field_type) {
             case "string":
@@ -240,7 +466,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, modelId }) => {
     };
 
     return (
-        <div className="px-4 py-2 flex items-center gap-2 hover:bg-[var(--ide-bg-elevated)] transition-colors group">
+        <div className="px-4 py-2 flex items-center gap-2 hover:bg-white/[0.03] transition-colors group">
             {/* Key Icon */}
             {field.primary_key && (
                 <svg className="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
@@ -273,15 +499,9 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, modelId }) => {
                 <button
                     className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all"
                     title="Delete field"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Delete field "${field.name}"?`)) {
-                            try {
-                                await deleteField(modelId, field.name);
-                            } catch (err) {
-                                toast.error(`Failed to delete field: ${err}`);
-                            }
-                        }
+                        onRequestDelete();
                     }}
                 >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,9 +516,24 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, modelId }) => {
 // Empty State
 interface EmptyERDStateProps {
     onAdd: () => void;
+    onGenerate: (mode?: "scratch" | "fix") => void;
+    generating: boolean;
 }
 
-const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd }) => {
+const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, generating }) => {
+    const [aiHelpOpen, setAiHelpOpen] = useState(false);
+    const aiHelpRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (aiHelpRef.current && !aiHelpRef.current.contains(event.target as Node)) {
+                setAiHelpOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
     return (
         <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-sm">
@@ -310,12 +545,79 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd }) => {
                 <h3 className="text-lg font-semibold text-[var(--ide-text)] mb-2">
                     Database Designer
                 </h3>
-                <p className="text-sm text-[var(--ide-text-muted)] mb-4">
+                <p className="text-sm text-[var(--ide-text-muted)] mb-6">
                     Design your database schema visually. Create models, define fields, and set up relations.
                 </p>
-                <button className="btn-primary" onClick={onAdd}>
-                    Create First Model
-                </button>
+                <div className="flex flex-col gap-3 items-center">
+                    <div className="relative" ref={aiHelpRef}>
+                        <button
+                            className={`px-5 py-2.5 bg-[#28d89c] text-teal-950 font-bold rounded-xl shadow-lg shadow-[#28d89c]/20 hover:bg-[#2dc7b2] hover:shadow-[#2dc7b2]/30 hover:-translate-y-0.5 transition-all outline-none flex items-center gap-2 pr-2 ${generating ? "opacity-70 cursor-not-allowed" : ""}`}
+                            onClick={() => !generating && setAiHelpOpen(!aiHelpOpen)}
+                        >
+                            {generating ? (
+                                <>
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    AI Working...
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                    </svg>
+                                    AI Help
+                                    <div className="ml-1 w-px h-4 bg-white/20 mx-1" />
+                                    <svg className={`w-3.5 h-3.5 transition-transform ${aiHelpOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </>
+                            )}
+                        </button>
+
+                        {aiHelpOpen && (
+                            <div className="absolute bottom-full mb-2 left-0 w-56 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-scale-in">
+                                <div className="p-1 px-2 py-1.5 border-b border-white/[0.04]">
+                                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">AI Assistance</span>
+                                </div>
+                                <div className="p-1">
+                                    <button
+                                        onClick={() => { onGenerate("scratch"); setAiHelpOpen(false); }}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--ide-text)] hover:bg-white/[0.05] rounded-lg transition-all text-left group"
+                                    >
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                        </div>
+                                        <div>
+                                            <div className="font-bold">Regenerate from Scratch</div>
+                                            <div className="text-[10px] text-white/40 font-normal">Wipe current schema and restart</div>
+                                        </div>
+                                    </button>
+                                    <button
+                                        onClick={() => { onGenerate("fix"); setAiHelpOpen(false); }}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--ide-text)] hover:bg-white/[0.05] rounded-lg transition-all text-left group"
+                                    >
+                                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        </div>
+                                        <div>
+                                            <div className="font-bold">Check and Fix Schema</div>
+                                            <div className="text-[10px] text-white/40 font-normal">Add missing fields or fix errors</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <span className="text-xs text-[var(--ide-text-muted)]">or</span>
+                    <button 
+                        className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-sm shadow-xl" 
+                        onClick={onAdd}
+                    >
+                        Create First Model
+                    </button>
+                </div>
             </div>
         </div>
     );

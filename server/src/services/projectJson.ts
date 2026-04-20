@@ -8,7 +8,6 @@ type StyleRecord = Record<string, StyleValue>;
 interface ProjectRelations {
   pages?: any[];
   blocks?: any[];
-  variables?: any[];
   dataModels?: any[];
   logicFlows?: any[];
 }
@@ -38,13 +37,7 @@ interface NormalizedPageImport {
   blocks: NormalizedBlockImport[];
 }
 
-interface NormalizedVariableImport {
-  id: string;
-  name: string;
-  variable_type: string;
-  default_value: unknown;
-  is_secret: boolean;
-}
+
 
 interface NormalizedFieldImport {
   id: string;
@@ -104,7 +97,7 @@ interface NormalizedProjectImport {
     settings: JsonObject;
   };
   pages: NormalizedPageImport[];
-  variables: NormalizedVariableImport[];
+
   data_models: NormalizedDataModelImport[];
   logic_flows: NormalizedLogicFlowImport[];
   use_cases: NormalizedUseCaseImport[];
@@ -541,21 +534,7 @@ function normalizeProjectImport(raw: unknown): NormalizedProjectImport {
       settings: mergeProjectSettings(asObject(projectNode.settings)),
     },
     pages: normalizedPages,
-    variables: Array.isArray(source.variables)
-      ? source.variables.map((entry, index) => {
-          const variable = asObject(entry);
-          return {
-            id: asString(variable.id).trim() || randomUUID(),
-            name: asString(variable.name).trim() || `variable_${index + 1}`,
-            variable_type:
-              asString(variable.variable_type).trim() ||
-              asString(variable.type).trim() ||
-              "string",
-            default_value: variable.default_value ?? null,
-            is_secret: asBoolean(variable.is_secret, false),
-          };
-        })
-      : [],
+
     data_models: Array.isArray(source.data_models)
       ? source.data_models.map((entry, index) =>
           normalizeDataModelImport(entry, index),
@@ -609,18 +588,7 @@ export function toPageSchema(page: any, blocks: any[] = []) {
   };
 }
 
-function toVariableSchema(variable: any) {
-  return {
-    id: variable.id,
-    name: variable.name,
-    variable_type: variable.type,
-    scope: "global",
-    default_value: variable.value
-      ? parseJsonValue(variable.value, variable.value)
-      : null,
-    archived: false,
-  };
-}
+
 
 function toDataModelSchema(model: any) {
   const schema = parseJsonValue<{ fields?: unknown[]; relations?: unknown[] }>(
@@ -681,7 +649,7 @@ function toBlockSchema(block: any, pageIdByInternalId: Map<string, string>) {
 export function toProjectSchema(project: any, relations: ProjectRelations = {}) {
   const pages = relations.pages || [];
   const blocks = relations.blocks || [];
-  const variables = relations.variables || [];
+
   const dataModels = relations.dataModels || [];
   const logicFlows = relations.logicFlows || [];
 
@@ -714,7 +682,7 @@ export function toProjectSchema(project: any, relations: ProjectRelations = {}) 
     apis: [],
     logic_flows: logicFlows.map(toLogicFlowSchema),
     data_models: dataModels.map(toDataModelSchema),
-    variables: variables.map(toVariableSchema),
+
     components: [],
   };
 }
@@ -725,7 +693,7 @@ export async function serializeProjectById(projectId: string) {
     include: {
       pages: true,
       blocks: true,
-      variables: true,
+
       dataModels: true,
       logicFlows: true,
     },
@@ -744,7 +712,7 @@ export function buildProjectImportSample(projectName = "Sample Project") {
     project: {
       name: projectName,
       description:
-        "Edit this sample and import it to create a project with starter pages, blocks, data models, variables, and logic flows.",
+        "Edit this sample and import it to create a project with starter pages, blocks, data models, and logic flows.",
       settings: defaultProjectSettings(),
     },
     pages: [
@@ -826,15 +794,7 @@ export function buildProjectImportSample(projectName = "Sample Project") {
         ],
       },
     ],
-    variables: [
-      {
-        id: "app-name",
-        name: "appName",
-        variable_type: "string",
-        default_value: projectName,
-        is_secret: false,
-      },
-    ],
+
     data_models: [
       {
         id: "user-model",
@@ -898,7 +858,7 @@ export async function exportProjectDocument(projectId: string) {
     include: {
       pages: true,
       blocks: true,
-      variables: true,
+
       dataModels: true,
       logicFlows: true,
       useCases: true,
@@ -965,15 +925,7 @@ export async function exportProjectDocument(projectId: string) {
         blocks,
       };
     }),
-    variables: project.variables.map((variable: any) => ({
-      id: variable.id,
-      name: variable.name,
-      variable_type: variable.type,
-      default_value: variable.value
-        ? parseJsonValue(variable.value, variable.value)
-        : null,
-      is_secret: variable.isSecret || false,
-    })),
+
     data_models: project.dataModels.map((model: any) => {
       const schema = parseJsonValue<{ fields?: unknown[]; relations?: unknown[] }>(
         model.schema,
@@ -1138,17 +1090,7 @@ export async function importProjectFromPayload(rawPayload: unknown) {
       });
     }
 
-    for (const variable of normalized.variables) {
-      await prisma.variable.create({
-        data: {
-          projectId: project.id,
-          name: variable.name,
-          type: variable.variable_type,
-          value: JSON.stringify(variable.default_value),
-          isSecret: variable.is_secret,
-        },
-      });
-    }
+
 
     for (const model of normalized.data_models) {
       const createdModel = await prisma.dataModel.create({
