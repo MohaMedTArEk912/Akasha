@@ -75,3 +75,4 @@ Cargo.lock
 # Local model assets
 Qwen/
 docs/
+server/.akasha/github-sessions.json
