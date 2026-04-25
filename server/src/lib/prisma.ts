@@ -1,3 +1,4 @@
+import './env.js';
 import { MongoClient, ObjectId } from 'mongodb';
 
 type Dict = Record<string, any>;

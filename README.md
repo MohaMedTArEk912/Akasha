@@ -36,7 +36,7 @@ The repository is web-first. There is no native desktop runtime here, and the re
 | UI/Editor Tooling | Craft.js, DnD Kit, Monaco Editor, Radix UI |
 | Backend | Node.js, Express, TypeScript |
 | Data / Storage | MongoDB, filesystem-backed project data |
-| AI / Integrations | OpenAI-compatible client, Qwen support, Git/GitHub integrations |
+| AI / Integrations | OpenRouter (OpenAI-compatible client), Git/GitHub integrations |
 
 ## Local Setup
 
@@ -83,7 +83,6 @@ WorkSpace/
 │   └── src/              # Routes, controllers, services, server entry
 ├── docs/                 # Product and UI documentation
 ├── public/               # Static assets served by the app
-├── Qwen/                 # Local AI helper/runtime assets
 ├── docker-compose.yml    # Local container setup
 └── README.md             # Project overview and setup
 ```

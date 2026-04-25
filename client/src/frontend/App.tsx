@@ -22,6 +22,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { DragDropProvider } from "./context/DragDropContext";
+import { SettingsProvider } from "./context/SettingsContext";
 
 const App: React.FC = () => {
   const { project, isDashboardActive, activePage } = useProjectStore();
@@ -43,25 +44,29 @@ const App: React.FC = () => {
   if (isDashboardActive || !project) {
     return (
       <ErrorBoundary>
-        <ThemeProvider>
-          <ToastProvider>
-            <DashboardLanding />
-          </ToastProvider>
-        </ThemeProvider>
+        <SettingsProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <DashboardLanding />
+            </ToastProvider>
+          </ThemeProvider>
+        </SettingsProvider>
       </ErrorBoundary>
     );
   }
 
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <ToastProvider>
-          <DragDropProvider>
-            <IDELayout />
-            {activePage !== "idea" && <FloatingBot />}
-          </DragDropProvider>
-        </ToastProvider>
-      </ThemeProvider>
+      <SettingsProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <DragDropProvider>
+              <IDELayout />
+              {activePage !== "idea" && <FloatingBot />}
+            </DragDropProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </SettingsProvider>
     </ErrorBoundary>
   );
 };

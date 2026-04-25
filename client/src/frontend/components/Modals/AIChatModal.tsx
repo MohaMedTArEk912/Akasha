@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
+import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
 import StructuredAiResponseCard from "../ui/StructuredAiResponse";
 import { normalizeAiResponse, type StructuredAiResponse } from "../../utils/aiResponse";
@@ -19,6 +20,7 @@ const API_BASE = "http://localhost:3001/api/ai";
 
 const AIChatModal: React.FC<AIChatModalProps> = ({ isOpen, onClose }) => {
     const toast = useToast();
+    const { apiKey, model, apiBaseUrl } = useSettings();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [isTyping, setIsTyping] = useState(false);
@@ -88,7 +90,7 @@ const AIChatModal: React.FC<AIChatModalProps> = ({ isOpen, onClose }) => {
             const res = await fetch(`${API_BASE}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: userMsg, sessionId })
+                body: JSON.stringify({ message: userMsg, sessionId, ...(apiKey && { apiKey }), ...(model && { model }), ...(apiBaseUrl && { apiBaseUrl }) })
             });
             const data = await res.json();
 

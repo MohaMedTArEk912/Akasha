@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect } from "react";
+import { useSettings } from "../../../context/SettingsContext";
 import StructuredAiResponseCard from "../../ui/StructuredAiResponse";
 import { normalizeAiResponse, type StructuredAiResponse } from "../../../utils/aiResponse";
 
@@ -25,6 +26,7 @@ interface ChatMessage {
 const API_BASE = "http://localhost:3001/api/ai";
 
 const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName, anchorX, anchorY: _anchorY }) => {
+    const { apiKey, model, apiBaseUrl } = useSettings();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [isTyping, setIsTyping] = useState(false);
@@ -102,8 +104,8 @@ const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName, anch
         try {
             const endpoint = projectId ? `${API_BASE}/project-chat` : `${API_BASE}/simple-chat`;
             const body = projectId
-                ? { message: userMsg, projectId, history: newMessages }
-                : { message: userMsg };
+                ? { message: userMsg, projectId, history: newMessages, ...(apiKey && { apiKey }), ...(model && { model }), ...(apiBaseUrl && { apiBaseUrl }) }
+                : { message: userMsg, ...(apiKey && { apiKey }), ...(model && { model }), ...(apiBaseUrl && { apiBaseUrl }) };
 
             const res = await fetch(endpoint, {
                 method: "POST",

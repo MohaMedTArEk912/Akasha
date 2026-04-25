@@ -1,11 +1,10 @@
 
-import 'dotenv/config';
+import './lib/env.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initializeLLMProvider } from './lib/llmProvider.js';
-import { startQwenServer, stopQwenServer } from './lib/qwenManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,12 +63,6 @@ app.use('/api/github', githubRouter);
 // Initialize servers
 async function startServer() {
     try {
-        // Start Qwen if enabled
-        const qwenStarted = await startQwenServer();
-        if (!qwenStarted && process.env.QWEN_ENABLED !== 'false') {
-            console.warn('[Server] Qwen did not start successfully. Will use OpenRouter fallback.');
-        }
-
         // Initialize LLM provider
         await initializeLLMProvider();
         console.log('[LLM Provider] Initialized successfully');
@@ -82,13 +75,11 @@ async function startServer() {
         // Handle graceful shutdown
         process.on('SIGINT', async () => {
             console.log('\n[Server] Shutting down gracefully...');
-            await stopQwenServer();
             process.exit(0);
         });
 
         process.on('SIGTERM', async () => {
             console.log('\n[Server] Shutting down gracefully...');
-            await stopQwenServer();
             process.exit(0);
         });
     } catch (error: any) {

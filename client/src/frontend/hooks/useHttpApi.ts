@@ -26,6 +26,33 @@ const client = axios.create({
 // State to track current project context (since HTTP is stateless)
 let activeProjectId: string | null = null;
 
+type LlmRequestSettings = {
+  apiKey?: string;
+  model?: string;
+  apiBaseUrl?: string;
+};
+
+function getLlmRequestSettings(): LlmRequestSettings {
+  if (typeof window === "undefined") return {};
+
+  const apiKey = localStorage.getItem("akasha_api_key")?.trim();
+  const model = localStorage.getItem("akasha_model")?.trim();
+  const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
+
+  return {
+    ...(apiKey ? { apiKey } : {}),
+    ...(model ? { model } : {}),
+    ...(apiBaseUrl ? { apiBaseUrl } : {}),
+  };
+}
+
+function withLlmSettings<T extends Record<string, unknown>>(payload: T): T & LlmRequestSettings {
+  return {
+    ...payload,
+    ...getLlmRequestSettings(),
+  };
+}
+
 export const httpApi = {
   mode: "web",
   // ─── Workspace ──────────────────────────────────
@@ -122,10 +149,16 @@ export const httpApi = {
   generateStructuredIdea: async (
     id: string,
     ideaContent?: string,
+    apiKey?: string,
+    model?: string,
+    apiBaseUrl?: string,
   ): Promise<ProjectSchema> => {
-    const res = await client.post(`/project/${id}/generate-idea-details`, {
+    const res = await client.post(`/project/${id}/generate-idea-details`, withLlmSettings({
       ideaContent,
-    });
+      ...(apiKey && { apiKey }),
+      ...(model && { model }),
+      ...(apiBaseUrl && { apiBaseUrl }),
+    }));
     return res.data;
   },
   resetProject: async (_clearDiskFiles?: boolean): Promise<ProjectSchema> => {
@@ -219,11 +252,11 @@ export const httpApi = {
 
   // ─── UI Builder AI ──────────────────────────────
   generateUiLayout: async (payload: UiBuilderGenerateRequest): Promise<UiBuilderGenerateResponse> => {
-    const res = await client.post("/ai/ui-builder/generate", payload);
+    const res = await client.post("/ai/ui-builder/generate", withLlmSettings(payload));
     return res.data;
   },
   analyzeUiLayout: async (payload: UiBuilderGenerateRequest): Promise<UiBuilderGenerateResponse> => {
-    const res = await client.post("/ai/ui-builder/analyze", payload);
+    const res = await client.post("/ai/ui-builder/analyze", withLlmSettings(payload));
     return res.data;
   },
   applyGeneratedLayout: async (payload: {
@@ -238,7 +271,7 @@ export const httpApi = {
     return fetch(`${API_BASE_URL}/ai/ui-builder/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(withLlmSettings(payload)),
     });
   },
 
@@ -609,7 +642,7 @@ export const httpApi = {
 
   // ─── AI Idea Validation & Refinement ───────────
   analyzeIdea: async (idea: string) => {
-    const res = await client.post("/ai/analyze-idea", { idea });
+    const res = await client.post("/ai/analyze-idea", withLlmSettings({ idea }));
     return res.data;
   },
   reviewIdeaFeature: async (payload: {
@@ -621,7 +654,7 @@ export const httpApi = {
     approvedFeatures?: any[];
     rejectedFeatures?: any[];
   }) => {
-    const res = await client.post("/ai/review-idea-feature", payload);
+    const res = await client.post("/ai/review-idea-feature", withLlmSettings(payload));
     return res.data;
   },
   refineIdea: async (idea: string, history: any[], projectId?: string, structuredConcept?: any, featureQueue?: any[], understanding?: any) => {
@@ -630,11 +663,11 @@ export const httpApi = {
     if (structuredConcept) payload.structuredConcept = structuredConcept;
     if (featureQueue) payload.featureQueue = featureQueue;
     if (understanding) payload.understanding = understanding;
-    const res = await client.post("/ai/refine-idea", payload);
+    const res = await client.post("/ai/refine-idea", withLlmSettings(payload));
     return res.data;
   },
   generateSchemaFromIdea: async (projectId: string, mode: "scratch" | "fix" = "scratch") => {
-    const res = await client.post("/ai/generate-schema", { projectId, mode });
+    const res = await client.post("/ai/generate-schema", withLlmSettings({ projectId, mode }));
     return res.data;
   },
 

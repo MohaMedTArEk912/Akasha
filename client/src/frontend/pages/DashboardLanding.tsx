@@ -6,6 +6,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
+import { useSettings } from "../context/SettingsContext";
 import {
   createProject,
   deleteProject,
@@ -31,6 +32,7 @@ type CreateMode = "workshop" | "json";
 const DashboardLanding: React.FC = () => {
   const { projects, workspacePath } = useProjectStore();
   const { theme } = useTheme();
+  const { apiKey, model, apiBaseUrl } = useSettings();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -108,7 +110,7 @@ const DashboardLanding: React.FC = () => {
     try {
       await createProject(projectName.trim(), refinedIdea);
       try {
-        await generateStructuredIdea(refinedIdea);
+        await generateStructuredIdea(refinedIdea, apiKey, model, apiBaseUrl);
       } catch (ideaError) {
         toast.showToast(`Project created, but PRD generation failed: ${ideaError}`, "warning");
       }

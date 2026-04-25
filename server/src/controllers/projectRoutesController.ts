@@ -532,6 +532,9 @@ export async function generateStructuredIdea(req: Request, res: Response) {
     }
 
     const provider = getLLMProvider();
+    const apiKey = req.body.apiKey || undefined;
+    const modelOverride = req.body.model || undefined;
+    const apiBaseUrl = req.body.apiBaseUrl || undefined;
     const systemPrompt = `You are a product architect. Return ONLY valid JSON with this structure:
 {
   "ideaMetadata": {
@@ -576,9 +579,11 @@ export async function generateStructuredIdea(req: Request, res: Response) {
 }`;
 
     const completion = await provider.chat({
-      model: process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it:free",
+      model: modelOverride || process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it:free",
       temperature: 0.2,
       max_tokens: 1400,
+      apiKey,
+      apiBaseUrl,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: rawIdea },
@@ -592,9 +597,11 @@ export async function generateStructuredIdea(req: Request, res: Response) {
       console.warn("Structured idea output was not valid JSON, attempting repair:", parseError);
       try {
         const repairCompletion = await provider.chat({
-          model: process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it:free",
+          model: modelOverride || process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it:free",
           temperature: 0,
           max_tokens: 1800,
+          apiKey,
+          apiBaseUrl,
           messages: [
             {
               role: "system",

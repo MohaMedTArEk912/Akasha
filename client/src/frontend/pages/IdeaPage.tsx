@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from "react";
 import useApi from "../hooks/useApi";
 import { useProjectStore } from "../hooks/useProjectStore";
+import { useSettings } from "../context/SettingsContext";
 import { generateStructuredIdea } from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
 import IdeaWorkshop from "./IdeaWorkshop";
@@ -27,6 +28,7 @@ function getGeneratePlanErrorMessage(err: unknown): string {
 const IdeaPage: React.FC = () => {
     const api = useApi();
     const { project } = useProjectStore();
+    const { apiKey, model, apiBaseUrl } = useSettings();
     const { error: showToastError } = useToast();
     const [idea, setIdea] = useState("");
     const [activeTab, setActiveTab] = useState<"workspace" | "document">("workspace");
@@ -42,7 +44,7 @@ const IdeaPage: React.FC = () => {
     const handleGeneratePlan = async () => {
         setGeneratingPlan(true);
         try {
-            await generateStructuredIdea();
+            await generateStructuredIdea(undefined, apiKey, model, apiBaseUrl);
         } catch (err) {
             console.error("Failed to generate structured plan:", err);
             showToastError(getGeneratePlanErrorMessage(err));
@@ -68,7 +70,7 @@ const IdeaPage: React.FC = () => {
             
             // Generate the structured plan immediately since they hit finalize
             setGeneratingPlan(true);
-            await generateStructuredIdea(refinedIdea);
+            await generateStructuredIdea(refinedIdea, apiKey, model, apiBaseUrl);
             setGeneratingPlan(false);
         } catch (err) {
             console.error("Failed to save refined idea or generate plan:", err);

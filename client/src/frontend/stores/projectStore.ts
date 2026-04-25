@@ -333,13 +333,13 @@ export async function updateProjectSettings(settings: Record<string, unknown>): 
 /**
  * Generate Structured Idea logic (AI)
  */
-export async function generateStructuredIdea(ideaContent?: string): Promise<void> {
+export async function generateStructuredIdea(ideaContent?: string, apiKey?: string, model?: string, apiBaseUrl?: string): Promise<void> {
     const projectId = state.project?.id;
     if (!projectId) throw new Error("No active project");
 
     updateState(() => ({ loading: true, error: null, loadingMessage: "Generating AI Structured Plan..." }));
     try {
-        const project = await api.generateStructuredIdea(projectId, ideaContent);
+        const project = await api.generateStructuredIdea(projectId, ideaContent, apiKey, model, apiBaseUrl);
         updateState(() => ({ project }));
     } catch (err) {
         updateState(() => ({ error: String(err) }));

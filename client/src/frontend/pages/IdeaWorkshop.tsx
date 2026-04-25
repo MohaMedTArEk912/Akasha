@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { useToast } from '../context/ToastContext';
+import { useSettings } from '../context/SettingsContext';
 import { httpApi } from '../hooks/useHttpApi';
 import StructuredAiResponseCard from '../components/ui/StructuredAiResponse';
 import { normalizeAiResponse, type StructuredAiResponse } from '../utils/aiResponse';
@@ -543,6 +544,7 @@ export default function IdeaWorkshop({
     onCancel,
 }: IdeaWorkshopProps) {
     const toast = useToast();
+    const { apiKey, model, apiBaseUrl } = useSettings();
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const [phase, setPhase] = useState<Phase>('input');
@@ -764,7 +766,7 @@ export default function IdeaWorkshop({
             const res = await fetch('http://localhost:3001/api/ai/simple-chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: contextMsg }),
+                body: JSON.stringify({ message: contextMsg, ...(apiKey && { apiKey }), ...(model && { model }), ...(apiBaseUrl && { apiBaseUrl }) }),
             });
 
             const data = await res.json();

@@ -83,6 +83,9 @@ export interface UiBuilderGenerateRequest {
     pageId?: string;
     mode: UiBuilderMode;
     prompt: string;
+    apiKey?: string;
+    model?: string;
+    apiBaseUrl?: string;
     context?: {
         projectName?: string;
         projectDescription?: string;
