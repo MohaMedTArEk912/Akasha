@@ -1,235 +1,48 @@
-/**
- * ApiList Component - React version
- * 
- * Displays and manages API endpoints in a list view.
- */
-
-import React, { useState, useEffect } from "react";
-import { addApi, archiveApi, addLogicFlow, setActivePage, updateEndpoint } from "../../../stores/projectStore";
+import React, { useState, useEffect, useMemo } from "react";
+import { addApi, archiveApi, updateEndpoint } from "../../../stores/projectStore";
 import { useProjectStore } from "../../../hooks/useProjectStore";
-import PromptModal from "../../ui/PromptModal";
-import ConfirmModal from "../../Modals/ConfirmModal";
 import { useToast } from "../../../context/ToastContext";
 import type { DataShape, ShapeField } from "../../../hooks/useApi";
 
-const getMethodColor = (method: string): string => {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const getMethodStyle = (method: string) => {
     switch (method.toUpperCase()) {
-        case "GET": return "bg-green-500/20 text-green-400 border-green-500/50";
-        case "POST": return "bg-blue-500/20 text-blue-400 border-blue-500/50";
-        case "PUT": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
-        case "PATCH": return "bg-orange-500/20 text-orange-400 border-orange-500/50";
-        case "DELETE": return "bg-red-500/20 text-red-400 border-red-500/50";
-        default: return "bg-gray-500/20 text-gray-400 border-gray-500/50";
+        case "GET": return { text: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.3)" };
+        case "POST": return { text: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.3)" };
+        case "PUT": return { text: "#f59e0b", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.3)" };
+        case "PATCH": return { text: "#8b5cf6", bg: "rgba(139,92,246,0.1)", border: "rgba(139,92,246,0.3)" };
+        case "DELETE": return { text: "#ef4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.3)" };
+        default: return { text: "#9ca3af", bg: "rgba(156,163,175,0.1)", border: "rgba(156,163,175,0.3)" };
     }
 };
 
-const ApiList: React.FC = () => {
-    const { project } = useProjectStore();
-    const [selectedApiId, setSelectedApiId] = useState<string | null>(null);
-    const [promptOpen, setPromptOpen] = useState(false);
-    const toast = useToast();
-
-    const apis = project?.apis.filter(a => !a.archived) || [];
-    const selectedApi = apis.find(a => a.id === selectedApiId);
-
-    const handleAddApi = () => setPromptOpen(true);
-
-    return (
-        <div className="h-full flex">
-            {/* API List */}
-            <div className="w-80 bg-[var(--ide-bg-sidebar)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0">
-                {/* Header */}
-                <div className="h-10 px-4 flex items-center justify-between border-b border-[var(--ide-border)]">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ide-text-muted)]">
-                        API Endpoints
-                    </span>
-                    <button
-                        className="p-1 hover:bg-[var(--ide-bg-panel)] rounded text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors"
-                        onClick={handleAddApi}
-                        aria-label="Add endpoint"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                    </button>
-                </div>
-
-                {/* List */}
-                <div className="flex-1 overflow-auto">
-                    {apis.length > 0 ? (
-                        <div className="p-2 space-y-1">
-                            {apis.map((api) => (
-                                <button
-                                    key={api.id}
-                                    className={`w-full text-left p-3 rounded-lg transition-colors ${selectedApiId === api.id
-                                        ? "bg-[var(--ide-accent-subtle)] border border-[var(--ide-border-strong)]"
-                                        : "hover:bg-[var(--ide-bg-panel)] border border-transparent"
-                                        }`}
-                                    onClick={() => setSelectedApiId(api.id)}
-                                >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${getMethodColor(api.method)}`}>
-                                            {api.method}
-                                        </span>
-                                        <span className="text-sm font-mono text-[var(--ide-text)] truncate">
-                                            {api.path}
-                                        </span>
-                                    </div>
-                                    <span className="text-xs text-[var(--ide-text-muted)]">{api.name}</span>
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-4 text-center text-[var(--ide-text-muted)] text-sm">
-                            <p>No API endpoints yet</p>
-                            <button
-                                className="mt-2 text-[var(--ide-primary)] hover:underline"
-                                onClick={handleAddApi}
-                            >
-                                Create your first endpoint
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <PromptModal
-                isOpen={promptOpen}
-                title="New API Endpoint"
-                confirmText="Create"
-                fields={[
-                    { name: "method", label: "HTTP method", placeholder: "GET", value: "GET", required: true },
-                    { name: "path", label: "API path", placeholder: "/api/", value: "/api/", required: true },
-                    { name: "name", label: "Endpoint name", placeholder: "ListUsers", required: true },
-                ]}
-                onClose={() => setPromptOpen(false)}
-                onSubmit={async (values) => {
-                    try {
-                        const method = values.method.trim().toUpperCase();
-                        const path = values.path.trim();
-                        const name = values.name.trim();
-                        await addApi(method, path, name);
-                        toast.success(`API "${name}" created`);
-                    } catch (err) {
-                        toast.error(`Failed to create API: ${err}`);
-                    }
-                }}
-            />
-
-            {/* API Detail Panel */}
-            <div className="flex-1 overflow-auto bg-[var(--ide-bg)]">
-                {!selectedApi ? (
-                    <div className="h-full flex items-center justify-center text-[var(--ide-text-muted)]">
-                        <div className="text-center">
-                            <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            <p className="text-sm">Select an endpoint to view details</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="p-6">
-                        <EndpointDetail api={selectedApi} onDelete={() => { setSelectedApiId(null); }} />
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-/* ============ Endpoint Detail (Editable) ============ */
-
 const SHAPE_TYPES = ['string', 'number', 'boolean', 'object', 'array', 'model'] as const;
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-const ShapeFieldEditor: React.FC<{
-    field: ShapeField;
-    onChange: (updated: ShapeField) => void;
-    onRemove: () => void;
-}> = ({ field, onChange, onRemove }) => (
-    <div className="flex items-center gap-2 mb-1.5 group">
-        <input
-            value={field.name}
-            onChange={(e) => onChange({ ...field, name: e.target.value })}
-            placeholder="field name"
-            className="flex-1 px-2 py-1 text-xs font-mono bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded text-[var(--ide-text)] focus:border-[var(--ide-primary)] focus:outline-none"
-        />
-        <select
-            value={field.field_type}
-            onChange={(e) => onChange({ ...field, field_type: e.target.value as ShapeField['field_type'] })}
-            className="px-2 py-1 text-xs bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded text-[var(--ide-text-muted)] focus:outline-none"
-        >
-            {SHAPE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <label className="flex items-center gap-1 text-[10px] text-[var(--ide-text-muted)]">
-            <input type="checkbox" checked={field.required} onChange={(e) => onChange({ ...field, required: e.target.checked })} className="rounded" />
-            req
-        </label>
-        <button onClick={onRemove} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity" title="Remove field">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-    </div>
-);
+// ─── Icons ────────────────────────────────────────────────────────────────────
+const IconSearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>;
+const IconPlus = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>;
+const IconClose = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
+const IconTrash = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>;
+const IconLock = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+const IconLink = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
 
-const DataShapeEditor: React.FC<{
-    label: string;
-    shape?: DataShape;
-    onChange: (shape: DataShape | undefined) => void;
-}> = ({ label, shape, onChange }) => {
-    const addField = () => {
-        const current: DataShape = shape || { shape_type: 'object', fields: [] };
-        const fields = [...(current.fields || []), { name: '', field_type: 'string' as const, required: true }];
-        onChange({ ...current, shape_type: 'object', fields });
-    };
-
-    const updateField = (idx: number, updated: ShapeField) => {
-        const fields = [...(shape?.fields || [])];
-        fields[idx] = updated;
-        onChange({ ...shape!, fields });
-    };
-
-    const removeField = (idx: number) => {
-        const fields = (shape?.fields || []).filter((_, i) => i !== idx);
-        if (fields.length === 0) {
-            onChange(undefined);
-        } else {
-            onChange({ ...shape!, fields });
-        }
-    };
-
-    return (
-        <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-[var(--ide-text)]">{label}</h3>
-                <button onClick={addField}
-                    className="text-xs px-2 py-1 rounded bg-[var(--ide-primary)]/10 text-[var(--ide-primary)] hover:bg-[var(--ide-primary)]/20 transition-colors">
-                    + Field
-                </button>
-            </div>
-            {(!shape || !shape.fields || shape.fields.length === 0) ? (
-                <p className="text-xs text-[var(--ide-text-muted)] italic">No fields defined — click "+ Field" to add</p>
-            ) : (
-                <div>
-                    <div className="flex items-center gap-2 mb-1 px-1">
-                        <span className="flex-1 text-[10px] uppercase tracking-wider text-[var(--ide-text-muted)]">Name</span>
-                        <span className="w-20 text-[10px] uppercase tracking-wider text-[var(--ide-text-muted)]">Type</span>
-                        <span className="w-9 text-[10px] uppercase tracking-wider text-[var(--ide-text-muted)]"></span>
-                        <span className="w-3.5"></span>
-                    </div>
-                    {shape.fields.map((field, idx) => (
-                        <ShapeFieldEditor
-                            key={idx}
-                            field={field}
-                            onChange={(f) => updateField(idx, f)}
-                            onRemove={() => removeField(idx)}
-                        />
-                    ))}
-                </div>
-            )}
-        </div>
-    );
+// ─── Common Styles ────────────────────────────────────────────────────────────
+const inputStyle: React.CSSProperties = {
+    width: "100%", background: "rgba(168,85,247,0.04)",
+    border: "1px solid rgba(168,85,247,0.15)", borderRadius: 8,
+    color: "#f3e8ff", fontSize: 13, padding: "9px 12px",
+    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+    transition: "border-color 0.2s",
 };
 
-const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+const labelStyle: React.CSSProperties = {
+    fontSize: 10.5, fontFamily: "'Space Mono', monospace",
+    letterSpacing: "0.08em", color: "rgba(168,85,247,0.55)",
+    textTransform: "uppercase", display: "block", marginBottom: 6,
+};
+
+// ─── Sub-Components ───────────────────────────────────────────────────────────
 
 const ApiTester: React.FC<{ api: any }> = ({ api }) => {
     const [baseUrl, setBaseUrl] = useState("http://localhost:8000");
@@ -245,7 +58,7 @@ const ApiTester: React.FC<{ api: any }> = ({ api }) => {
     useEffect(() => {
         setPath(api.path);
         setHeaders(api.auth_required ? '{\n  "Authorization": "Bearer YOUR_TOKEN"\n}' : "{}");
-    }, [api.id]);
+    }, [api.id, api.path, api.auth_required]);
 
     const handleSend = async () => {
         setIsLoading(true);
@@ -294,73 +107,69 @@ const ApiTester: React.FC<{ api: any }> = ({ api }) => {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
-                <input
-                    value={baseUrl}
-                    onChange={e => setBaseUrl(e.target.value)}
-                    placeholder="Base URL (e.g. http://localhost:3000)"
-                    className="w-1/3 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none"
-                />
-                <input
-                    value={path}
-                    onChange={e => setPath(e.target.value)}
-                    placeholder="Path (e.g. /api/users)"
-                    className="flex-1 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none"
-                />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* URL Row */}
+            <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...inputStyle, width: "30%", fontFamily: "'Space Mono', monospace" }}
+                    value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="http://localhost:3000" />
+                <input style={{ ...inputStyle, flex: 1, fontFamily: "'Space Mono', monospace" }}
+                    value={path} onChange={e => setPath(e.target.value)} placeholder="/api/endpoint" />
                 <button
-                    onClick={handleSend}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-[var(--ide-primary)] hover:bg-[var(--ide-primary-hover)] text-white rounded font-medium disabled:opacity-50 transition-colors"
-                >
-                    {isLoading ? "Sending..." : "Send"}
-                </button>
+                    onClick={handleSend} disabled={isLoading}
+                    style={{
+                        background: isLoading ? "rgba(168,85,247,0.2)" : "linear-gradient(135deg, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.15) 100%)",
+                        border: "1px solid rgba(168,85,247,0.4)", borderRadius: 8,
+                        color: "#e9d5ff", cursor: isLoading ? "default" : "pointer", padding: "0 24px",
+                        fontSize: 13, fontFamily: "inherit", fontWeight: 600,
+                        boxShadow: isLoading ? "none" : "0 0 16px rgba(168,85,247,0.1)",
+                    }}
+                >{isLoading ? "..." : "Send"}</button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 h-[400px]">
-                <div className="space-y-4 flex flex-col h-full">
-                    <div>
-                        <label className="block text-xs font-semibold text-[var(--ide-text-muted)] mb-1">Headers (JSON)</label>
-                        <textarea
-                            value={headers}
-                            onChange={e => setHeaders(e.target.value)}
-                            className="w-full h-24 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none resize-none"
-                        />
+            <div style={{ display: "flex", gap: 16, height: 380 }}>
+                {/* Left Col */}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ flexShrink: 0 }}>
+                        <label style={labelStyle}>Headers (JSON)</label>
+                        <textarea style={{ ...inputStyle, height: 80, resize: "none", fontFamily: "'Space Mono', monospace" }}
+                            value={headers} onChange={e => setHeaders(e.target.value)} />
                     </div>
                     {['POST', 'PUT', 'PATCH'].includes(api.method) && (
-                        <div className="flex-1 flex flex-col min-h-0">
-                            <label className="block text-xs font-semibold text-[var(--ide-text-muted)] mb-1">Body (JSON)</label>
-                            <textarea
-                                value={body}
-                                onChange={e => setBody(e.target.value)}
-                                className="w-full flex-1 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none resize-none"
-                            />
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                            <label style={labelStyle}>Body (JSON)</label>
+                            <textarea style={{ ...inputStyle, flex: 1, resize: "none", fontFamily: "'Space Mono', monospace" }}
+                                value={body} onChange={e => setBody(e.target.value)} />
                         </div>
                     )}
                 </div>
 
-                <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)] flex flex-col h-full">
-                    <div className="flex items-center justify-between mb-3 shrink-0">
-                        <h3 className="text-sm font-semibold text-[var(--ide-text)]">Response</h3>
+                {/* Right Col */}
+                <div style={{
+                    flex: 1, background: "rgba(10,5,20,0.5)", border: "1px solid rgba(168,85,247,0.15)",
+                    borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden"
+                }}>
+                    <div style={{
+                        padding: "12px 16px", borderBottom: "1px solid rgba(168,85,247,0.1)",
+                        display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(168,85,247,0.03)"
+                    }}>
+                        <span style={{ fontSize: 11, fontFamily: "'Space Mono', monospace", color: "rgba(168,85,247,0.5)", letterSpacing: "0.1em" }}>RESPONSE</span>
                         {response && (
-                            <div className="flex items-center gap-3 text-xs">
-                                <span className={response.status >= 200 && response.status < 300 ? "text-green-400" : "text-red-400"}>
-                                    Status: {response.status}
-                                </span>
-                                <span className="text-[var(--ide-text-muted)]">Time: {response.time}ms</span>
+                            <div style={{ display: "flex", gap: 12, fontSize: 11, fontFamily: "'Space Mono', monospace" }}>
+                                <span style={{ color: response.status < 300 ? "#10b981" : "#ef4444" }}>STATUS: {response.status}</span>
+                                <span style={{ color: "rgba(216,180,254,0.6)" }}>TIME: {response.time}ms</span>
                             </div>
                         )}
                     </div>
-                    <div className="flex-1 bg-[var(--ide-bg)] rounded border border-[var(--ide-border)] overflow-auto p-3">
+                    <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
                         {error ? (
-                            <div className="text-red-400 text-sm font-mono">{error}</div>
+                            <div style={{ color: "#ef4444", fontSize: 13, fontFamily: "'Space Mono', monospace" }}>{error}</div>
                         ) : response ? (
-                            <pre className="text-sm font-mono text-[var(--ide-text)] whitespace-pre-wrap">
+                            <pre style={{ margin: 0, color: "#f3e8ff", fontSize: 12, fontFamily: "'Space Mono', monospace", whiteSpace: "pre-wrap" }}>
                                 {typeof response.data === 'object' ? JSON.stringify(response.data, null, 2) : response.data}
                             </pre>
                         ) : (
-                            <div className="h-full flex items-center justify-center text-[var(--ide-text-muted)] text-sm">
-                                Click Send to test endpoint
+                            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(168,85,247,0.3)", fontSize: 13 }}>
+                                No response yet
                             </div>
                         )}
                     </div>
@@ -370,328 +179,391 @@ const ApiTester: React.FC<{ api: any }> = ({ api }) => {
     );
 };
 
-interface EndpointDetailProps {
-    api: any;
-    onDelete: () => void;
-}
+const ShapeFieldEditor: React.FC<{
+    field: ShapeField; onChange: (updated: ShapeField) => void; onRemove: () => void;
+}> = ({ field, onChange, onRemove }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <input style={{ ...inputStyle, flex: 1, padding: "6px 10px", fontSize: 12 }}
+            value={field.name} onChange={(e) => onChange({ ...field, name: e.target.value })} placeholder="field_name" />
+        <select style={{ ...inputStyle, width: 100, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+            value={field.field_type} onChange={(e) => onChange({ ...field, field_type: e.target.value as ShapeField['field_type'] })}>
+            {SHAPE_TYPES.map(t => <option key={t} value={t} style={{ background: "#0e0618" }}>{t}</option>)}
+        </select>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "rgba(216,180,254,0.6)", cursor: "pointer" }}>
+            <input type="checkbox" checked={field.required} onChange={(e) => onChange({ ...field, required: e.target.checked })} /> req
+        </label>
+        <button onClick={onRemove} style={{
+            background: "transparent", border: "none", color: "#ef4444", cursor: "pointer", opacity: 0.7, padding: 4
+        }} title="Remove"><IconClose /></button>
+    </div>
+);
 
-const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
-    const { project } = useProjectStore();
-    const toast = useToast();
-    const [isEditing, setIsEditing] = useState(false);
-    const [editData, setEditData] = useState({
-        method: api.method,
-        path: api.path,
-        name: api.name,
-        description: api.description || "",
-        auth_required: api.auth_required || false,
-    });
-    const [reqBody, setReqBody] = useState<DataShape | undefined>(api.request_body);
-    const [resBody, setResBody] = useState<DataShape | undefined>(api.response_body);
-    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'design' | 'test'>('design');
-    const backendFlows = (project?.logic_flows || []).filter(
-        (flow) => !flow.archived && flow.context === "backend"
-    );
-
-    // Reset form when selected api changes
-    useEffect(() => {
-        setEditData({
-            method: api.method,
-            path: api.path,
-            name: api.name,
-            description: api.description || "",
-            auth_required: api.auth_required || false,
-        });
-        setReqBody(api.request_body);
-        setResBody(api.response_body);
-        setIsEditing(false);
-    }, [api.id]);
-
-    const handleSave = async () => {
-        try {
-            const updates: Record<string, unknown> = {};
-            if (editData.method !== api.method) updates.method = editData.method;
-            if (editData.path !== api.path) updates.path = editData.path;
-            if (editData.name !== api.name) updates.name = editData.name;
-            if (editData.description !== (api.description || "")) updates.description = editData.description;
-            if (editData.auth_required !== (api.auth_required || false)) updates.auth_required = editData.auth_required;
-            if (JSON.stringify(reqBody) !== JSON.stringify(api.request_body)) updates.request_body = reqBody ?? null;
-            if (JSON.stringify(resBody) !== JSON.stringify(api.response_body)) updates.response_body = resBody ?? null;
-            if (Object.keys(updates).length > 0) {
-                await updateEndpoint(api.id, updates);
-                toast.success("Endpoint updated");
-            }
-            setIsEditing(false);
-        } catch (err) { toast.error(`Failed to update: ${err}`); }
+const DataShapeEditor: React.FC<{ label: string; shape?: DataShape; onChange: (s: DataShape | undefined) => void; }> = ({ label, shape, onChange }) => {
+    const addField = () => {
+        const current: DataShape = shape || { shape_type: 'object', fields: [] };
+        onChange({ ...current, shape_type: 'object', fields: [...(current.fields || []), { name: '', field_type: 'string', required: true }] });
     };
-
-    const handleDelete = async () => {
-        try {
-            await archiveApi(api.id);
-            onDelete();
-            toast.success(`Endpoint "${api.name}" deleted`);
-        } catch (err) { toast.error(`Failed to delete: ${err}`); }
+    const updateField = (idx: number, updated: ShapeField) => {
+        const fields = [...(shape?.fields || [])];
+        fields[idx] = updated;
+        onChange({ ...shape!, fields });
+    };
+    const removeField = (idx: number) => {
+        const fields = (shape?.fields || []).filter((_, i) => i !== idx);
+        onChange(fields.length === 0 ? undefined : { ...shape!, fields });
     };
 
     return (
-        <>
-            <ConfirmModal
-                isOpen={confirmDeleteOpen}
-                title="Delete Endpoint"
-                message={`Are you sure you want to delete the endpoint "${api.name}"?`}
-                confirmText="Delete"
-                cancelText="Cancel"
-                variant="danger"
-                onConfirm={() => {
-                    setConfirmDeleteOpen(false);
-                    handleDelete();
-                }}
-                onCancel={() => setConfirmDeleteOpen(false)}
-            />
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    {isEditing ? (
-                        <>
-                            <select value={editData.method}
-                                onChange={(e) => setEditData({ ...editData, method: e.target.value })}
-                                className={`text-sm font-mono px-2 py-1 rounded border ${getMethodColor(editData.method)} bg-transparent focus:outline-none`}>
-                                {HTTP_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                            <input value={editData.path}
-                                onChange={(e) => setEditData({ ...editData, path: e.target.value })}
-                                className="text-xl font-mono text-[var(--ide-text)] bg-transparent border-b border-[var(--ide-primary)] focus:outline-none"
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <span className={`text-sm font-mono px-2 py-1 rounded border ${getMethodColor(api.method)}`}>{api.method}</span>
-                            <span className="text-xl font-mono text-[var(--ide-text)]">{api.path}</span>
-                        </>
-                    )}
-                </div>
-                <div className="flex items-center gap-1">
-                    {isEditing ? (
-                        <>
-                            <button onClick={handleSave} className="px-3 py-1.5 bg-[var(--ide-primary)] hover:bg-[var(--ide-primary-hover)] text-white text-sm rounded">Save</button>
-                            <button onClick={() => { setIsEditing(false); setEditData({ method: api.method, path: api.path, name: api.name, description: api.description || "", auth_required: api.auth_required || false }); setReqBody(api.request_body); setResBody(api.response_body); }}
-                                className="px-3 py-1.5 bg-[var(--ide-bg-elevated)] text-sm rounded border border-[var(--ide-border)]">Cancel</button>
-                        </>
-                    ) : (
-                        <>
-                            <button onClick={() => setIsEditing(true)}
-                                className="p-2 text-[var(--ide-text-muted)] hover:text-[var(--ide-primary)] hover:bg-[var(--ide-primary)]/10 rounded transition-colors" title="Edit">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            </button>
-                            <button onClick={() => setConfirmDeleteOpen(true)}
-                                className="p-2 text-[var(--ide-text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded transition-colors" title="Delete">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                        </>
-                    )}
-                </div>
+        <div style={{ background: "rgba(10,5,20,0.4)", border: "1px dashed rgba(168,85,247,0.2)", borderRadius: 12, padding: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={labelStyle}>{label}</span>
+                <button onClick={addField} style={{
+                    background: "rgba(168,85,247,0.1)", border: "none", borderRadius: 4,
+                    color: "#c084fc", fontSize: 11, padding: "4px 8px", cursor: "pointer"
+                }}>+ Add Field</button>
             </div>
-
-            {/* Name & Description */}
-            <div className="mb-6">
-                {isEditing ? (
-                    <>
-                        <input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                            className="text-2xl font-bold text-[var(--ide-text)] bg-transparent border-b border-[var(--ide-border)] focus:border-[var(--ide-primary)] focus:outline-none w-full mb-2"
-                            placeholder="Endpoint name" />
-                        <textarea value={editData.description} onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                            className="w-full px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text-muted)] focus:outline-none focus:border-[var(--ide-primary)] resize-none"
-                            rows={2} placeholder="Description (optional)" />
-                    </>
-                ) : (
-                    <>
-                        <h2 className="text-2xl font-bold text-[var(--ide-text)]">{api.name}</h2>
-                        {api.description && <p className="mt-2 text-[var(--ide-text-muted)]">{api.description}</p>}
-                    </>
-                )}
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b border-[var(--ide-border)] mb-6">
-                <button
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'design' ? 'border-[var(--ide-primary)] text-[var(--ide-primary)]' : 'border-transparent text-[var(--ide-text-muted)] hover:text-[var(--ide-text)]'}`}
-                    onClick={() => setActiveTab('design')}
-                >
-                    Design Schema
-                </button>
-                <button
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'test' ? 'border-[var(--ide-primary)] text-[var(--ide-primary)]' : 'border-transparent text-[var(--ide-text-muted)] hover:text-[var(--ide-text)]'}`}
-                    onClick={() => setActiveTab('test')}
-                >
-                    Test API
-                </button>
-            </div>
-
-            {activeTab === 'design' ? (
-            <div className="space-y-6 animate-fade-in">
-                {/* Auth */}
-                <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
-                    <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-3">Authentication</h3>
-                    {isEditing ? (
-                        <label className="flex items-center gap-2 text-sm text-[var(--ide-text-secondary)] cursor-pointer">
-                            <input type="checkbox" checked={editData.auth_required}
-                                onChange={(e) => setEditData({ ...editData, auth_required: e.target.checked })}
-                                className="rounded" />
-                            Requires authentication (JWT Bearer token)
-                        </label>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            {api.auth_required ? (
-                                <>
-                                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                    <span className="text-sm text-[var(--ide-text)]">Protected — JWT required</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                                    <span className="text-sm text-[var(--ide-text-muted)]">Public — no authentication required</span>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Request Preview / Editor */}
-                {isEditing ? (
-                    <>
-                        <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)] mb-1">
-                            <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-2">Request Preview</h3>
-                            <div className="bg-[var(--ide-bg)] rounded p-3 font-mono text-sm text-[var(--ide-text-muted)]">
-                                <span className="text-green-400">{editData.method}</span>{" "}
-                                <span className="text-[var(--ide-text)]">{editData.path}</span>
-                                {editData.auth_required && (
-                                    <div className="mt-1 text-xs text-yellow-400">Authorization: Bearer &lt;token&gt;</div>
-                                )}
-                            </div>
-                        </div>
-                        <DataShapeEditor label="Request Body" shape={reqBody} onChange={setReqBody} />
-                    </>
-                ) : (
-                    <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
-                        <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-3">Request</h3>
-                        <div className="bg-[var(--ide-bg)] rounded p-3 font-mono text-sm text-[var(--ide-text-muted)]">
-                            <span className="text-green-400">{api.method}</span>{" "}
-                            <span className="text-[var(--ide-text)]">{api.path}</span>
-                            {api.auth_required && (
-                                <div className="mt-1 text-xs text-yellow-400">Authorization: Bearer &lt;token&gt;</div>
-                            )}
-                        </div>
-                        {api.request_body && api.request_body.fields && api.request_body.fields.length > 0 && (
-                            <div className="mt-3 bg-[var(--ide-bg)] rounded p-3 font-mono text-xs text-[var(--ide-text-muted)]">
-                                <div className="text-[10px] uppercase text-[var(--ide-text-muted)] mb-1">Body Fields</div>
-                                {api.request_body.fields.map((f: ShapeField, i: number) => (
-                                    <div key={i} className="flex gap-2">
-                                        <span className="text-[var(--ide-text)]">{f.name}</span>
-                                        <span className="text-purple-400">{f.field_type}</span>
-                                        {f.required && <span className="text-red-400">*</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Response Body Editor / Preview */}
-                {isEditing ? (
-                    <DataShapeEditor label="Response Body" shape={resBody} onChange={setResBody} />
-                ) : (
-                    <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
-                        <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-3">Response</h3>
-                        <div className="bg-[var(--ide-bg)] rounded p-3 font-mono text-xs text-[var(--ide-text-muted)]">
-                            {api.response_body && api.response_body.fields && api.response_body.fields.length > 0 ? (
-                                <div>
-                                    {api.response_body.fields.map((f: ShapeField, i: number) => (
-                                        <div key={i} className="flex gap-2">
-                                            <span className="text-[var(--ide-text)]">{f.name}</span>
-                                            <span className="text-purple-400">{f.field_type}</span>
-                                            {f.required && <span className="text-red-400">*</span>}
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <pre>{`{
-  "success": true,
-  "data": {}
-}`}</pre>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Logic Flow */}
-                <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
-                    <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-3">Handler Logic</h3>
-                    <div className="space-y-3">
-                        <select
-                            value={api.logic_flow_id || ""}
-                            onChange={async (e) => {
-                                try {
-                                    await updateEndpoint(api.id, { logic_flow_id: e.target.value || null });
-                                    toast.success(e.target.value ? "Logic flow linked" : "Logic flow unlinked");
-                                } catch (err) {
-                                    toast.error(`Failed to update logic flow link: ${err}`);
-                                }
-                            }}
-                            className="w-full px-3 py-2 text-sm bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded text-[var(--ide-text)] focus:outline-none focus:border-[var(--ide-primary)]"
-                        >
-                            <option value="">— No flow linked —</option>
-                            {backendFlows.map((flow) => (
-                                <option key={flow.id} value={flow.id}>
-                                    {flow.name}
-                                </option>
-                            ))}
-                        </select>
-
-                        <button
-                            onClick={async () => {
-                                try {
-                                    const flow = await addLogicFlow(`${api.name}_handler`, "backend");
-                                    await updateEndpoint(api.id, { logic_flow_id: flow.id });
-                                    toast.success("Logic flow created and linked — switching to Use Cases");
-                                    setActivePage("usecases");
-                                } catch (err) {
-                                    toast.error(`Failed to create logic flow: ${err}`);
-                                }
-                            }}
-                            className="w-full py-3 border-2 border-dashed border-[var(--ide-border)] rounded-lg text-[var(--ide-text-muted)] hover:border-[var(--ide-primary)] hover:text-[var(--ide-primary)] transition-colors"
-                        >
-                            + Create & Link Logic Flow
-                        </button>
-
-                        {api.logic_flow_id && (
-                            <p className="text-sm text-[var(--ide-text-muted)]">
-                                Connected to logic flow: {api.logic_flow_id}
-                            </p>
-                        )}
-                    </div>
-                </div>
-
-                {/* Permissions */}
-                <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
-                    <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-3">Permissions</h3>
-                    {api.permissions?.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                            {api.permissions.map((perm: string) => (
-                                <span key={perm} className="px-2 py-1 text-xs rounded bg-purple-500/20 text-purple-400">{perm}</span>
-                            ))}
-                        </div>
-                    ) : (
-                        <span className="text-sm text-[var(--ide-text-muted)]">No role-based permissions configured</span>
-                    )}
-                </div>
-            </div>
+            {(!shape || !shape.fields || shape.fields.length === 0) ? (
+                <div style={{ fontSize: 12, color: "rgba(216,180,254,0.4)", fontStyle: "italic" }}>No fields defined.</div>
             ) : (
-                <div className="animate-fade-in">
-                    <ApiTester api={api} />
+                <div>
+                    {shape.fields.map((f, i) => <ShapeFieldEditor key={i} field={f} onChange={c => updateField(i, c)} onRemove={() => removeField(i)} />)}
                 </div>
             )}
-        </>
+        </div>
+    );
+};
+
+// ─── Api Editor Modal ─────────────────────────────────────────────────────────
+
+const ApiEditorModal = ({
+    api, onSave, onDelete, onClose
+}: {
+    api: any; onSave: (id: string, updates: any) => Promise<void>; onDelete: (id: string) => Promise<void>; onClose: () => void;
+}) => {
+    const { project } = useProjectStore();
+    const [activeTab, setActiveTab] = useState<"design" | "test">("design");
+    const [editData, setEditData] = useState({
+        method: api.method, path: api.path, name: api.name,
+        description: api.description || "", auth_required: api.auth_required || false,
+    });
+    const [reqBody, setReqBody] = useState<DataShape | undefined>(api.request_body);
+    const [resBody, setResBody] = useState<DataShape | undefined>(api.response_body);
+    const [logicFlowId, setLogicFlowId] = useState(api.logic_flow_id || "");
+
+    const backendFlows = (project?.logic_flows || []).filter(f => !f.archived && f.context === "backend");
+
+    const handleSave = async () => {
+        const updates: any = {};
+        if (editData.method !== api.method) updates.method = editData.method;
+        if (editData.path !== api.path) updates.path = editData.path;
+        if (editData.name !== api.name) updates.name = editData.name;
+        if (editData.description !== (api.description || "")) updates.description = editData.description;
+        if (editData.auth_required !== (api.auth_required || false)) updates.auth_required = editData.auth_required;
+        if (JSON.stringify(reqBody) !== JSON.stringify(api.request_body)) updates.request_body = reqBody ?? null;
+        if (JSON.stringify(resBody) !== JSON.stringify(api.response_body)) updates.response_body = resBody ?? null;
+        if (logicFlowId !== (api.logic_flow_id || "")) updates.logic_flow_id = logicFlowId || null;
+
+        await onSave(api.id, updates);
+    };
+
+    return (
+        <div style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(6,2,12,0.85)", backdropFilter: "blur(8px)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+        }}>
+            <div style={{
+                background: "linear-gradient(145deg, #160a28 0%, #0e0618 100%)",
+                border: "1px solid rgba(168,85,247,0.2)", borderRadius: 16, width: "100%", maxWidth: 860,
+                maxHeight: "90vh", display: "flex", flexDirection: "column",
+                boxShadow: "0 0 0 1px rgba(168,85,247,0.05), 0 24px 80px rgba(0,0,0,0.7)",
+                overflow: "hidden",
+            }}>
+                {/* Header */}
+                <div style={{
+                    padding: "20px 24px", borderBottom: "1px solid rgba(168,85,247,0.08)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
+                }}>
+                    <div style={{ flex: 1, display: "flex", gap: 16, alignItems: "center" }}>
+                        <select style={{ ...inputStyle, width: 100, fontWeight: 700, cursor: "pointer", ...getMethodStyle(editData.method) }}
+                            value={editData.method} onChange={e => setEditData({ ...editData, method: e.target.value })}>
+                            {HTTP_METHODS.map(m => <option key={m} value={m} style={{ background: "#0e0618" }}>{m}</option>)}
+                        </select>
+                        <input style={{ ...inputStyle, flex: 1, fontSize: 16, fontFamily: "'Space Mono', monospace", background: "transparent", border: "none", borderBottom: "1px solid rgba(168,85,247,0.3)", borderRadius: 0 }}
+                            value={editData.path} onChange={e => setEditData({ ...editData, path: e.target.value })} placeholder="/api/endpoint" />
+                    </div>
+                    <button onClick={onClose} style={{
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 8, color: "rgba(216,180,254,0.6)", cursor: "pointer",
+                        padding: "6px 8px", marginLeft: 16
+                    }}><IconClose /></button>
+                </div>
+
+                {/* Tabs */}
+                <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(168,85,247,0.08)", flexShrink: 0 }}>
+                    <button onClick={() => setActiveTab("design")} style={{
+                        background: "none", border: "none", cursor: "pointer", padding: "12px 16px 10px", fontSize: 12.5,
+                        fontFamily: "'Space Mono', monospace", letterSpacing: "0.03em",
+                        color: activeTab === "design" ? "#c084fc" : "rgba(216,180,254,0.45)",
+                        borderBottom: `2px solid ${activeTab === "design" ? "#c084fc" : "transparent"}`, transition: "all 0.2s", marginBottom: -1,
+                    }}>Design Schema</button>
+                    <button onClick={() => setActiveTab("test")} style={{
+                        background: "none", border: "none", cursor: "pointer", padding: "12px 16px 10px", fontSize: 12.5,
+                        fontFamily: "'Space Mono', monospace", letterSpacing: "0.03em",
+                        color: activeTab === "test" ? "#c084fc" : "rgba(216,180,254,0.45)",
+                        borderBottom: `2px solid ${activeTab === "test" ? "#c084fc" : "transparent"}`, transition: "all 0.2s", marginBottom: -1,
+                    }}>Test API</button>
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
+                    {activeTab === "design" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                            {/* Meta */}
+                            <div style={{ display: "flex", gap: 16 }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={labelStyle}>Endpoint Name</label>
+                                    <input style={inputStyle} value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} placeholder="e.g. GetUser" />
+                                </div>
+                                <div style={{ flex: 2 }}>
+                                    <label style={labelStyle}>Description</label>
+                                    <input style={inputStyle} value={editData.description} onChange={e => setEditData({ ...editData, description: e.target.value })} placeholder="What does this do?" />
+                                </div>
+                            </div>
+
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                                {/* Left Col */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                                    <div>
+                                        <label style={labelStyle}>Authentication</label>
+                                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#f3e8ff", cursor: "pointer", background: "rgba(10,5,20,0.4)", padding: 12, borderRadius: 8, border: "1px solid rgba(168,85,247,0.15)" }}>
+                                            <input type="checkbox" checked={editData.auth_required} onChange={e => setEditData({ ...editData, auth_required: e.target.checked })} />
+                                            Requires JWT Bearer Token
+                                        </label>
+                                    </div>
+                                    <DataShapeEditor label="Request Body" shape={reqBody} onChange={setReqBody} />
+                                </div>
+
+                                {/* Right Col */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                                    <div>
+                                        <label style={labelStyle}>Logic Flow Handler</label>
+                                        <select style={{ ...inputStyle, cursor: "pointer" }} value={logicFlowId} onChange={e => setLogicFlowId(e.target.value)}>
+                                            <option value="" style={{ background: "#0e0618" }}>— No flow linked —</option>
+                                            {backendFlows.map(f => <option key={f.id} value={f.id} style={{ background: "#0e0618" }}>{f.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <DataShapeEditor label="Response Body" shape={resBody} onChange={setResBody} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "test" && (
+                        <ApiTester api={{ ...api, ...editData, request_body: reqBody }} />
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                    padding: "14px 24px", borderTop: "1px solid rgba(168,85,247,0.08)",
+                    display: "flex", justifyContent: "space-between", flexShrink: 0,
+                }}>
+                    <button onClick={() => onDelete(api.id)} style={{
+                        background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.2)",
+                        borderRadius: 8, color: "#ef4444", cursor: "pointer", padding: "9px 16px", fontSize: 13,
+                        display: "flex", alignItems: "center", gap: 6
+                    }}><IconTrash /> Delete API</button>
+                    <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={onClose} style={{
+                            background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: 8, color: "rgba(216,180,254,0.6)", cursor: "pointer",
+                            padding: "9px 20px", fontSize: 13, fontFamily: "inherit",
+                        }}>Cancel</button>
+                        <button onClick={handleSave} style={{
+                            background: "linear-gradient(135deg, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.15) 100%)",
+                            border: "1px solid rgba(168,85,247,0.4)", borderRadius: 8,
+                            color: "#e9d5ff", cursor: "pointer", padding: "9px 22px",
+                            fontSize: 13, fontFamily: "inherit", fontWeight: 600,
+                            boxShadow: "0 0 16px rgba(168,85,247,0.1)",
+                        }}>Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ─── Api Card ─────────────────────────────────────────────────────────────────
+
+const ApiCard = ({ api, onClick }: { api: any; onClick: () => void }) => {
+    const [hovered, setHovered] = useState(false);
+    const ms = getMethodStyle(api.method);
+
+    return (
+        <div
+            onClick={onClick}
+            onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+            style={{
+                position: "relative",
+                background: hovered ? "linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(14,6,24,0.95) 60%)" : "rgba(14,6,24,0.85)",
+                border: `1px solid ${hovered ? "rgba(168,85,247,0.35)" : "rgba(168,85,247,0.15)"}`,
+                borderRadius: 12, padding: "20px 22px", cursor: "pointer",
+                transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)", backdropFilter: "blur(12px)",
+                boxShadow: hovered ? "0 0 0 1px rgba(168,85,247,0.12), 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(168,85,247,0.05)" : "0 2px 8px rgba(0,0,0,0.3)",
+                transform: hovered ? "translateY(-2px)" : "none", overflow: "hidden",
+            }}
+        >
+            <div style={{
+                position: "absolute", top: 0, left: 22, right: 22, height: 1,
+                background: hovered ? `linear-gradient(90deg, transparent, ${ms.text}88, transparent)` : "transparent",
+                transition: "all 0.3s ease",
+            }} />
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <span style={{
+                    fontSize: 10, fontFamily: "'Space Mono', monospace", padding: "3px 8px", borderRadius: 4,
+                    background: ms.bg, color: ms.text, border: `1px solid ${ms.border}`, fontWeight: 600
+                }}>{api.method}</span>
+                {api.auth_required && <div style={{ color: "rgba(245,158,11,0.8)" }} title="Requires Auth"><IconLock /></div>}
+            </div>
+
+            <h3 style={{ margin: "0 0 4px", fontSize: 16, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#f3e8ff", lineHeight: 1.3 }}>{api.name}</h3>
+            <p style={{ margin: "0 0 16px", fontSize: 13, fontFamily: "'Space Mono', monospace", color: "rgba(216,180,254,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {api.path}
+            </p>
+
+            <div style={{ borderTop: "1px solid rgba(168,85,247,0.1)", paddingTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                {api.logic_flow_id ? (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#a855f7" }}><IconLink /> Handler Linked</span>
+                ) : (
+                    <span style={{ fontSize: 11, color: "rgba(216,180,254,0.4)" }}>No Handler</span>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+const ApiList: React.FC = () => {
+    const { project } = useProjectStore();
+    const toast = useToast();
+    const [search, setSearch] = useState("");
+    const [methodFilter, setMethodFilter] = useState("ALL");
+    const [selectedApi, setSelectedApi] = useState<any>(null);
+
+    const apis = project?.apis.filter(a => !a.archived) || [];
+
+    const filtered = useMemo(() => {
+        let res = apis;
+        if (methodFilter !== "ALL") res = res.filter(a => a.method === methodFilter);
+        if (search) {
+            const q = search.toLowerCase();
+            res = res.filter(a => a.name.toLowerCase().includes(q) || a.path.toLowerCase().includes(q));
+        }
+        return res;
+    }, [apis, search, methodFilter]);
+
+    const handleCreate = async () => {
+        try {
+            await addApi("GET", "/api/new-endpoint", "NewEndpoint");
+            toast.success("New endpoint created");
+        } catch (err) { toast.error("Failed to create endpoint"); }
+    };
+
+    const handleSave = async (id: string, updates: any) => {
+        try {
+            await updateEndpoint(id, updates);
+            toast.success("Endpoint saved");
+            setSelectedApi(null);
+        } catch (err) { toast.error("Failed to save endpoint"); }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!window.confirm("Are you sure you want to delete this endpoint?")) return;
+        try {
+            await archiveApi(id);
+            toast.success("Endpoint deleted");
+            setSelectedApi(null);
+        } catch (err) { toast.error("Failed to delete endpoint"); }
+    };
+
+    return (
+        <div style={{
+            height: "100%", overflowY: "auto", position: "relative",
+            background: "linear-gradient(135deg, #090514 0%, #0d061c 50%, #090514 100%)",
+            fontFamily: "'Outfit', 'Space Mono', sans-serif", color: "#f3e8ff",
+        }}>
+            {/* Background grid */}
+            <div style={{
+                position: "fixed", inset: 0, pointerEvents: "none",
+                backgroundImage: `linear-gradient(rgba(168,85,247,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.03) 1px, transparent 1px)`,
+                backgroundSize: "48px 48px",
+            }} />
+
+            <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+                {/* Header */}
+                <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyItems: "space-between" }}>
+                    <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                            <div style={{ width: 6, height: 24, background: "linear-gradient(180deg, #c084fc, rgba(168,85,247,0.2))", borderRadius: 3 }} />
+                            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", color: "#f3e8ff" }}>
+                                API Endpoints
+                            </h1>
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13.5, color: "rgba(216,180,254,0.5)", paddingLeft: 16, fontFamily: "'Space Mono', monospace" }}>
+                            {apis.length} total endpoints · Architect your backend routing
+                        </p>
+                    </div>
+                    <button onClick={handleCreate} style={{
+                        background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.3)",
+                        borderRadius: 8, color: "#e9d5ff", cursor: "pointer", padding: "10px 16px",
+                        fontSize: 13, fontFamily: "'Space Mono', monospace", display: "flex", alignItems: "center", gap: 8,
+                        boxShadow: "0 0 16px rgba(168,85,247,0.15)", transition: "all 0.2s"
+                    }}>
+                        <IconPlus /> New Endpoint
+                    </button>
+                </div>
+
+                {/* Filters */}
+                <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+                    <div style={{ position: "relative", width: 280 }}>
+                        <div style={{ position: "absolute", left: 12, top: 10, color: "rgba(216,180,254,0.4)" }}><IconSearch /></div>
+                        <input
+                            style={{ ...inputStyle, paddingLeft: 36, background: "rgba(14,6,24,0.6)" }}
+                            placeholder="Search endpoints..." value={search} onChange={e => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <select style={{ ...inputStyle, width: 140, cursor: "pointer", background: "rgba(14,6,24,0.6)" }}
+                        value={methodFilter} onChange={e => setMethodFilter(e.target.value)}>
+                        <option value="ALL" style={{ background: "#0e0618" }}>ALL METHODS</option>
+                        {HTTP_METHODS.map(m => <option key={m} value={m} style={{ background: "#0e0618" }}>{m}</option>)}
+                    </select>
+                </div>
+
+                {/* Grid */}
+                {filtered.length === 0 ? (
+                    <div style={{ padding: "60px 0", textAlign: "center", color: "rgba(216,180,254,0.4)" }}>
+                        No endpoints match your filters.
+                    </div>
+                ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
+                        {filtered.map(api => (
+                            <ApiCard key={api.id} api={api} onClick={() => setSelectedApi(api)} />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {selectedApi && (
+                <ApiEditorModal
+                    api={selectedApi}
+                    onSave={handleSave}
+                    onDelete={handleDelete}
+                    onClose={() => setSelectedApi(null)}
+                />
+            )}
+        </div>
     );
 };
 

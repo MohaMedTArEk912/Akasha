@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { setBuilderActive } from "../stores/projectStore";
 import BuilderWorkspace from "../components/features/VisualBuilder/workspace/BuilderWorkspace";
-import UXRootPlanner, { type UXRootPlannerTab } from "../components/features/UIIdeation/UXRootPlanner";
+import UXRootPlanner, { type UXRootPlannerTab } from "../components/features/VisualBuilder/UIIdeation/UXRootPlanner";
 
 import { useProjectStore } from "../hooks/useProjectStore";
 

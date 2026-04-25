@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useToast } from "../../../context/ToastContext";
-import { useProjectStore } from "../../../hooks/useProjectStore";
-import { addPage, selectPage } from "../../../stores/projectStore";
+import { useToast } from "../../../../context/ToastContext";
+import { useProjectStore } from "../../../../hooks/useProjectStore";
+import { addPage, selectPage } from "../../../../stores/projectStore";
 
 export type UXRootPlannerTab = "product" | "flows" | "pages" | "specs" | "export";
 

@@ -1,38 +1,47 @@
-/**
- * APIs Page — Requestly-Style API Client (Full Featured)
- *
- * Features:
- * - Three-panel layout: Collections + History | Request Builder | Response Viewer
- * - Code generation (cURL, fetch, Python requests)
- * - Import from cURL
- * - JSON syntax highlighting in response
- * - Body format selector (JSON / Raw / Form Data)
- * - Copy response body
- * - Save request to project collection
- * - Keyboard shortcuts (Ctrl+Enter to send)
- */
-
+// APIs Page — Amethyst Purple Themed Postman Client (v2)
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import useApi from "../hooks/useApi";
 import { useProjectStore } from "../hooks/useProjectStore";
 import { addApi } from "../stores/projectStore";
 import type { ProxyResponse, ApiRequestEntry } from "../types/api";
 
+/* ━━━ Environments ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+interface ApiEnvironment { name: string; baseUrl: string; token: string; }
+const DEFAULT_ENVS: ApiEnvironment[] = [
+    { name: "Local", baseUrl: "http://localhost:3001", token: "" },
+    { name: "Dev", baseUrl: "http://dev-api.example.com", token: "" },
+    { name: "Staging", baseUrl: "https://staging-api.example.com", token: "" },
+    { name: "Production", baseUrl: "https://api.example.com", token: "" },
+];
+
+/* ━━━ Presets ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+interface RequestPreset { label: string; method: string; path: string; headers: Record<string, string>; body: string; }
+const REQUEST_PRESETS: RequestPreset[] = [
+    { label: "GET JSON", method: "GET", path: "/api/resource", headers: { "Accept": "application/json" }, body: "" },
+    { label: "POST JSON", method: "POST", path: "/api/resource", headers: { "Content-Type": "application/json" }, body: '{\n  "name": "",\n  "value": ""\n}' },
+    { label: "PUT Update", method: "PUT", path: "/api/resource/:id", headers: { "Content-Type": "application/json" }, body: '{\n  "name": "",\n  "value": ""\n}' },
+    { label: "DELETE", method: "DELETE", path: "/api/resource/:id", headers: {}, body: "" },
+    { label: "Auth Login", method: "POST", path: "/api/auth/login", headers: { "Content-Type": "application/json" }, body: '{\n  "email": "",\n  "password": ""\n}' },
+    { label: "File Upload", method: "POST", path: "/api/upload", headers: { "Content-Type": "multipart/form-data" }, body: "" },
+    { label: "GraphQL", method: "POST", path: "/graphql", headers: { "Content-Type": "application/json" }, body: '{\n  "query": "{ users { id name } }"\n}' },
+    { label: "Health Check", method: "GET", path: "/health", headers: {}, body: "" },
+];
+
 /* ━━━ Constants ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 
 const METHOD_COLORS: Record<string, string> = {
-    GET: "text-emerald-400", POST: "text-blue-400", PUT: "text-amber-400",
-    PATCH: "text-orange-400", DELETE: "text-red-400", HEAD: "text-purple-400", OPTIONS: "text-cyan-400",
+    GET: "#10b981", POST: "#3b82f6", PUT: "#f59e0b",
+    PATCH: "#8b5cf6", DELETE: "#ef4444", HEAD: "#c084fc", OPTIONS: "#06b6d4",
 };
 
-function getStatusColor(status: number): string {
-    if (status >= 200 && status < 300) return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
-    if (status >= 300 && status < 400) return "bg-blue-500/15 text-blue-400 border-blue-500/30";
-    if (status >= 400 && status < 500) return "bg-amber-500/15 text-amber-400 border-amber-500/30";
-    if (status >= 500) return "bg-red-500/15 text-red-400 border-red-500/30";
-    return "bg-gray-500/15 text-gray-400 border-gray-500/30";
+function getStatusColor(status: number): { text: string; bg: string; border: string } {
+    if (status >= 200 && status < 300) return { text: "#10b981", bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.3)" };
+    if (status >= 300 && status < 400) return { text: "#3b82f6", bg: "rgba(59,130,246,0.1)", border: "rgba(59,130,246,0.3)" };
+    if (status >= 400 && status < 500) return { text: "#f59e0b", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.3)" };
+    if (status >= 500) return { text: "#ef4444", bg: "rgba(239,68,68,0.1)", border: "rgba(239,68,68,0.3)" };
+    return { text: "#9ca3af", bg: "rgba(156,163,175,0.1)", border: "rgba(156,163,175,0.3)" };
 }
 
 function tryPrettyJson(str: string): string {
@@ -52,61 +61,41 @@ function formatBytes(str: string): string {
 }
 
 /* ━━━ cURL Parsing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-function parseCurl(curlStr: string): { method: string; url: string; headers: Record<string, string>; body: string } {
+function parseCurl(curlStr: string) {
     const result = { method: "GET", url: "", headers: {} as Record<string, string>, body: "" };
-    // Remove line continuations and normalize
     const cmd = curlStr.replace(/\\\n/g, " ").replace(/\\\r\n/g, " ").trim();
-
-    // Extract URL — find first thing that looks like a URL
     const urlMatch = cmd.match(/(?:curl\s+)?(?:['"]?(https?:\/\/[^\s'"]+)['"]?)/i);
     if (urlMatch) result.url = urlMatch[1];
-
-    // Method
     const methodMatch = cmd.match(/-X\s+(\w+)/i);
     if (methodMatch) result.method = methodMatch[1].toUpperCase();
-
-    // Headers
     const headerRegex = /-H\s+['"]([^'"]+)['"]/gi;
     let hMatch;
     while ((hMatch = headerRegex.exec(cmd)) !== null) {
         const [key, ...valParts] = hMatch[1].split(":");
-        if (key && valParts.length > 0) {
-            result.headers[key.trim()] = valParts.join(":").trim();
-        }
+        if (key && valParts.length > 0) result.headers[key.trim()] = valParts.join(":").trim();
     }
-
-    // Body (--data, -d, --data-raw)
     const bodyMatch = cmd.match(/(?:--data-raw|--data|-d)\s+['"]([^'"]*)['"]/i);
     if (bodyMatch) {
         result.body = bodyMatch[1];
         if (result.method === "GET") result.method = "POST";
     }
-
     return result;
 }
 
 /* ━━━ Code Generation ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-function generateCurl(method: string, url: string, headers: Record<string, string>, body: string): string {
+function generateCurl(method: string, url: string, headers: Record<string, string>, body: string) {
     let cmd = `curl -X ${method} '${url}'`;
     Object.entries(headers).forEach(([k, v]) => { cmd += ` \\\n  -H '${k}: ${v}'`; });
     if (body && method !== "GET" && method !== "HEAD") cmd += ` \\\n  -d '${body}'`;
     return cmd;
 }
-
-function generateFetch(method: string, url: string, headers: Record<string, string>, body: string): string {
+function generateFetch(method: string, url: string, headers: Record<string, string>, body: string) {
     const opts: string[] = [`  method: '${method}'`];
-    if (Object.keys(headers).length > 0) {
-        opts.push(`  headers: ${JSON.stringify(headers, null, 4).split('\n').map((l, i) => i === 0 ? l : '  ' + l).join('\n')}`);
-    }
-    if (body && method !== "GET" && method !== "HEAD") {
-        opts.push(`  body: ${JSON.stringify(body)}`);
-    }
+    if (Object.keys(headers).length > 0) opts.push(`  headers: ${JSON.stringify(headers, null, 4).split('\n').map((l, i) => i === 0 ? l : '  ' + l).join('\n')}`);
+    if (body && method !== "GET" && method !== "HEAD") opts.push(`  body: ${JSON.stringify(body)}`);
     return `const response = await fetch('${url}', {\n${opts.join(',\n')}\n});\nconst data = await response.json();\nconsole.log(data);`;
 }
-
-function generatePython(method: string, url: string, headers: Record<string, string>, body: string): string {
+function generatePython(method: string, url: string, headers: Record<string, string>, body: string) {
     let code = `import requests\n\n`;
     const hasHeaders = Object.keys(headers).length > 0;
     if (hasHeaders) code += `headers = ${JSON.stringify(headers, null, 4)}\n\n`;
@@ -117,121 +106,78 @@ function generatePython(method: string, url: string, headers: Record<string, str
     return code;
 }
 
-/* ━━━ JSON Syntax Highlighter ━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
+/* ━━━ UI Components ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const JsonHighlight: React.FC<{ json: string }> = ({ json }) => {
     const highlighted = useMemo(() => {
-        const pretty = tryPrettyJson(json);
-        // Replace JSON tokens with styled spans
-        return pretty.replace(
-            /("(?:\\.|[^"\\])*")\s*:/g,
-            '<span class="json-key">$1</span>:'
-        ).replace(
-            /:\s*("(?:\\.|[^"\\])*")/g,
-            ': <span class="json-string">$1</span>'
-        ).replace(
-            /:\s*(\d+\.?\d*)/g,
-            ': <span class="json-number">$1</span>'
-        ).replace(
-            /:\s*(true|false)/g,
-            ': <span class="json-bool">$1</span>'
-        ).replace(
-            /:\s*(null)/g,
-            ': <span class="json-null">$1</span>'
-        );
+        return tryPrettyJson(json).replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span style="color:#93c5fd">$1</span>:')
+            .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span style="color:#86efac">$1</span>')
+            .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#fbbf24">$1</span>')
+            .replace(/:\s*(true|false)/g, ': <span style="color:#c084fc">$1</span>')
+            .replace(/:\s*(null)/g, ': <span style="color:#f87171">$1</span>');
     }, [json]);
-
-    return <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: highlighted }} />;
+    return <pre style={{ margin: 0, fontSize: 12, fontFamily: "'Space Mono', monospace", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-all" }} dangerouslySetInnerHTML={{ __html: highlighted }} />;
 };
 
-/* ━━━ Key-Value Editor ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+// ─── Input Styles ───
+const inputStyle: React.CSSProperties = {
+    background: "rgba(168,85,247,0.04)", border: "1px solid rgba(168,85,247,0.15)", borderRadius: 8,
+    color: "#f3e8ff", fontSize: 13, padding: "8px 12px", outline: "none", fontFamily: "'Space Mono', monospace",
+    transition: "all 0.2s", width: "100%", boxSizing: "border-box"
+};
+const labelStyle: React.CSSProperties = {
+    fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: "0.08em",
+    color: "rgba(168,85,247,0.55)", textTransform: "uppercase", display: "block", marginBottom: 6
+};
 
+// ─── KV Editor ───
 interface KVPair { key: string; value: string; enabled: boolean }
-
-const KVEditor: React.FC<{
-    pairs: KVPair[];
-    onChange: (pairs: KVPair[]) => void;
-    keyPlaceholder?: string;
-    valuePlaceholder?: string;
-}> = ({ pairs, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value" }) => {
-    const update = (i: number, field: keyof KVPair, value: any) => {
-        const updated = [...pairs];
-        updated[i] = { ...updated[i], [field]: value };
-        onChange(updated);
-    };
+const KVEditor: React.FC<{ pairs: KVPair[]; onChange: (pairs: KVPair[]) => void; keyPlaceholder?: string; valuePlaceholder?: string; }> = ({ pairs, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value" }) => {
+    const update = (i: number, field: keyof KVPair, value: any) => { const u = [...pairs]; u[i] = { ...u[i], [field]: value }; onChange(u); };
     const remove = (i: number) => onChange(pairs.filter((_, idx) => idx !== i));
     const add = () => onChange([...pairs, { key: "", value: "", enabled: true }]);
 
     return (
-        <div className="space-y-1.5">
-            {/* Column headers */}
-            <div className="flex items-center gap-2 px-0.5 mb-1">
-                <span className="w-4" />
-                <span className="flex-1 text-[9px] uppercase tracking-wider text-[var(--ide-text-muted)] font-bold">{keyPlaceholder}</span>
-                <span className="flex-1 text-[9px] uppercase tracking-wider text-[var(--ide-text-muted)] font-bold">{valuePlaceholder}</span>
-                <span className="w-6" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, padding: "0 4px", marginBottom: 4 }}>
+                <span style={{ width: 20 }} />
+                <span style={{ flex: 1, ...labelStyle, marginBottom: 0 }}>{keyPlaceholder}</span>
+                <span style={{ flex: 1, ...labelStyle, marginBottom: 0 }}>{valuePlaceholder}</span>
+                <span style={{ width: 24 }} />
             </div>
             {pairs.map((pair, i) => (
-                <div key={i} className="flex items-center gap-2 group">
-                    <input type="checkbox" checked={pair.enabled} onChange={e => update(i, "enabled", e.target.checked)} className="rounded accent-indigo-500 shrink-0" />
-                    <input className="flex-1 bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/40 focus:outline-none focus:border-indigo-500/50 transition-all" value={pair.key} onChange={e => update(i, "key", e.target.value)} placeholder={keyPlaceholder} />
-                    <input className="flex-1 bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-3 py-1.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/40 focus:outline-none focus:border-indigo-500/50 transition-all" value={pair.value} onChange={e => update(i, "value", e.target.value)} placeholder={valuePlaceholder} />
-                    <button onClick={() => remove(i)} className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 p-1 transition-all shrink-0">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type="checkbox" checked={pair.enabled} onChange={e => update(i, "enabled", e.target.checked)} style={{ accentColor: "#a855f7" }} />
+                    <input style={{ ...inputStyle, flex: 1, padding: "6px 10px", fontSize: 12 }} value={pair.key} onChange={e => update(i, "key", e.target.value)} placeholder={keyPlaceholder} />
+                    <input style={{ ...inputStyle, flex: 1, padding: "6px 10px", fontSize: 12 }} value={pair.value} onChange={e => update(i, "value", e.target.value)} placeholder={valuePlaceholder} />
+                    <button onClick={() => remove(i)} style={{ background: "transparent", border: "none", color: "#ef4444", opacity: 0.7, cursor: "pointer", padding: 4 }}>×</button>
                 </div>
             ))}
-            <button onClick={add} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors pl-7">+ Add</button>
+            <button onClick={add} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#c084fc", fontSize: 11, cursor: "pointer", marginLeft: 28, padding: 4 }}>+ Add</button>
         </div>
     );
 };
 
-/* ━━━ Tab Bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-const TabBar: React.FC<{ tabs: string[]; active: string; onChange: (tab: string) => void; counts?: Record<string, number>; extra?: React.ReactNode }> = ({ tabs, active, onChange, counts, extra }) => (
-    <div className="flex border-b border-[var(--ide-border)] items-center">
-        {tabs.map(tab => (
-            <button key={tab} onClick={() => onChange(tab)}
-                className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all border-b-2 ${active === tab ? "text-indigo-400 border-indigo-400" : "text-[var(--ide-text-muted)] border-transparent hover:text-[var(--ide-text)]"}`}>
-                {tab}
-                {counts && counts[tab] !== undefined && counts[tab] > 0 && (
-                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)]">{counts[tab]}</span>
-                )}
-            </button>
-        ))}
-        {extra && <div className="ml-auto pr-2 flex items-center gap-1">{extra}</div>}
-    </div>
-);
-
-/* ━━━ Modal Overlay ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
+// ─── Modal ───
 const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; width?: string; children: React.ReactNode }> = ({ isOpen, onClose, title, width = "600px", children }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <div className="relative bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-scale-in" style={{ maxWidth: width, width: "90%", maxHeight: "80vh" }} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--ide-border)]">
-                    <h3 className="text-sm font-bold text-[var(--ide-text)]">{title}</h3>
-                    <button onClick={onClose} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(6,2,12,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+            <div style={{ background: "linear-gradient(145deg, #160a28 0%, #0e0618 100%)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 16, width: "100%", maxWidth: width, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 80px rgba(0,0,0,0.7)" }} onClick={e => e.stopPropagation()}>
+                <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(168,85,247,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <h3 style={{ margin: 0, fontSize: 16, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#f3e8ff" }}>{title}</h3>
+                    <button onClick={onClose} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "rgba(216,180,254,0.6)", cursor: "pointer", padding: "4px 8px" }}>✕</button>
                 </div>
-                <div className="p-5 overflow-y-auto" style={{ maxHeight: "calc(80vh - 52px)" }}>
-                    {children}
-                </div>
+                <div style={{ padding: "20px 24px", overflowY: "auto" }}>{children}</div>
             </div>
         </div>
     );
 };
 
-/* ━━━ Toast ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
+// ─── Toast ───
 const Toast: React.FC<{ message: string; type?: "success" | "error"; onDone: () => void }> = ({ message, type = "success", onDone }) => {
     useEffect(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); }, [onDone]);
-    const color = type === "success" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-red-500/20 border-red-500/40 text-red-300";
     return (
-        <div className={`fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-lg border backdrop-blur-md text-sm font-medium ${color}`} style={{ animation: "api-fadeIn 0.2s ease-out" }}>
+        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, padding: "12px 20px", borderRadius: 8, fontSize: 13, fontFamily: "'Outfit', sans-serif", fontWeight: 500, background: type === "success" ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)", color: type === "success" ? "#6ee7b7" : "#fca5a5", border: `1px solid ${type === "success" ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`, backdropFilter: "blur(8px)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }}>
             {message}
         </div>
     );
@@ -243,7 +189,6 @@ const APIsPage: React.FC = () => {
     const api = useApi();
     const { project } = useProjectStore();
 
-    // Request state
     const [method, setMethod] = useState("GET");
     const [url, setUrl] = useState("");
     const [params, setParams] = useState<KVPair[]>([{ key: "", value: "", enabled: true }]);
@@ -252,63 +197,142 @@ const APIsPage: React.FC = () => {
     const [bodyFormat, setBodyFormat] = useState<"json" | "raw" | "form">("json");
     const [authToken, setAuthToken] = useState("");
 
-    // Tabs
     const [reqTab, setReqTab] = useState("Params");
     const [resTab, setResTab] = useState("Body");
 
-    // Response
     const [response, setResponse] = useState<ProxyResponse | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // Sidebar
     const [sidebarTab, setSidebarTab] = useState<"collections" | "history">("collections");
     const [history, setHistory] = useState<ApiRequestEntry[]>([]);
 
-    // Modals
     const [codeGenOpen, setCodeGenOpen] = useState(false);
     const [codeGenLang, setCodeGenLang] = useState<"curl" | "fetch" | "python">("curl");
     const [importCurlOpen, setImportCurlOpen] = useState(false);
     const [importCurlText, setImportCurlText] = useState("");
     const [saveCollOpen, setSaveCollOpen] = useState(false);
     const [saveCollName, setSaveCollName] = useState("");
+    const [saveCollFolder, setSaveCollFolder] = useState("");
 
-    // Toast
+    // Collection Folders
+    const [collFolders, setCollFolders] = useState<Record<string, string>>(() => {
+        try { const s = localStorage.getItem('akasha_api_folders'); return s ? JSON.parse(s) : {}; } catch { return {}; }
+    });
+    const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+    useEffect(() => { try { localStorage.setItem('akasha_api_folders', JSON.stringify(collFolders)); } catch {} }, [collFolders]);
+
+    const allFolderNames = useMemo(() => {
+        const names = new Set(Object.values(collFolders).filter(Boolean));
+        return Array.from(names).sort();
+    }, [collFolders]);
+
+    const toggleFolder = (name: string) => {
+        setCollapsedFolders(prev => {
+            const next = new Set(prev);
+            next.has(name) ? next.delete(name) : next.add(name);
+            return next;
+        });
+    };
+
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-    // Collections from project
+    // ─── New Feature State ───
+    const [environments, setEnvironments] = useState<ApiEnvironment[]>(() => {
+        try { const s = localStorage.getItem('akasha_api_envs'); return s ? JSON.parse(s) : DEFAULT_ENVS; } catch { return DEFAULT_ENVS; }
+    });
+    const [activeEnvIdx, setActiveEnvIdx] = useState(0);
+    const [envEditorOpen, setEnvEditorOpen] = useState(false);
+    const [presetOpen, setPresetOpen] = useState(false);
+    const [responseSearch, setResponseSearch] = useState("");
+    const [responseWrap, setResponseWrap] = useState(true);
+    const [requestCount, setRequestCount] = useState(0);
+    const [avgLatency, setAvgLatency] = useState(0);
+
+    // Persist environments
+    useEffect(() => { try { localStorage.setItem('akasha_api_envs', JSON.stringify(environments)); } catch {} }, [environments]);
+
+    const activeEnv = environments[activeEnvIdx] || environments[0];
+
     const collections = useMemo(() => (project?.apis || []).filter((a: any) => !a.archived), [project]);
-
-    // Load history
     useEffect(() => { api.listApiHistory().then(setHistory).catch(console.error); }, []);
-
     const urlRef = useRef<HTMLInputElement>(null);
 
-    /* ─── Build headers/params objects ─────────── */
-    const buildHeaders = useCallback((): Record<string, string> => {
+    // Stats tracking
+    const updateStats = useCallback((durationMs: number) => {
+        setRequestCount(c => c + 1);
+        setAvgLatency(prev => prev === 0 ? durationMs : Math.round((prev + durationMs) / 2));
+    }, []);
+
+    // Apply preset
+    const applyPreset = (preset: RequestPreset) => {
+        setMethod(preset.method);
+        setUrl(activeEnv.baseUrl + preset.path);
+        setBodyText(preset.body);
+        const hPairs = Object.entries(preset.headers).map(([key, value]) => ({ key, value, enabled: true }));
+        if (hPairs.length > 0) setHeaders(hPairs);
+        if (activeEnv.token) setAuthToken(activeEnv.token);
+        setPresetOpen(false);
+        setToast({ message: `Preset "${preset.label}" loaded`, type: "success" });
+    };
+
+    // Switch environment
+    const switchEnv = (idx: number) => {
+        setActiveEnvIdx(idx);
+        const env = environments[idx];
+        if (env.token) setAuthToken(env.token);
+        // Replace base URL in current URL if applicable
+        if (url) {
+            const oldBase = activeEnv.baseUrl;
+            if (url.startsWith(oldBase)) setUrl(url.replace(oldBase, env.baseUrl));
+        }
+        setToast({ message: `Switched to ${env.name}`, type: "success" });
+    };
+
+    // Filtered response for search
+    const filteredResponseBody = useMemo(() => {
+        if (!response?.body || !responseSearch.trim()) return null;
+        try {
+            const parsed = JSON.parse(response.body);
+            const search = responseSearch.toLowerCase();
+            const filterObj = (obj: any): any => {
+                if (typeof obj === 'string') return obj.toLowerCase().includes(search) ? obj : undefined;
+                if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj).toLowerCase().includes(search) ? obj : undefined;
+                if (Array.isArray(obj)) { const r = obj.map(filterObj).filter(v => v !== undefined); return r.length > 0 ? r : undefined; }
+                if (obj && typeof obj === 'object') {
+                    const r: any = {}; let found = false;
+                    for (const [k, v] of Object.entries(obj)) {
+                        if (k.toLowerCase().includes(search)) { r[k] = v; found = true; }
+                        else { const fv = filterObj(v); if (fv !== undefined) { r[k] = fv; found = true; } }
+                    }
+                    return found ? r : undefined;
+                }
+                return undefined;
+            };
+            const result = filterObj(parsed);
+            return result !== undefined ? JSON.stringify(result, null, 2) : '// No matches found';
+        } catch { return null; }
+    }, [response?.body, responseSearch]);
+
+    const buildHeaders = useCallback(() => {
         const hdrs: Record<string, string> = {};
         headers.filter(h => h.enabled && h.key.trim()).forEach(h => { hdrs[h.key.trim()] = h.value; });
         if (authToken.trim()) hdrs["Authorization"] = `Bearer ${authToken.trim()}`;
         return hdrs;
     }, [headers, authToken]);
 
-    const buildParams = useCallback((): Record<string, string> => {
+    const buildParams = useCallback(() => {
         const prms: Record<string, string> = {};
         params.filter(p => p.enabled && p.key.trim()).forEach(p => { prms[p.key.trim()] = p.value; });
         return prms;
     }, [params]);
 
-    /* ─── Send Request ─────────────────────────── */
     const sendRequest = useCallback(async () => {
         if (!url.trim()) return;
-        setLoading(true);
-        setResponse(null);
+        setLoading(true); setResponse(null);
         const hdrs = buildHeaders();
         const prms = buildParams();
-
-        // Handle form data body format
         let sendBody = bodyText;
         if (bodyFormat === "form" && bodyText.trim()) {
-            // Convert key=value lines to JSON
             try {
                 const obj: Record<string, string> = {};
                 bodyText.split("\n").forEach(line => {
@@ -317,57 +341,41 @@ const APIsPage: React.FC = () => {
                 });
                 sendBody = JSON.stringify(obj);
                 if (!hdrs["Content-Type"]) hdrs["Content-Type"] = "application/x-www-form-urlencoded";
-            } catch { /* keep as-is */ }
+            } catch { }
         }
 
         try {
-            const result: ProxyResponse = await api.sendProxyRequest({
-                method, url: url.trim(), headers: hdrs, body: sendBody || undefined,
-                params: Object.keys(prms).length > 0 ? prms : undefined,
-            });
+            const result = await api.sendProxyRequest({ method, url: url.trim(), headers: hdrs, body: sendBody || undefined, params: Object.keys(prms).length > 0 ? prms : undefined });
             setResponse(result);
-            // Save to history
+            updateStats(result.duration_ms);
             try {
                 await api.saveApiHistory({
-                    method, url: url.trim(), headers: hdrs, body: sendBody,
-                    params: prms, responseStatus: result.status, responseHeaders: result.headers,
-                    responseBody: result.body?.substring(0, 5000) || "", duration: result.duration_ms,
+                    method, url: url.trim(), headers: hdrs, body: sendBody, params: prms, responseStatus: result.status,
+                    responseHeaders: result.headers, responseBody: result.body?.substring(0, 5000) || "", duration: result.duration_ms,
                 });
                 setHistory(await api.listApiHistory());
-            } catch { /* non-critical */ }
+            } catch { }
         } catch (err: any) {
             setResponse({ status: 0, statusText: "Error", headers: {}, body: err.message || "Request failed", duration_ms: 0, url: url.trim(), error: true });
         } finally { setLoading(false); }
     }, [method, url, headers, params, bodyText, bodyFormat, authToken, api, buildHeaders, buildParams]);
 
-    /* ─── Keyboard shortcut ────────────────────── */
     useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); sendRequest(); }
-        };
-        window.addEventListener("keydown", handler);
-        return () => window.removeEventListener("keydown", handler);
+        const handler = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); sendRequest(); } };
+        window.addEventListener("keydown", handler); return () => window.removeEventListener("keydown", handler);
     }, [sendRequest]);
 
-    /* ─── Load from collection / history ──────── */
     const loadFromEndpoint = (ep: any) => {
-        setMethod(ep.method || "GET");
-        setUrl(ep.path.startsWith("http") ? ep.path : `http://localhost:3001${ep.path}`);
-        setResponse(null);
+        setMethod(ep.method || "GET"); setUrl(ep.path.startsWith("http") ? ep.path : `http://localhost:3001${ep.path}`); setResponse(null);
         if (ep.request_body?.fields?.length > 0) {
             const skeleton: Record<string, string> = {};
-            ep.request_body.fields.forEach((f: any) => {
-                skeleton[f.name] = f.field_type === "number" ? "0" : f.field_type === "boolean" ? "false" : "";
-            });
+            ep.request_body.fields.forEach((f: any) => { skeleton[f.name] = f.field_type === "number" ? "0" : f.field_type === "boolean" ? "false" : ""; });
             setBodyText(JSON.stringify(skeleton, null, 2));
         } else { setBodyText(""); }
     };
 
     const loadFromHistory = (entry: ApiRequestEntry) => {
-        setMethod(entry.method);
-        setUrl(entry.url);
-        setBodyText(entry.body || "");
-        setResponse(null);
+        setMethod(entry.method); setUrl(entry.url); setBodyText(entry.body || ""); setResponse(null);
         const hPairs = Object.entries(entry.headers || {}).map(([key, value]) => ({ key, value, enabled: true }));
         if (hPairs.length > 0) setHeaders(hPairs);
         const pPairs = Object.entries(entry.params || {}).map(([key, value]) => ({ key, value, enabled: true }));
@@ -377,370 +385,424 @@ const APIsPage: React.FC = () => {
         }
     };
 
-    /* ─── Import cURL ──────────────────────────── */
     const handleImportCurl = () => {
         const parsed = parseCurl(importCurlText);
         if (!parsed.url) { setToast({ message: "Could not parse URL from cURL", type: "error" }); return; }
-        setMethod(parsed.method);
-        setUrl(parsed.url);
-        setBodyText(parsed.body);
+        setMethod(parsed.method); setUrl(parsed.url); setBodyText(parsed.body);
         const hPairs = Object.entries(parsed.headers).map(([key, value]) => ({ key, value, enabled: true }));
         if (hPairs.length > 0) setHeaders(hPairs);
-        setImportCurlOpen(false);
-        setImportCurlText("");
-        setToast({ message: "cURL imported successfully", type: "success" });
+        setImportCurlOpen(false); setImportCurlText(""); setToast({ message: "cURL imported successfully", type: "success" });
     };
 
-    /* ─── Save to Collection ───────────────────── */
     const handleSaveToCollection = async () => {
         if (!saveCollName.trim()) return;
         try {
             const path = url.replace(/^https?:\/\/[^/]+/, "") || "/api/new";
             await addApi(method, path, saveCollName.trim());
-            setSaveCollOpen(false);
-            setSaveCollName("");
-            setToast({ message: `Saved "${saveCollName}" to collections`, type: "success" });
-        } catch (err: any) {
-            setToast({ message: `Failed to save: ${err.message}`, type: "error" });
-        }
+            // Assign folder if specified
+            if (saveCollFolder.trim()) {
+                const updated = (project?.apis || []).filter((a: any) => !a.archived);
+                const newest = updated[updated.length - 1];
+                if (newest) setCollFolders(prev => ({ ...prev, [newest.id]: saveCollFolder.trim() }));
+            }
+            setSaveCollOpen(false); setSaveCollName(""); setSaveCollFolder(""); setToast({ message: `Saved "${saveCollName}" to ${saveCollFolder || 'collections'}`, type: "success" });
+        } catch (err: any) { setToast({ message: `Failed to save: ${err.message}`, type: "error" }); }
     };
 
-    /* ─── Copy to clipboard ────────────────────── */
-    const copyToClipboard = (text: string, label: string) => {
-        navigator.clipboard.writeText(text);
-        setToast({ message: `${label} copied to clipboard`, type: "success" });
-    };
+    const copyToClipboard = (text: string, label: string) => { navigator.clipboard.writeText(text); setToast({ message: `${label} copied`, type: "success" }); };
 
-    /* ─── Generated code ───────────────────────── */
     const generatedCode = useMemo(() => {
         const hdrs = buildHeaders();
-        switch (codeGenLang) {
-            case "curl": return generateCurl(method, url || "https://example.com", hdrs, bodyText);
-            case "fetch": return generateFetch(method, url || "https://example.com", hdrs, bodyText);
-            case "python": return generatePython(method, url || "https://example.com", hdrs, bodyText);
-        }
+        switch (codeGenLang) { case "curl": return generateCurl(method, url || "https://example.com", hdrs, bodyText); case "fetch": return generateFetch(method, url || "https://example.com", hdrs, bodyText); case "python": return generatePython(method, url || "https://example.com", hdrs, bodyText); }
     }, [codeGenLang, method, url, bodyText, buildHeaders]);
 
-    const reqTabCounts = {
-        Params: params.filter(p => p.enabled && p.key.trim()).length,
-        Headers: headers.filter(h => h.enabled && h.key.trim()).length,
-        Body: bodyText.trim() ? 1 : 0,
-        Auth: authToken.trim() ? 1 : 0,
+    const reqTabCounts = { Params: params.filter(p => p.enabled && p.key.trim()).length, Headers: headers.filter(h => h.enabled && h.key.trim()).length, Body: bodyText.trim() ? 1 : 0, Auth: authToken.trim() ? 1 : 0 };
+    const isJsonResponse = useMemo(() => { if (!response?.body) return false; try { JSON.parse(response.body); return true; } catch { return false; } }, [response]);
+    const [collectionSearch, setCollectionSearch] = useState("");
+    const filteredCollections = useMemo(() => {
+        if (!collectionSearch.trim()) return collections;
+        const q = collectionSearch.toLowerCase();
+        return collections.filter((a: any) => a.name.toLowerCase().includes(q) || a.path.toLowerCase().includes(q) || a.method.toLowerCase().includes(q));
+    }, [collections, collectionSearch]);
+
+    // Group collections by folder
+    const groupedCollections = useMemo(() => {
+        const groups: Record<string, any[]> = { '': [] };
+        filteredCollections.forEach((ep: any) => {
+            const folder = collFolders[ep.id] || '';
+            if (!groups[folder]) groups[folder] = [];
+            groups[folder].push(ep);
+        });
+        return groups;
+    }, [filteredCollections, collFolders]);
+
+    // ─── Theme Elements ───
+    const TabButton = ({ active, label, count, onClick }: { active: boolean; label: string; count?: number; onClick: () => void }) => (
+        <button onClick={onClick} style={{
+            background: "none", border: "none", cursor: "pointer", padding: "12px 16px 10px", fontSize: 12,
+            fontFamily: "'Space Mono', monospace", letterSpacing: "0.05em",
+            color: active ? "#c084fc" : "rgba(216,180,254,0.45)",
+            borderBottom: `2px solid ${active ? "#c084fc" : "transparent"}`, transition: "all 0.2s", marginBottom: -1,
+            display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase"
+        }}>
+            {label}
+            {count !== undefined && count > 0 && <span style={{ background: "rgba(168,85,247,0.15)", color: "#d8b4fe", padding: "2px 6px", borderRadius: 10, fontSize: 10 }}>{count}</span>}
+        </button>
+    );
+
+    const getMethodStyle = (m: string) => {
+        const c = METHOD_COLORS[m] || "#9ca3af";
+        return { text: c, bg: `${c}15`, border: `${c}40` };
     };
 
-    const isJsonResponse = useMemo(() => {
-        if (!response?.body) return false;
-        try { JSON.parse(response.body); return true; } catch { return false; }
-    }, [response]);
-
     return (
-        <div className="flex flex-1 overflow-hidden h-full bg-[var(--ide-bg)] page-enter">
-            {/* ─── Left Sidebar ─────────────────── */}
-            <div className="w-72 bg-[var(--ide-bg-sidebar)] border-r border-[var(--ide-border)] flex flex-col flex-shrink-0 animate-slide-left">
-                {/* Sidebar Tabs */}
-                <div className="flex border-b border-[var(--ide-border)] shrink-0">
-                    <button onClick={() => setSidebarTab("collections")}
-                        className={`flex-1 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all ${sidebarTab === "collections" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-[var(--ide-text-muted)]"}`}>
-                        Collections
-                    </button>
-                    <button onClick={() => setSidebarTab("history")}
-                        className={`flex-1 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all ${sidebarTab === "history" ? "text-indigo-400 border-b-2 border-indigo-400" : "text-[var(--ide-text-muted)]"}`}>
-                        History {history.length > 0 && <span className="ml-1 text-[9px] opacity-60">({history.length})</span>}
-                    </button>
+        <div style={{
+            display: "flex", flex: 1, overflow: "hidden", height: "100%", position: "relative",
+            background: "linear-gradient(135deg, #090514 0%, #0d061c 50%, #090514 100%)",
+            fontFamily: "'Outfit', 'Space Mono', sans-serif", color: "#f3e8ff",
+        }}>
+            {/* Background grid */}
+            <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(rgba(168,85,247,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.03) 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+
+            <div style={{ width: 300, display: "flex", flexDirection: "column", flexShrink: 0, background: "rgba(14,6,24,0.5)", borderRight: "1px solid rgba(168,85,247,0.15)", backdropFilter: "blur(12px)", zIndex: 10 }}>
+                {/* Environment Switcher */}
+                <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(168,85,247,0.1)", display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 9, color: "rgba(168,85,247,0.5)", fontFamily: "'Space Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>ENV</span>
+                    <select value={activeEnvIdx} onChange={e => switchEnv(Number(e.target.value))} style={{ ...inputStyle, padding: "4px 8px", fontSize: 11, flex: 1, background: "rgba(168,85,247,0.08)", cursor: "pointer" }}>
+                        {environments.map((env, i) => <option key={i} value={i} style={{ background: "#0e0618" }}>{env.name} — {env.baseUrl.replace(/^https?:\/\//, '')}</option>)}
+                    </select>
+                    <button onClick={() => setEnvEditorOpen(true)} style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 4, color: "#c084fc", cursor: "pointer", padding: "3px 6px", fontSize: 10 }} title="Edit Environments">⚙</button>
                 </div>
 
-                {/* Sidebar Actions */}
-                <div className="shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-[var(--ide-border)]">
-                    <button onClick={() => setImportCurlOpen(true)} title="Import cURL"
-                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded-md transition-all">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                        Import cURL
-                    </button>
-                    <button onClick={() => setCodeGenOpen(true)} title="Generate Code"
-                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-[10px] font-semibold text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded-md transition-all">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
-                        Code Gen
-                    </button>
+                {/* Tabs */}
+                <div style={{ display: "flex", borderBottom: "1px solid rgba(168,85,247,0.1)", flexShrink: 0 }}>
+                    <button onClick={() => setSidebarTab("collections")} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "12px 0", fontSize: 10, fontFamily: "'Space Mono', monospace", color: sidebarTab === "collections" ? "#c084fc" : "rgba(216,180,254,0.5)", borderBottom: `2px solid ${sidebarTab === "collections" ? "#c084fc" : "transparent"}`, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.2s", marginBottom: -1 }}>Collections ({collections.length})</button>
+                    <button onClick={() => setSidebarTab("history")} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "12px 0", fontSize: 10, fontFamily: "'Space Mono', monospace", color: sidebarTab === "history" ? "#c084fc" : "rgba(216,180,254,0.5)", borderBottom: `2px solid ${sidebarTab === "history" ? "#c084fc" : "transparent"}`, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.2s", marginBottom: -1 }}>History ({history.length})</button>
                 </div>
 
-                {/* Sidebar Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* Actions Row */}
+                <div style={{ display: "flex", gap: 6, padding: "10px 12px", borderBottom: "1px solid rgba(168,85,247,0.1)", flexShrink: 0, flexWrap: "wrap" }}>
+                    <button onClick={() => setImportCurlOpen(true)} style={{ flex: 1, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 6, color: "#d8b4fe", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>↓ cURL</button>
+                    <button onClick={() => setCodeGenOpen(true)} style={{ flex: 1, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 6, color: "#d8b4fe", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>{"</>"} Code</button>
+                    <button onClick={() => setPresetOpen(true)} style={{ flex: 1, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 6, color: "#6ee7b7", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>⚡ Preset</button>
+                </div>
+
+                {/* Collection Search */}
+                {sidebarTab === "collections" && collections.length > 3 && (
+                    <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(168,85,247,0.08)", flexShrink: 0 }}>
+                        <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11, background: "rgba(168,85,247,0.06)" }} placeholder="🔍 Search collections..." value={collectionSearch} onChange={e => setCollectionSearch(e.target.value)} />
+                    </div>
+                )}
+
+                {/* List */}
+                <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
                     {sidebarTab === "collections" ? (
-                        <div className="p-2 space-y-0.5">
-                            {collections.length === 0 ? (
-                                <div className="p-4 text-center text-[var(--ide-text-muted)] text-xs">
-                                    <svg className="w-10 h-10 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                                    <p className="mb-1 font-medium">No endpoints yet</p>
-                                    <p className="text-[10px] opacity-60">Define endpoints or save requests here</p>
-                                </div>
-                            ) : (
-                                collections.map((ep: any) => (
-                                    <button key={ep.id} onClick={() => loadFromEndpoint(ep)}
-                                        className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-[var(--ide-bg-panel)] transition-colors group">
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <span className={`text-[10px] font-bold font-mono ${METHOD_COLORS[ep.method] || "text-gray-400"}`}>{ep.method}</span>
-                                            <span className="text-xs font-mono text-[var(--ide-text)] truncate">{ep.path}</span>
-                                        </div>
-                                        <span className="text-[10px] text-[var(--ide-text-muted)]">{ep.name}</span>
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                    ) : (
-                        <div className="p-2 space-y-0.5">
-                            {history.length === 0 ? (
-                                <div className="p-4 text-center text-[var(--ide-text-muted)] text-xs">
-                                    <svg className="w-10 h-10 mx-auto mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    <p className="font-medium mb-1">No history</p>
-                                    <p className="text-[10px] opacity-60">Send a request to see it here</p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {filteredCollections.length === 0 ? (
+                                <div style={{ textAlign: "center", color: "rgba(216,180,254,0.3)", fontSize: 12, marginTop: 20, padding: "20px 0" }}>
+                                    <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>📭</div>
+                                    {collectionSearch ? "No matches" : "No endpoints yet"}
+                                    <div style={{ fontSize: 10, marginTop: 6, color: "rgba(216,180,254,0.2)" }}>{collectionSearch ? "Try a different search" : "Save a request or use a Preset"}</div>
                                 </div>
                             ) : (
                                 <>
-                                    <button onClick={async () => { await api.clearApiHistory(); setHistory([]); setToast({ message: "History cleared", type: "success" }); }}
-                                        className="w-full text-[10px] text-[var(--ide-text-muted)] hover:text-red-400 py-1 transition-colors text-right pr-2">
-                                        Clear All
-                                    </button>
-                                    {history.map((entry) => (
-                                        <button key={entry.id} onClick={() => loadFromHistory(entry)}
-                                            className="w-full text-left px-3 py-2 rounded-lg hover:bg-[var(--ide-bg-panel)] transition-colors group">
-                                            <div className="flex items-center gap-2 mb-0.5">
-                                                <span className={`text-[10px] font-bold font-mono ${METHOD_COLORS[entry.method] || "text-gray-400"}`}>{entry.method}</span>
-                                                {entry.response_status && (
-                                                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${getStatusColor(entry.response_status)}`}>{entry.response_status}</span>
-                                                )}
-                                                <span className="text-[10px] text-[var(--ide-text-muted)] ml-auto">{formatDuration(entry.duration)}</span>
-                                            </div>
-                                            <span className="text-[10px] font-mono text-[var(--ide-text-secondary)] truncate block">{entry.url.replace(/^https?:\/\//, '').substring(0, 35)}</span>
-                                            <span className="text-[9px] text-[var(--ide-text-muted)]">{new Date(entry.created_at).toLocaleTimeString()}</span>
-                                        </button>
+                                    {/* Render folders */}
+                                    {Object.entries(groupedCollections).filter(([k]) => k !== '').sort(([a],[b]) => a.localeCompare(b)).map(([folder, eps]) => (
+                                        <div key={folder} style={{ marginBottom: 4 }}>
+                                            <button onClick={() => toggleFolder(folder)} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "6px 8px", background: "rgba(168,85,247,0.06)", border: "1px solid rgba(168,85,247,0.1)", borderRadius: 6, cursor: "pointer", color: "#d8b4fe", fontSize: 10, fontFamily: "'Space Mono', monospace", textAlign: "left" }}>
+                                                <span style={{ fontSize: 8, transition: "transform 0.2s", display: "inline-block", transform: collapsedFolders.has(folder) ? "rotate(-90deg)" : "rotate(0)" }}>▼</span>
+                                                <span style={{ fontSize: 12 }}>📁</span>
+                                                <span style={{ flex: 1, fontWeight: 600 }}>{folder}</span>
+                                                <span style={{ fontSize: 9, color: "rgba(216,180,254,0.4)", background: "rgba(168,85,247,0.1)", padding: "1px 5px", borderRadius: 8 }}>{eps.length}</span>
+                                            </button>
+                                            {!collapsedFolders.has(folder) && (
+                                                <div style={{ paddingLeft: 12, marginTop: 4, display: "flex", flexDirection: "column", gap: 3, borderLeft: "2px solid rgba(168,85,247,0.1)" }}>
+                                                    {eps.map((ep: any) => { const ms = getMethodStyle(ep.method); return (
+                                                        <div key={ep.id} onClick={() => loadFromEndpoint(ep)} style={{ padding: "8px 10px", background: "rgba(168,85,247,0.03)", border: "1px solid rgba(168,85,247,0.06)", borderRadius: 6, cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(168,85,247,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(168,85,247,0.03)"}>
+                                                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                                                <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: ms.bg, color: ms.text, border: `1px solid ${ms.border}` }}>{ep.method}</span>
+                                                                <span style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "#f3e8ff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{ep.name || ep.path}</span>
+                                                            </div>
+                                                        </div>
+                                                    ); })}
+                                                </div>
+                                            )}
+                                        </div>
                                     ))}
+                                    {/* Ungrouped items */}
+                                    {(groupedCollections[''] || []).map((ep: any) => {
+                                        const ms = getMethodStyle(ep.method);
+                                        return (
+                                            <div key={ep.id} onClick={() => loadFromEndpoint(ep)} style={{ padding: "10px 12px", background: "rgba(168,85,247,0.04)", border: "1px solid rgba(168,85,247,0.08)", borderRadius: 8, cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(168,85,247,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(168,85,247,0.04)"}>
+                                                <div style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "center" }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "2px 6px", borderRadius: 3, background: ms.bg, color: ms.text, border: `1px solid ${ms.border}` }}>{ep.method}</span>
+                                                    <span style={{ fontSize: 11, fontFamily: "'Space Mono', monospace", color: "#f3e8ff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{ep.path}</span>
+                                                </div>
+                                                <div style={{ fontSize: 11, color: "rgba(216,180,254,0.55)" }}>{ep.name}</div>
+                                            </div>
+                                        );
+                                    })}
+                                </>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {history.length === 0 ? (
+                                <div style={{ textAlign: "center", color: "rgba(216,180,254,0.3)", fontSize: 12, marginTop: 20 }}>
+                                    <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>⏳</div>
+                                    No history yet
+                                </div>
+                            ) : (
+                                <>
+                                    <button onClick={async () => { try { await api.clearApiHistory(); setHistory([]); setToast({ message: "History cleared", type: "success" }); } catch {} }} style={{ alignSelf: "flex-end", background: "none", border: "none", color: "rgba(239,68,68,0.6)", fontSize: 9, cursor: "pointer", padding: "2px 4px", fontFamily: "'Space Mono', monospace" }}>Clear All</button>
+                                    {history.map((entry) => {
+                                        const sc = entry.response_status ? getStatusColor(entry.response_status) : null;
+                                        return (
+                                            <div key={entry.id} onClick={() => loadFromHistory(entry)} style={{ padding: "10px 12px", background: "rgba(168,85,247,0.04)", border: "1px solid rgba(168,85,247,0.08)", borderRadius: 8, cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(168,85,247,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(168,85,247,0.04)"}>
+                                                <div style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "center", justifyContent: "space-between" }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "'Space Mono', monospace", color: METHOD_COLORS[entry.method] }}>{entry.method}</span>
+                                                    {sc && <span style={{ fontSize: 8, fontFamily: "'Space Mono', monospace", background: sc.bg, color: sc.text, border: `1px solid ${sc.border}`, padding: "1px 5px", borderRadius: 3 }}>{entry.response_status}</span>}
+                                                    <span style={{ fontSize: 9, color: "rgba(216,180,254,0.4)", marginLeft: "auto" }}>{formatDuration(entry.duration || 0)}</span>
+                                                </div>
+                                                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "#f3e8ff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 4 }}>{entry.url.replace(/^https?:\/\//, '')}</div>
+                                                <div style={{ fontSize: 8, color: "rgba(216,180,254,0.3)" }}>{new Date(entry.created_at).toLocaleString()}</div>
+                                            </div>
+                                        );
+                                    })}
                                 </>
                             )}
                         </div>
                     )}
                 </div>
+
+                {/* Session Stats Footer */}
+                <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(168,85,247,0.1)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flexShrink: 0, background: "rgba(6,2,12,0.3)" }}>
+                    <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#c084fc", fontFamily: "'Space Mono', monospace" }}>{requestCount}</div>
+                        <div style={{ fontSize: 8, color: "rgba(216,180,254,0.4)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Requests</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: avgLatency < 200 ? "#10b981" : avgLatency < 500 ? "#f59e0b" : "#ef4444", fontFamily: "'Space Mono', monospace" }}>{avgLatency ? `${avgLatency}ms` : "—"}</div>
+                        <div style={{ fontSize: 8, color: "rgba(216,180,254,0.4)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Avg Latency</div>
+                    </div>
+                </div>
             </div>
 
             {/* ─── Main Content ─────────────────── */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", zIndex: 10 }}>
                 {/* URL Bar */}
-                <div className="shrink-0 px-4 py-3 bg-[var(--ide-chrome)] border-b border-[var(--ide-border)] animate-slide-down">
-                    <div className="flex items-center gap-2">
-                        <select value={method} onChange={e => setMethod(e.target.value)}
-                            className={`bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg text-sm font-mono font-bold px-3 py-2.5 focus:outline-none focus:border-indigo-500/50 transition-all cursor-pointer ${METHOD_COLORS[method] || "text-gray-400"}`}
-                            style={{ minWidth: 100 }}>
-                            {HTTP_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                <div style={{ padding: "16px 24px", background: "rgba(6,2,12,0.6)", borderBottom: "1px solid rgba(168,85,247,0.15)", backdropFilter: "blur(12px)", flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <select value={method} onChange={e => setMethod(e.target.value)} style={{ ...inputStyle, width: 100, fontWeight: 700, color: METHOD_COLORS[method] || "#fff", cursor: "pointer", padding: "10px 12px" }}>
+                            {HTTP_METHODS.map(m => <option key={m} value={m} style={{ background: "#0e0618", color: "#fff" }}>{m}</option>)}
                         </select>
-
-                        <input ref={urlRef} type="text" value={url} onChange={e => setUrl(e.target.value)}
-                            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendRequest(); }}
-                            placeholder="Enter URL (e.g., https://jsonplaceholder.typicode.com/posts)"
-                            className="flex-1 bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-2.5 text-sm font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all" />
-
-                        {/* Action Buttons */}
-                        <button onClick={() => setSaveCollOpen(true)} title="Save to Collection"
-                            className="p-2.5 text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                        <input ref={urlRef} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendRequest(); }} placeholder="Enter URL (e.g., https://api.example.com/data)" style={{ ...inputStyle, flex: 1, padding: "10px 16px", fontSize: 14 }} />
+                        <button onClick={() => setSaveCollOpen(true)} style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 8, color: "#d8b4fe", cursor: "pointer", padding: "10px 14px", display: "flex", alignItems: "center" }} title="Save">💾</button>
+                        <button onClick={sendRequest} disabled={loading || !url.trim()} style={{
+                            background: loading ? "rgba(168,85,247,0.2)" : "linear-gradient(135deg, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.15) 100%)",
+                            border: "1px solid rgba(168,85,247,0.4)", borderRadius: 8, color: "#e9d5ff", cursor: loading || !url.trim() ? "default" : "pointer",
+                            padding: "0 28px", fontSize: 14, fontFamily: "'Space Mono', monospace", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                            boxShadow: loading ? "none" : "0 0 20px rgba(168,85,247,0.2)", height: 42, display: "flex", alignItems: "center", opacity: url.trim() ? 1 : 0.5
+                        }}>
+                            {loading ? "..." : "SEND"}
                         </button>
-
-                        <button onClick={sendRequest} disabled={loading || !url.trim()}
-                            className="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-40 shadow-lg shadow-indigo-500/20 flex items-center gap-2">
-                            {loading ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>}
-                            Send
-                        </button>
-                    </div>
-                    <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-[10px] text-[var(--ide-text-muted)]">
-                            <kbd className="px-1.5 py-0.5 rounded bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] text-[9px] font-mono mr-1">Ctrl+Enter</kbd>
-                            to send
-                        </span>
                     </div>
                 </div>
 
-                {/* Request / Response Split */}
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    {/* Request Section */}
-                    <div className="shrink-0 border-b border-[var(--ide-border)]" style={{ minHeight: 160 }}>
-                        <TabBar tabs={["Params", "Headers", "Body", "Auth"]} active={reqTab} onChange={setReqTab} counts={reqTabCounts} />
-                        <div className="p-4 overflow-y-auto" style={{ maxHeight: 220 }}>
-                            {reqTab === "Params" && <KVEditor pairs={params} onChange={setParams} keyPlaceholder="Parameter" valuePlaceholder="Value" />}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                    {/* Request Area */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", borderBottom: "1px solid rgba(168,85,247,0.15)", background: "rgba(14,6,24,0.3)" }}>
+                        <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(168,85,247,0.1)", flexShrink: 0 }}>
+                            {(["Params", "Headers", "Body", "Auth"] as const).map(t => (
+                                <TabButton key={t} active={reqTab === t} label={t} count={reqTabCounts[t as keyof typeof reqTabCounts]} onClick={() => setReqTab(t)} />
+                            ))}
+                        </div>
+                        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+                            {reqTab === "Params" && <KVEditor pairs={params} onChange={setParams} keyPlaceholder="Query Parameter" valuePlaceholder="Value" />}
                             {reqTab === "Headers" && <KVEditor pairs={headers} onChange={setHeaders} keyPlaceholder="Header" valuePlaceholder="Value" />}
                             {reqTab === "Body" && (
-                                <div>
-                                    <div className="flex items-center gap-2 mb-3">
+                                <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12 }}>
+                                    <div style={{ display: "flex", gap: 8 }}>
                                         {(["json", "raw", "form"] as const).map(fmt => (
-                                            <button key={fmt} onClick={() => setBodyFormat(fmt)}
-                                                className={`px-3 py-1 text-[10px] font-bold uppercase rounded-md border transition-all ${bodyFormat === fmt ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : "text-[var(--ide-text-muted)] border-[var(--ide-border)] hover:text-[var(--ide-text)]"}`}>
-                                                {fmt === "json" ? "JSON" : fmt === "raw" ? "Raw" : "Form Data"}
+                                            <button key={fmt} onClick={() => setBodyFormat(fmt)} style={{
+                                                background: bodyFormat === fmt ? "rgba(168,85,247,0.15)" : "transparent",
+                                                border: `1px solid ${bodyFormat === fmt ? "rgba(168,85,247,0.3)" : "rgba(168,85,247,0.1)"}`,
+                                                borderRadius: 6, color: bodyFormat === fmt ? "#c084fc" : "rgba(216,180,254,0.5)",
+                                                fontSize: 10, fontFamily: "'Space Mono', monospace", padding: "4px 12px", cursor: "pointer", textTransform: "uppercase"
+                                            }}>
+                                                {fmt === "json" ? "JSON" : fmt === "raw" ? "Raw" : "Form"}
                                             </button>
                                         ))}
                                     </div>
-                                    <textarea
-                                        className="w-full h-32 bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-3 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/40 focus:outline-none focus:border-indigo-500/50 resize-none transition-all"
-                                        value={bodyText} onChange={e => setBodyText(e.target.value)}
-                                        placeholder={bodyFormat === "form" ? "key1=value1\nkey2=value2" : bodyFormat === "json" ? '{"key": "value"}' : "Raw body content..."} />
-                                    {bodyFormat === "json" && bodyText.trim() && (
-                                        <div className="mt-1.5 flex items-center gap-2">
-                                            {(() => { try { JSON.parse(bodyText); return <span className="text-[10px] text-emerald-400 flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>Valid JSON</span>; } catch { return <span className="text-[10px] text-red-400 flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>Invalid JSON</span>; } })()}
-                                            <button onClick={() => { try { setBodyText(JSON.stringify(JSON.parse(bodyText), null, 2)); } catch { } }}
-                                                className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors">Prettify</button>
-                                        </div>
-                                    )}
+                                    <textarea style={{ ...inputStyle, flex: 1, resize: "none" }} value={bodyText} onChange={e => setBodyText(e.target.value)} placeholder={bodyFormat === "json" ? '{"key": "value"}' : "Enter body content..."} />
                                 </div>
                             )}
                             {reqTab === "Auth" && (
-                                <div className="space-y-3">
-                                    <label className="text-xs font-semibold text-[var(--ide-text-muted)] uppercase tracking-wide">Bearer Token</label>
-                                    <input className="w-full bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-2.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/40 focus:outline-none focus:border-indigo-500/50 transition-all"
-                                        value={authToken} onChange={e => setAuthToken(e.target.value)} placeholder="Enter your bearer token..." type="password" />
-                                    <p className="text-[10px] text-[var(--ide-text-muted)]">
-                                        Sent as <code className="bg-[var(--ide-bg-elevated)] px-1.5 py-0.5 rounded text-indigo-400 text-[9px]">Authorization: Bearer &lt;token&gt;</code>
-                                    </p>
+                                <div style={{ maxWidth: 400 }}>
+                                    <label style={labelStyle}>Bearer Token</label>
+                                    <input style={{ ...inputStyle, marginBottom: 8 }} value={authToken} onChange={e => setAuthToken(e.target.value)} placeholder="Token" type="password" />
+                                    <div style={{ fontSize: 11, color: "rgba(216,180,254,0.4)", fontFamily: "'Space Mono', monospace" }}>Sent as: Authorization: Bearer &lt;token&gt;</div>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Response Section */}
-                    <div className="flex-1 flex flex-col overflow-hidden bg-[var(--ide-bg-panel)]">
+                    {/* Response Area */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "rgba(6,2,12,0.5)" }}>
                         {!response && !loading ? (
-                            <div className="flex-1 flex items-center justify-center text-[var(--ide-text-muted)]">
-                                <div className="text-center">
-                                    <svg className="w-16 h-16 mx-auto mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                    <p className="text-sm font-medium mb-1">Ready to send</p>
-                                    <p className="text-xs opacity-60">Enter a URL and press <kbd className="px-1.5 py-0.5 rounded bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] text-[9px] font-mono">Ctrl+Enter</kbd></p>
-                                </div>
+                            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(216,180,254,0.3)", flexDirection: "column", gap: 12 }}>
+                                <div style={{ fontSize: 40, opacity: 0.5 }}>⚡</div>
+                                <div style={{ fontSize: 16, fontFamily: "'Outfit', sans-serif" }}>Ready to send</div>
+                                <div style={{ fontSize: 12, fontFamily: "'Space Mono', monospace" }}>Enter URL & press Send</div>
                             </div>
                         ) : loading ? (
-                            <div className="flex-1 flex items-center justify-center text-[var(--ide-text-muted)]">
-                                <div className="flex items-center gap-3">
-                                    <span className="inline-block w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin" />
-                                    <span className="text-sm">Sending request...</span>
-                                </div>
+                            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#c084fc", fontSize: 14, fontFamily: "'Space Mono', monospace" }}>
+                                Sending...
                             </div>
                         ) : response ? (
-                            <div className="flex flex-col flex-1 overflow-hidden" style={{ animation: "api-fadeIn 0.2s ease-out" }}>
-                                {/* Response Status Bar */}
-                                <div className="shrink-0 px-4 py-2.5 flex items-center gap-3 border-b border-[var(--ide-border)] bg-[var(--ide-chrome)]">
-                                    <span className={`text-xs font-bold font-mono px-3 py-1 rounded-lg border ${response.error ? "bg-red-500/15 text-red-400 border-red-500/30" : getStatusColor(response.status)}`}>
+                            <>
+                                <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 24px", borderBottom: "1px solid rgba(168,85,247,0.1)", background: "rgba(168,85,247,0.03)" }}>
+                                    <span style={{ ...getStatusColor(response.status), padding: "4px 10px", borderRadius: 6, fontSize: 12, fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>
                                         {response.error ? "ERR" : response.status} {response.statusText}
                                     </span>
-                                    <span className="text-xs text-[var(--ide-text-muted)] flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2" /><path strokeLinecap="round" strokeWidth="2" d="M12 6v6l4 2" /></svg>
-                                        {formatDuration(response.duration_ms)}
-                                    </span>
-                                    <span className="text-xs text-[var(--ide-text-muted)] flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z" /></svg>
-                                        {formatBytes(response.body)}
-                                    </span>
-                                    <div className="ml-auto flex items-center gap-1">
-                                        <button onClick={() => copyToClipboard(response.body, "Response")}
-                                            className="p-1.5 text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all" title="Copy Response">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" /></svg>
-                                        </button>
+                                    <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: "rgba(216,180,254,0.7)" }}>TIME: {formatDuration(response.duration_ms)}</span>
+                                    <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: "rgba(216,180,254,0.7)" }}>SIZE: {formatBytes(response.body)}</span>
+                                    <button onClick={() => copyToClipboard(response.body, "Response")} style={{ marginLeft: "auto", background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 6, color: "#c084fc", fontSize: 11, fontFamily: "'Space Mono', monospace", padding: "4px 10px", cursor: "pointer" }}>Copy</button>
+                                </div>
+                                <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(168,85,247,0.1)", flexShrink: 0, alignItems: "center" }}>
+                                    <TabButton active={resTab === "Body"} label="Body" onClick={() => setResTab("Body")} />
+                                    <TabButton active={resTab === "Headers"} label="Headers" count={Object.keys(response.headers).length} onClick={() => setResTab("Headers")} />
+                                    {/* Response controls */}
+                                    <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", paddingRight: 4 }}>
+                                        {resTab === "Body" && isJsonResponse && (
+                                            <>
+                                                <input style={{ ...inputStyle, width: 140, padding: "3px 8px", fontSize: 10, background: "rgba(168,85,247,0.06)" }} placeholder="🔍 Search response..." value={responseSearch} onChange={e => setResponseSearch(e.target.value)} />
+                                                <button onClick={() => setResponseWrap(w => !w)} style={{ background: responseWrap ? "rgba(168,85,247,0.15)" : "transparent", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 4, color: "#c084fc", fontSize: 9, padding: "3px 6px", cursor: "pointer", fontFamily: "'Space Mono', monospace" }} title="Toggle word wrap">{responseWrap ? "Wrap" : "NoWrap"}</button>
+                                                <button onClick={() => copyToClipboard(tryPrettyJson(response.body), "Pretty JSON")} style={{ background: "transparent", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 4, color: "#c084fc", fontSize: 9, padding: "3px 6px", cursor: "pointer", fontFamily: "'Space Mono', monospace" }} title="Copy prettified JSON">Pretty</button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-
-                                {/* Response Tabs */}
-                                <TabBar tabs={["Body", "Headers"]} active={resTab} onChange={setResTab}
-                                    counts={{ Headers: Object.keys(response.headers).length }} />
-
-                                {/* Response Content */}
-                                <div className="flex-1 overflow-auto custom-scrollbar p-4">
+                                <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
                                     {resTab === "Body" ? (
-                                        isJsonResponse ? <JsonHighlight json={response.body} />
-                                            : <pre className="text-xs font-mono text-[var(--ide-text)] whitespace-pre-wrap break-words leading-relaxed">{response.body}</pre>
+                                        responseSearch.trim() && filteredResponseBody ? (
+                                            <pre style={{ margin: 0, fontSize: 12, fontFamily: "'Space Mono', monospace", whiteSpace: responseWrap ? "pre-wrap" : "pre", wordBreak: responseWrap ? "break-all" : "normal", color: "#d8b4fe" }}>{filteredResponseBody}</pre>
+                                        ) : isJsonResponse ? (
+                                            <div style={{ whiteSpace: responseWrap ? undefined : "pre", overflowX: responseWrap ? undefined : "auto" }}><JsonHighlight json={response.body} /></div>
+                                        ) : (
+                                            <pre style={{ margin: 0, fontSize: 12, fontFamily: "'Space Mono', monospace", whiteSpace: responseWrap ? "pre-wrap" : "pre" }}>{response.body}</pre>
+                                        )
                                     ) : (
-                                        <div className="space-y-1">
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                             {Object.entries(response.headers).map(([key, value]) => (
-                                                <div key={key} className="flex gap-3 text-xs font-mono group">
-                                                    <span className="text-indigo-400 shrink-0 font-medium">{key}:</span>
-                                                    <span className="text-[var(--ide-text-secondary)] break-all">{value}</span>
-                                                    <button onClick={() => copyToClipboard(value, key)}
-                                                        className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-indigo-400 transition-all shrink-0">
-                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" /></svg>
-                                                    </button>
+                                                <div key={key} style={{ display: "flex", gap: 12, fontSize: 12, fontFamily: "'Space Mono', monospace" }}>
+                                                    <span style={{ color: "#c084fc" }}>{key}:</span>
+                                                    <span style={{ color: "#f3e8ff", wordBreak: "break-all" }}>{value}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     )}
                                 </div>
-                            </div>
+                            </>
                         ) : null}
                     </div>
                 </div>
             </div>
 
-            {/* ─── Code Gen Modal ───────────────── */}
+            {/* Modals */}
             <Modal isOpen={codeGenOpen} onClose={() => setCodeGenOpen(false)} title="Generate Code" width="650px">
-                <div className="flex gap-2 mb-4">
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     {(["curl", "fetch", "python"] as const).map(lang => (
-                        <button key={lang} onClick={() => setCodeGenLang(lang)}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-lg border transition-all ${codeGenLang === lang ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30" : "text-[var(--ide-text-muted)] border-[var(--ide-border)] hover:text-[var(--ide-text)]"}`}>
-                            {lang === "curl" ? "cURL" : lang === "fetch" ? "JavaScript" : "Python"}
-                        </button>
+                        <button key={lang} onClick={() => setCodeGenLang(lang)} style={{ background: codeGenLang === lang ? "rgba(168,85,247,0.2)" : "rgba(168,85,247,0.05)", border: `1px solid ${codeGenLang === lang ? "rgba(168,85,247,0.4)" : "rgba(168,85,247,0.15)"}`, borderRadius: 8, color: codeGenLang === lang ? "#d8b4fe" : "rgba(216,180,254,0.6)", padding: "6px 16px", fontSize: 12, fontFamily: "'Space Mono', monospace", cursor: "pointer" }}>{lang}</button>
                     ))}
                 </div>
-                <div className="relative">
-                    <pre className="bg-[var(--ide-bg)] rounded-lg p-4 text-xs font-mono text-[var(--ide-text)] whitespace-pre-wrap border border-[var(--ide-border)] overflow-auto max-h-64">{generatedCode}</pre>
-                    <button onClick={() => copyToClipboard(generatedCode, "Code")}
-                        className="absolute top-2 right-2 p-2 text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" /></svg>
-                    </button>
+                <div style={{ position: "relative" }}>
+                    <pre style={{ margin: 0, background: "rgba(10,5,20,0.6)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 8, padding: 16, fontSize: 12, fontFamily: "'Space Mono', monospace", color: "#f3e8ff", whiteSpace: "pre-wrap" }}>{generatedCode}</pre>
+                    <button onClick={() => copyToClipboard(generatedCode, "Code")} style={{ position: "absolute", top: 8, right: 8, background: "rgba(168,85,247,0.2)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 6, color: "#c084fc", fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>Copy</button>
                 </div>
             </Modal>
 
-            {/* ─── Import cURL Modal ─────────────── */}
-            <Modal isOpen={importCurlOpen} onClose={() => setImportCurlOpen(false)} title="Import from cURL" width="600px">
-                <p className="text-xs text-[var(--ide-text-muted)] mb-3">Paste a cURL command and we'll parse it into the request builder.</p>
-                <textarea className="w-full h-40 bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-3 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/40 focus:outline-none focus:border-indigo-500/50 resize-none"
-                    value={importCurlText} onChange={e => setImportCurlText(e.target.value)}
-                    placeholder={`curl -X POST 'https://api.example.com/data' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"key": "value"}'`} autoFocus />
-                <div className="flex justify-end gap-2 mt-4">
-                    <button onClick={() => setImportCurlOpen(false)} className="px-4 py-2 text-sm text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] rounded-lg border border-[var(--ide-border)] transition-all">Cancel</button>
-                    <button onClick={handleImportCurl} disabled={!importCurlText.trim()} className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold disabled:opacity-40 transition-all">Import</button>
+            <Modal isOpen={importCurlOpen} onClose={() => setImportCurlOpen(false)} title="Import cURL" width="600px">
+                <textarea style={{ ...inputStyle, height: 160, resize: "none", marginBottom: 16 }} value={importCurlText} onChange={e => setImportCurlText(e.target.value)} placeholder="Paste cURL command..." autoFocus />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button onClick={handleImportCurl} style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.15) 100%)", border: "1px solid rgba(168,85,247,0.4)", borderRadius: 8, color: "#e9d5ff", cursor: "pointer", padding: "8px 20px", fontSize: 13, fontWeight: 600 }}>Import</button>
                 </div>
             </Modal>
 
-            {/* ─── Save to Collection Modal ──────── */}
             <Modal isOpen={saveCollOpen} onClose={() => setSaveCollOpen(false)} title="Save to Collection" width="450px">
-                <p className="text-xs text-[var(--ide-text-muted)] mb-3">Save the current request as a project API endpoint.</p>
-                <div className="space-y-3">
-                    <div>
-                        <label className="text-[10px] uppercase font-bold text-[var(--ide-text-muted)] tracking-wide">Endpoint Name</label>
-                        <input className="w-full bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-2.5 text-sm text-[var(--ide-text)] mt-1 focus:outline-none focus:border-indigo-500/50"
-                            value={saveCollName} onChange={e => setSaveCollName(e.target.value)} placeholder="e.g., List Users" autoFocus
-                            onKeyDown={e => { if (e.key === "Enter") handleSaveToCollection(); }} />
-                    </div>
-                    <div className="bg-[var(--ide-bg)] rounded-lg p-3 border border-[var(--ide-border)]">
-                        <div className="flex items-center gap-2 text-xs font-mono">
-                            <span className={`font-bold ${METHOD_COLORS[method] || "text-gray-400"}`}>{method}</span>
-                            <span className="text-[var(--ide-text)]">{url || "/api/..."}</span>
-                        </div>
-                    </div>
+                <label style={labelStyle}>Endpoint Name</label>
+                <input style={{ ...inputStyle, marginBottom: 12 }} value={saveCollName} onChange={e => setSaveCollName(e.target.value)} placeholder="e.g. Get Users" autoFocus />
+                <label style={labelStyle}>Folder / Group</label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <select value={saveCollFolder} onChange={e => setSaveCollFolder(e.target.value)} style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
+                        <option value="" style={{ background: "#0e0618" }}>— No folder (ungrouped) —</option>
+                        {allFolderNames.map(f => <option key={f} value={f} style={{ background: "#0e0618" }}>{f}</option>)}
+                    </select>
+                    <button onClick={() => { const name = prompt("New folder name:"); if (name?.trim()) setSaveCollFolder(name.trim()); }} style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 6, color: "#c084fc", fontSize: 11, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>+ New</button>
                 </div>
-                <div className="flex justify-end gap-2 mt-4">
-                    <button onClick={() => setSaveCollOpen(false)} className="px-4 py-2 text-sm text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] rounded-lg border border-[var(--ide-border)] transition-all">Cancel</button>
-                    <button onClick={handleSaveToCollection} disabled={!saveCollName.trim()} className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold disabled:opacity-40 transition-all">Save</button>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button onClick={handleSaveToCollection} disabled={!saveCollName.trim()} style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.15) 100%)", border: "1px solid rgba(168,85,247,0.4)", borderRadius: 8, color: "#e9d5ff", cursor: saveCollName.trim() ? "pointer" : "default", padding: "8px 20px", fontSize: 13, fontWeight: 600 }}>Save</button>
                 </div>
             </Modal>
 
-            {/* ─── Toast ─────────────────────────── */}
-            {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
+            {/* Preset Picker */}
+            <Modal isOpen={presetOpen} onClose={() => setPresetOpen(false)} title="Request Presets" width="560px">
+                {/* Dynamic presets from project APIs */}
+                {collections.length > 0 && (
+                    <>
+                        <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(168,85,247,0.6)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>📁 Your Endpoints ({collections.length})</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 16 }}>
+                            {collections.slice(0, 8).map((ep: any) => {
+                                const ms = getMethodStyle(ep.method);
+                                return (
+                                    <button key={ep.id} onClick={() => { loadFromEndpoint(ep); setPresetOpen(false); }} style={{ padding: "10px", background: "rgba(16,185,129,0.04)", border: "1px solid rgba(16,185,129,0.12)", borderRadius: 8, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(16,185,129,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(16,185,129,0.04)"}>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
+                                            <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: ms.bg, color: ms.text, border: `1px solid ${ms.border}` }}>{ep.method}</span>
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: "#d1fae5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ep.name}</span>
+                                        </div>
+                                        <div style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", color: "rgba(110,231,183,0.5)" }}>{ep.path}</div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
+                {/* Static templates */}
+                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(168,85,247,0.6)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>⚡ Templates</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                    {REQUEST_PRESETS.map(p => {
+                        const ms = getMethodStyle(p.method);
+                        return (
+                            <button key={p.label} onClick={() => applyPreset(p)} style={{ padding: "10px", background: "rgba(168,85,247,0.05)", border: "1px solid rgba(168,85,247,0.12)", borderRadius: 8, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(168,85,247,0.12)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(168,85,247,0.05)"}>
+                                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
+                                    <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: ms.bg, color: ms.text, border: `1px solid ${ms.border}` }}>{p.method}</span>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: "#f3e8ff" }}>{p.label}</span>
+                                </div>
+                                <div style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", color: "rgba(216,180,254,0.5)" }}>{p.path}</div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </Modal>
 
-            {/* ─── Styles ────────────────────────── */}
-            <style>{`
-                @keyframes api-fadeIn {
-                    from { opacity: 0; transform: translateY(4px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                .json-key { color: #93c5fd; }
-                .json-string { color: #86efac; }
-                .json-number { color: #fbbf24; }
-                .json-bool { color: #c084fc; }
-                .json-null { color: #f87171; }
-            `}</style>
+            {/* Environment Editor */}
+            <Modal isOpen={envEditorOpen} onClose={() => setEnvEditorOpen(false)} title="Manage Environments" width="550px">
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {environments.map((env, i) => (
+                        <div key={i} style={{ padding: 12, background: "rgba(168,85,247,0.05)", border: `1px solid ${i === activeEnvIdx ? "rgba(168,85,247,0.3)" : "rgba(168,85,247,0.1)"}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                <input style={{ ...inputStyle, flex: 1, padding: "5px 10px", fontSize: 12 }} value={env.name} onChange={e => { const u = [...environments]; u[i] = { ...u[i], name: e.target.value }; setEnvironments(u); }} placeholder="Name" />
+                                <button onClick={() => { if (environments.length > 1) setEnvironments(environments.filter((_, j) => j !== i)); }} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, color: "#f87171", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>×</button>
+                            </div>
+                            <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.baseUrl} onChange={e => { const u = [...environments]; u[i] = { ...u[i], baseUrl: e.target.value }; setEnvironments(u); }} placeholder="Base URL" />
+                            <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.token} onChange={e => { const u = [...environments]; u[i] = { ...u[i], token: e.target.value }; setEnvironments(u); }} placeholder="Bearer Token (optional)" type="password" />
+                        </div>
+                    ))}
+                    <button onClick={() => setEnvironments([...environments, { name: "New", baseUrl: "http://localhost:3000", token: "" }])} style={{ alignSelf: "flex-start", background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.2)", borderRadius: 6, color: "#c084fc", fontSize: 11, padding: "6px 14px", cursor: "pointer" }}>+ Add Environment</button>
+                </div>
+            </Modal>
+
+            {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
         </div>
     );
 };
