@@ -231,6 +231,145 @@ const DataShapeEditor: React.FC<{
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
+const ApiTester: React.FC<{ api: any }> = ({ api }) => {
+    const [baseUrl, setBaseUrl] = useState("http://localhost:8000");
+    const [path, setPath] = useState(api.path);
+    const [headers, setHeaders] = useState(
+        api.auth_required ? '{\n  "Authorization": "Bearer YOUR_TOKEN"\n}' : "{}"
+    );
+    const [body, setBody] = useState("{\n  \n}");
+    const [response, setResponse] = useState<{ status: number; data: any; time: number } | null>(null);
+    const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        setPath(api.path);
+        setHeaders(api.auth_required ? '{\n  "Authorization": "Bearer YOUR_TOKEN"\n}' : "{}");
+    }, [api.id]);
+
+    const handleSend = async () => {
+        setIsLoading(true);
+        setError("");
+        setResponse(null);
+        try {
+            let parsedHeaders: any = {};
+            try {
+                if (headers.trim()) parsedHeaders = JSON.parse(headers);
+            } catch (e) {
+                throw new Error("Invalid JSON in headers");
+            }
+
+            if (!parsedHeaders['Content-Type'] && ['POST', 'PUT', 'PATCH'].includes(api.method)) {
+                parsedHeaders['Content-Type'] = 'application/json';
+            }
+
+            const url = baseUrl.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
+            const options: RequestInit = {
+                method: api.method,
+                headers: parsedHeaders,
+            };
+
+            if (['POST', 'PUT', 'PATCH'].includes(api.method)) {
+                options.body = body;
+            }
+
+            const start = Date.now();
+            const res = await fetch(url, options);
+            const time = Date.now() - start;
+
+            let data;
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                data = await res.json();
+            } else {
+                data = await res.text();
+            }
+
+            setResponse({ status: res.status, data, time });
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center gap-2">
+                <input
+                    value={baseUrl}
+                    onChange={e => setBaseUrl(e.target.value)}
+                    placeholder="Base URL (e.g. http://localhost:3000)"
+                    className="w-1/3 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none"
+                />
+                <input
+                    value={path}
+                    onChange={e => setPath(e.target.value)}
+                    placeholder="Path (e.g. /api/users)"
+                    className="flex-1 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none"
+                />
+                <button
+                    onClick={handleSend}
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-[var(--ide-primary)] hover:bg-[var(--ide-primary-hover)] text-white rounded font-medium disabled:opacity-50 transition-colors"
+                >
+                    {isLoading ? "Sending..." : "Send"}
+                </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 h-[400px]">
+                <div className="space-y-4 flex flex-col h-full">
+                    <div>
+                        <label className="block text-xs font-semibold text-[var(--ide-text-muted)] mb-1">Headers (JSON)</label>
+                        <textarea
+                            value={headers}
+                            onChange={e => setHeaders(e.target.value)}
+                            className="w-full h-24 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none resize-none"
+                        />
+                    </div>
+                    {['POST', 'PUT', 'PATCH'].includes(api.method) && (
+                        <div className="flex-1 flex flex-col min-h-0">
+                            <label className="block text-xs font-semibold text-[var(--ide-text-muted)] mb-1">Body (JSON)</label>
+                            <textarea
+                                value={body}
+                                onChange={e => setBody(e.target.value)}
+                                className="w-full flex-1 px-3 py-2 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded text-sm text-[var(--ide-text)] font-mono focus:border-[var(--ide-primary)] focus:outline-none resize-none"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)] flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-3 shrink-0">
+                        <h3 className="text-sm font-semibold text-[var(--ide-text)]">Response</h3>
+                        {response && (
+                            <div className="flex items-center gap-3 text-xs">
+                                <span className={response.status >= 200 && response.status < 300 ? "text-green-400" : "text-red-400"}>
+                                    Status: {response.status}
+                                </span>
+                                <span className="text-[var(--ide-text-muted)]">Time: {response.time}ms</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex-1 bg-[var(--ide-bg)] rounded border border-[var(--ide-border)] overflow-auto p-3">
+                        {error ? (
+                            <div className="text-red-400 text-sm font-mono">{error}</div>
+                        ) : response ? (
+                            <pre className="text-sm font-mono text-[var(--ide-text)] whitespace-pre-wrap">
+                                {typeof response.data === 'object' ? JSON.stringify(response.data, null, 2) : response.data}
+                            </pre>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-[var(--ide-text-muted)] text-sm">
+                                Click Send to test endpoint
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface EndpointDetailProps {
     api: any;
     onDelete: () => void;
@@ -250,6 +389,7 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
     const [reqBody, setReqBody] = useState<DataShape | undefined>(api.request_body);
     const [resBody, setResBody] = useState<DataShape | undefined>(api.response_body);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'design' | 'test'>('design');
     const backendFlows = (project?.logic_flows || []).filter(
         (flow) => !flow.archived && flow.context === "backend"
     );
@@ -372,8 +512,24 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
                 )}
             </div>
 
-            {/* Sections */}
-            <div className="space-y-6">
+            {/* Tabs */}
+            <div className="flex border-b border-[var(--ide-border)] mb-6">
+                <button
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'design' ? 'border-[var(--ide-primary)] text-[var(--ide-primary)]' : 'border-transparent text-[var(--ide-text-muted)] hover:text-[var(--ide-text)]'}`}
+                    onClick={() => setActiveTab('design')}
+                >
+                    Design Schema
+                </button>
+                <button
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'test' ? 'border-[var(--ide-primary)] text-[var(--ide-primary)]' : 'border-transparent text-[var(--ide-text-muted)] hover:text-[var(--ide-text)]'}`}
+                    onClick={() => setActiveTab('test')}
+                >
+                    Test API
+                </button>
+            </div>
+
+            {activeTab === 'design' ? (
+            <div className="space-y-6 animate-fade-in">
                 {/* Auth */}
                 <div className="bg-[var(--ide-bg-panel)] rounded-lg p-4 border border-[var(--ide-border)]">
                     <h3 className="text-sm font-semibold text-[var(--ide-text)] mb-3">Authentication</h3>
@@ -530,6 +686,11 @@ const EndpointDetail: React.FC<EndpointDetailProps> = ({ api, onDelete }) => {
                     )}
                 </div>
             </div>
+            ) : (
+                <div className="animate-fade-in">
+                    <ApiTester api={api} />
+                </div>
+            )}
         </>
     );
 };
