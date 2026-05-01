@@ -50,7 +50,7 @@ const DatabasePage: React.FC = () => {
                 }}
             />
 
-            <div className="relative flex flex-col min-h-0 flex-1 px-6 pt-6 pb-5 gap-4">
+            <div className="relative flex flex-col min-h-0 flex-1 px-8 py-6 gap-6">
                 <header className="flex items-start justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
@@ -77,7 +77,7 @@ const DatabasePage: React.FC = () => {
                     </div>
                 </header>
 
-                <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <MetricCard label="Models" value={stats.models} color="#28d89c" />
                     <MetricCard label="Relations" value={stats.relations} color="#2dc7b2" />
                     <MetricCard label="API Endpoints" value={stats.apis} color="#67e8a5" />
@@ -85,16 +85,16 @@ const DatabasePage: React.FC = () => {
                 </section>
 
                 <section
-                    className="flex flex-col min-h-0 flex-1 overflow-hidden"
+                    className="flex flex-col min-h-0 flex-1 overflow-hidden relative"
                     style={{
                         background: "rgba(11, 28, 23, 0.72)",
                         border: "1px solid rgba(40,216,156,0.14)",
-                        borderRadius: 14,
+                        borderRadius: 16,
                         backdropFilter: "blur(10px)",
                         boxShadow: "0 10px 34px rgba(0,0,0,0.35)",
                     }}
                 >
-                    <div className="flex px-4 pt-3 pb-0 border-b border-[rgba(40,216,156,0.12)] gap-6">
+                    <div className="flex px-6 pt-4 pb-0 border-b border-[rgba(40,216,156,0.12)] gap-6 z-10">
                         <TabButton label="Schema Studio" active={tab === "schema"} onClick={() => setTab("schema")} />
                         <TabButton label="API Shape Builder" active={tab === "apiSchema"} onClick={() => setTab("apiSchema")} icon />
                     </div>
@@ -111,7 +111,7 @@ const DatabasePage: React.FC = () => {
 
 const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
     <div
-        className="rounded-[10px] px-4 py-3"
+        className="rounded-xl px-5 py-4"
         style={{
             background: "rgba(40,216,156,0.04)",
             border: "1px solid rgba(40,216,156,0.11)",
@@ -119,7 +119,7 @@ const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({
         }}
     >
         <div
-            className="text-[10px] tracking-[0.08em] mb-1"
+            className="text-[11px] tracking-[0.08em] mb-1.5"
             style={{
                 color: "rgba(184,228,209,0.48)",
                 fontFamily: "'Space Mono', monospace",
@@ -127,7 +127,7 @@ const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({
         >
             {label.toUpperCase()}
         </div>
-        <div className="text-[25px] font-bold tracking-[-0.02em]" style={{ color }}>
+        <div className="text-[28px] font-bold tracking-[-0.02em]" style={{ color }}>
             {value}
         </div>
     </div>
@@ -136,7 +136,7 @@ const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({
 const TabButton: React.FC<{ label: string; active: boolean; onClick: () => void; icon?: boolean }> = ({ label, active, onClick, icon }) => (
     <button
         onClick={onClick}
-        className="px-4 py-3 text-sm font-semibold transition-all flex items-center gap-2 border-b-2"
+        className="px-4 py-3 text-[14px] font-semibold transition-all flex items-center gap-2 border-b-2"
         style={
             active
                 ? {
@@ -150,7 +150,7 @@ const TabButton: React.FC<{ label: string; active: boolean; onClick: () => void;
         }
     >
         {icon && (
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
         )}

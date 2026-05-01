@@ -107,9 +107,9 @@ const ERDCanvas: React.FC = () => {
     return (
         <div className="flex-1 min-h-0 w-full flex flex-col bg-transparent">
             {/* ERD Toolbar */}
-            <div className="h-10 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-4 gap-2">
+            <div className="h-12 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-6 gap-3">
                 <button
-                    className="btn-ghost flex items-center gap-1 text-sm"
+                    className="btn-ghost flex items-center gap-1 text-sm font-medium hover:text-[#28d89c] transition-colors"
                     onClick={handleAddModel}
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -301,7 +301,7 @@ const ERDCanvas: React.FC = () => {
             />
 
             {/* ERD Canvas Area */}
-            <div className="flex-1 overflow-auto p-8">
+            <div className="flex-1 overflow-auto p-6 md:p-10 relative">
                 {models.length > 0 ? (
                     <div
                         className="relative min-h-[600px] min-w-[800px]"
@@ -535,10 +535,10 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
     }, []);
 
     return (
-        <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-sm">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center">
-                    <svg className="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="h-full flex items-center justify-center p-8">
+            <div className="text-center max-w-sm w-full">
+                <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#28d89c]/20 to-teal-500/20 flex items-center justify-center shadow-lg shadow-[#28d89c]/10">
+                    <svg className="w-10 h-10 text-[#28d89c]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                     </svg>
                 </div>
@@ -577,42 +577,46 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                         </button>
 
                         {aiHelpOpen && (
-                            <div className="absolute bottom-full mb-2 left-0 w-56 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-scale-in">
-                                <div className="p-1 px-2 py-1.5 border-b border-white/[0.04]">
-                                    <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest">AI Assistance</span>
+                            <div className="absolute bottom-full mb-3 left-0 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-scale-in">
+                                <div className="p-1 px-3 py-2 border-b border-white/[0.06]">
+                                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">AI Assistance</span>
                                 </div>
-                                <div className="p-1">
+                                <div className="p-1.5">
                                     <button
                                         onClick={() => { onGenerate("scratch"); setAiHelpOpen(false); }}
-                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--ide-text)] hover:bg-white/[0.05] rounded-lg transition-all text-left group"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-[#28d89c]/10 hover:text-[#28d89c] rounded-lg transition-all text-left group"
                                     >
-                                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                                        <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 group-hover:bg-red-500/20 group-hover:scale-110 transition-all">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                         </div>
                                         <div>
-                                            <div className="font-bold">Regenerate from Scratch</div>
-                                            <div className="text-[10px] text-white/40 font-normal">Wipe current schema and restart</div>
+                                            <div className="font-bold text-sm">Regenerate from Scratch</div>
+                                            <div className="text-[10px] text-[var(--ide-text-muted)] font-normal mt-0.5">Wipe current schema and restart</div>
                                         </div>
                                     </button>
                                     <button
                                         onClick={() => { onGenerate("fix"); setAiHelpOpen(false); }}
-                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[var(--ide-text)] hover:bg-white/[0.05] rounded-lg transition-all text-left group"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-[#28d89c]/10 hover:text-[#28d89c] rounded-lg transition-all text-left group mt-1"
                                     >
-                                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
+                                        <div className="w-8 h-8 rounded-lg bg-[#28d89c]/10 flex items-center justify-center text-[#28d89c] group-hover:bg-[#28d89c]/20 group-hover:scale-110 transition-all">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         </div>
                                         <div>
-                                            <div className="font-bold">Check and Fix Schema</div>
-                                            <div className="text-[10px] text-white/40 font-normal">Add missing fields or fix errors</div>
+                                            <div className="font-bold text-sm">Check and Fix Schema</div>
+                                            <div className="text-[10px] text-[var(--ide-text-muted)] font-normal mt-0.5">Add missing fields or fix errors</div>
                                         </div>
                                     </button>
                                 </div>
                             </div>
                         )}
                     </div>
-                    <span className="text-xs text-[var(--ide-text-muted)]">or</span>
+                    <div className="flex items-center gap-4 w-full justify-center">
+                        <div className="h-px bg-white/5 flex-1" />
+                        <span className="text-[11px] text-[var(--ide-text-muted)] uppercase tracking-widest font-semibold">or</span>
+                        <div className="h-px bg-white/5 flex-1" />
+                    </div>
                     <button 
-                        className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-sm shadow-xl" 
+                        className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-sm shadow-xl mt-1 w-full" 
                         onClick={onAdd}
                     >
                         Create First Model

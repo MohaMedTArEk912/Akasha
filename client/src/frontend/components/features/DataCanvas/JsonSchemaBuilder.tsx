@@ -850,7 +850,7 @@ const JsonSchemaBuilder: React.FC = () => {
         <div className="flex-1 min-h-0 w-full flex flex-col bg-transparent overflow-hidden">
 
             {/* Toolbar */}
-            <div className="h-10 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-4 gap-1.5 flex-shrink-0">
+            <div className="h-12 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-6 gap-2 flex-shrink-0">
                 {/* Left: Actions */}
                 <ToolbarButton icon="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" label="Clear All" onClick={clearAll} danger />
                 <ToolbarDivider />
@@ -887,9 +887,9 @@ const JsonSchemaBuilder: React.FC = () => {
                             </div>
                         ) : (
                             /* Empty State */
-                            <div className="h-full flex items-center justify-center">
-                                <div className="text-center max-w-sm">
-                                    <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-[#28d89c]/20 to-teal-500/20 flex items-center justify-center">
+                            <div className="h-full flex items-center justify-center p-8">
+                                <div className="text-center max-w-sm w-full">
+                                    <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#28d89c]/20 to-teal-500/20 flex items-center justify-center shadow-lg shadow-[#28d89c]/10">
                                         <svg className="w-10 h-10 text-[#28d89c]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
