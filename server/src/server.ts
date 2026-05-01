@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initializeLLMProvider } from './lib/llmProvider.js';
+import { initializeLLMProvider, aiConfigStorage } from './lib/llmProvider.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +20,16 @@ app.use(cors({
 app.use(express.json());
 
 app.use(express.static(path.join(__dirname, '../../public')));
+
+// Set up AI configuration context from request headers or body
+app.use((req, res, next) => {
+    const aiConfig = {
+        apiKey: (req.headers['x-ai-api-key'] as string) || req.body?.apiKey,
+        model: (req.headers['x-ai-model'] as string) || req.body?.model,
+        apiBaseUrl: (req.headers['x-ai-api-base-url'] as string) || req.body?.apiBaseUrl,
+    };
+    aiConfigStorage.run(aiConfig, next);
+});
 
 
 // Health check

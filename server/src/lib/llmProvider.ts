@@ -5,6 +5,9 @@
 
 import './env.js';
 import OpenAI from 'openai';
+import { AsyncLocalStorage } from 'async_hooks';
+
+export const aiConfigStorage = new AsyncLocalStorage<{ apiKey?: string; apiBaseUrl?: string; model?: string }>();
 
 export interface LLMMessage {
     role: 'user' | 'assistant' | 'system';
@@ -41,8 +44,19 @@ class OpenAICompatibleProvider implements LLMProvider {
     }
 
     private getClient(apiKey?: string, apiBaseUrl?: string): OpenAI {
-        const key = apiKey || this.defaultApiKey;
-        let baseURL = apiBaseUrl || this.defaultBaseUrl;
+        const store = aiConfigStorage.getStore();
+        let baseURL = apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl;
+        
+        let key = apiKey || store?.apiKey;
+        if (!key && baseURL === this.defaultBaseUrl) {
+            key = this.defaultApiKey;
+        }
+
+        // Strip Bearer prefix if the user accidentally pasted it
+        if (key && key.toLowerCase().startsWith('bearer ')) {
+            key = key.slice(7).trim();
+        }
+
         if (baseURL.endsWith('/')) {
             baseURL = baseURL.slice(0, -1);
         }
@@ -56,10 +70,11 @@ class OpenAICompatibleProvider implements LLMProvider {
     }
 
     async chat(options: LLMCompletionOptions): Promise<string> {
+        const store = aiConfigStorage.getStore();
         try {
             const client = this.getClient(options.apiKey, options.apiBaseUrl);
             const completion = await client.chat.completions.create({
-                model: options.model || 'google/gemma-3-4b-it:free',
+                model: options.model || store?.model || 'google/gemma-3-4b-it:free',
                 messages: options.messages as any,
                 temperature: options.temperature ?? 0.3,
                 max_tokens: options.max_tokens ?? 2048,
@@ -73,9 +88,10 @@ class OpenAICompatibleProvider implements LLMProvider {
     }
 
     async *chatStream(options: LLMCompletionOptions): AsyncGenerator<string, void, undefined> {
+        const store = aiConfigStorage.getStore();
         const client = this.getClient(options.apiKey, options.apiBaseUrl);
         const stream = await client.chat.completions.create({
-            model: options.model || 'google/gemma-3-4b-it:free',
+            model: options.model || store?.model || 'google/gemma-3-4b-it:free',
             messages: options.messages as any,
             temperature: options.temperature ?? 0.3,
             max_tokens: options.max_tokens ?? 2048,

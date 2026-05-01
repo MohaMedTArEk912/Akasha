@@ -26,32 +26,18 @@ const client = axios.create({
 // State to track current project context (since HTTP is stateless)
 let activeProjectId: string | null = null;
 
-type LlmRequestSettings = {
-  apiKey?: string;
-  model?: string;
-  apiBaseUrl?: string;
-};
-
-function getLlmRequestSettings(): LlmRequestSettings {
-  if (typeof window === "undefined") return {};
-
-  const apiKey = localStorage.getItem("akasha_api_key")?.trim();
-  const model = localStorage.getItem("akasha_model")?.trim();
-  const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
-
-  return {
-    ...(apiKey ? { apiKey } : {}),
-    ...(model ? { model } : {}),
-    ...(apiBaseUrl ? { apiBaseUrl } : {}),
-  };
-}
-
-function withLlmSettings<T extends Record<string, unknown>>(payload: T): T & LlmRequestSettings {
-  return {
-    ...payload,
-    ...getLlmRequestSettings(),
-  };
-}
+client.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const apiKey = localStorage.getItem("akasha_api_key")?.trim();
+    const model = localStorage.getItem("akasha_model")?.trim();
+    const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
+    
+    if (apiKey) config.headers["x-ai-api-key"] = apiKey;
+    if (model) config.headers["x-ai-model"] = model;
+    if (apiBaseUrl) config.headers["x-ai-api-base-url"] = apiBaseUrl;
+  }
+  return config;
+});
 
 export const httpApi = {
   mode: "web",
@@ -149,16 +135,10 @@ export const httpApi = {
   generateStructuredIdea: async (
     id: string,
     ideaContent?: string,
-    apiKey?: string,
-    model?: string,
-    apiBaseUrl?: string,
   ): Promise<ProjectSchema> => {
-    const res = await client.post(`/project/${id}/generate-idea-details`, withLlmSettings({
+    const res = await client.post(`/project/${id}/generate-idea-details`, {
       ideaContent,
-      ...(apiKey && { apiKey }),
-      ...(model && { model }),
-      ...(apiBaseUrl && { apiBaseUrl }),
-    }));
+    });
     return res.data;
   },
   resetProject: async (_clearDiskFiles?: boolean): Promise<ProjectSchema> => {
@@ -252,11 +232,11 @@ export const httpApi = {
 
   // ─── UI Builder AI ──────────────────────────────
   generateUiLayout: async (payload: UiBuilderGenerateRequest): Promise<UiBuilderGenerateResponse> => {
-    const res = await client.post("/ai/ui-builder/generate", withLlmSettings(payload));
+    const res = await client.post("/ai/ui-builder/generate", payload);
     return res.data;
   },
   analyzeUiLayout: async (payload: UiBuilderGenerateRequest): Promise<UiBuilderGenerateResponse> => {
-    const res = await client.post("/ai/ui-builder/analyze", withLlmSettings(payload));
+    const res = await client.post("/ai/ui-builder/analyze", payload);
     return res.data;
   },
   applyGeneratedLayout: async (payload: {
@@ -268,10 +248,19 @@ export const httpApi = {
     return res.data;
   },
   streamUiLayout: async (payload: UiBuilderGenerateRequest): Promise<Response> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (typeof window !== "undefined") {
+      const apiKey = localStorage.getItem("akasha_api_key")?.trim();
+      const model = localStorage.getItem("akasha_model")?.trim();
+      const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
+      if (apiKey) headers["x-ai-api-key"] = apiKey;
+      if (model) headers["x-ai-model"] = model;
+      if (apiBaseUrl) headers["x-ai-api-base-url"] = apiBaseUrl;
+    }
     return fetch(`${API_BASE_URL}/ai/ui-builder/stream`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(withLlmSettings(payload)),
+      headers,
+      body: JSON.stringify(payload),
     });
   },
 
@@ -642,7 +631,7 @@ export const httpApi = {
 
   // ─── AI Idea Validation & Refinement ───────────
   analyzeIdea: async (idea: string) => {
-    const res = await client.post("/ai/analyze-idea", withLlmSettings({ idea }));
+    const res = await client.post("/ai/analyze-idea", { idea });
     return res.data;
   },
   reviewIdeaFeature: async (payload: {
@@ -654,7 +643,7 @@ export const httpApi = {
     approvedFeatures?: any[];
     rejectedFeatures?: any[];
   }) => {
-    const res = await client.post("/ai/review-idea-feature", withLlmSettings(payload));
+    const res = await client.post("/ai/review-idea-feature", payload);
     return res.data;
   },
   refineIdea: async (idea: string, history: any[], projectId?: string, structuredConcept?: any, featureQueue?: any[], understanding?: any) => {
@@ -663,11 +652,11 @@ export const httpApi = {
     if (structuredConcept) payload.structuredConcept = structuredConcept;
     if (featureQueue) payload.featureQueue = featureQueue;
     if (understanding) payload.understanding = understanding;
-    const res = await client.post("/ai/refine-idea", withLlmSettings(payload));
+    const res = await client.post("/ai/refine-idea", payload);
     return res.data;
   },
   generateSchemaFromIdea: async (projectId: string, mode: "scratch" | "fix" = "scratch") => {
-    const res = await client.post("/ai/generate-schema", withLlmSettings({ projectId, mode }));
+    const res = await client.post("/ai/generate-schema", { projectId, mode });
     return res.data;
   },
 
