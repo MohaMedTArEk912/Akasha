@@ -51,15 +51,15 @@ interface SavedSchema {
 /* ━━━ Constants ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 const FIELD_TYPES: { value: FieldType; label: string; icon: string; color: string }[] = [
-    { value: "string", label: "String", icon: "T", color: "text-emerald-400" },
-    { value: "integer", label: "Integer", icon: "#", color: "text-blue-400" },
-    { value: "number", label: "Float", icon: ".", color: "text-cyan-400" },
-    { value: "boolean", label: "Boolean", icon: "⊘", color: "text-amber-400" },
-    { value: "object", label: "Object", icon: "{}", color: "text-purple-400" },
-    { value: "array", label: "Array", icon: "[]", color: "text-pink-400" },
-    { value: "enum", label: "Enum", icon: "≡", color: "text-orange-400" },
-    { value: "date", label: "Date", icon: "📅", color: "text-teal-400" },
-    { value: "datetime", label: "DateTime", icon: "🕐", color: "text-violet-400" },
+    { value: "string", label: "String", icon: "T", color: "text-white" },
+    { value: "integer", label: "Integer", icon: "#", color: "text-white/80" },
+    { value: "number", label: "Float", icon: ".", color: "text-white/80" },
+    { value: "boolean", label: "Boolean", icon: "⊘", color: "text-white/60" },
+    { value: "object", label: "Object", icon: "{}", color: "text-white/70" },
+    { value: "array", label: "Array", icon: "[]", color: "text-white/70" },
+    { value: "enum", label: "Enum", icon: "≡", color: "text-white/50" },
+    { value: "date", label: "Date", icon: "📅", color: "text-white/80" },
+    { value: "datetime", label: "DateTime", icon: "🕐", color: "text-white/80" },
 ];
 
 const STORAGE_KEY = "akasha_json_schemas";
@@ -173,19 +173,19 @@ const JsonHighlight: React.FC<{ json: string }> = ({ json }) => {
     const highlighted = useMemo(() => {
         return json.replace(
             /("(?:\\.|[^"\\])*")\s*:/g,
-            '<span class="jsb-key">$1</span>:'
+            '<span class="text-white/90">$1</span>:'
         ).replace(
             /:\s*("(?:\\.|[^"\\])*")/g,
-            ': <span class="jsb-string">$1</span>'
+            ': <span class="text-white/50">$1</span>'
         ).replace(
             /:\s*(\d+\.?\d*)/g,
-            ': <span class="jsb-number">$1</span>'
+            ': <span class="text-white/70">$1</span>'
         ).replace(
             /:\s*(true|false)/g,
-            ': <span class="jsb-bool">$1</span>'
+            ': <span class="text-white/40">$1</span>'
         ).replace(
             /:\s*(null)/g,
-            ': <span class="jsb-null">$1</span>'
+            ': <span class="text-white/30">$1</span>'
         );
     }, [json]);
 
@@ -200,9 +200,9 @@ const ToolbarButton: React.FC<{ icon: string; label: string; onClick: () => void
         onClick={onClick}
         title={label}
         className={`p-1.5 rounded-md transition-all ${danger
-            ? "text-[var(--ide-text-muted)] hover:text-red-400 hover:bg-red-500/10"
+            ? "text-[var(--ide-text-muted)] hover:text-white hover:bg-white/10"
             : accent
-                ? "text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10"
+                ? "text-white hover:bg-white/15"
                 : "text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-white/[0.04]"
             }`}
     >
@@ -218,10 +218,10 @@ const ToolbarDivider: React.FC = () => <div className="w-px h-5 bg-[var(--ide-bo
 const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; size?: "sm" | "xs" }> = ({ checked, onChange, label, size = "sm" }) => (
     <label className="flex items-center gap-1.5 cursor-pointer select-none group">
         <div
-            className={`relative rounded-full transition-all duration-200 ${checked ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]" : "bg-white/10"} ${size === "xs" ? "w-7 h-3.5" : "w-8 h-4"}`}
+            className={`relative rounded-full transition-all duration-200 ${checked ? "bg-white" : "bg-white/10"} ${size === "xs" ? "w-7 h-3.5" : "w-8 h-4"}`}
             onClick={() => onChange(!checked)}
         >
-            <div className={`absolute top-0.5 rounded-full bg-white transition-all duration-200 shadow-sm ${checked ? (size === "xs" ? "left-3.5" : "left-4") : "left-0.5"} ${size === "xs" ? "w-2.5 h-2.5" : "w-3 h-3"}`} />
+            <div className={`absolute top-0.5 rounded-full bg-black transition-all duration-200 shadow-sm ${checked ? (size === "xs" ? "left-3.5" : "left-4") : "left-0.5"} ${size === "xs" ? "w-2.5 h-2.5" : "w-3 h-3"}`} />
         </div>
         <span className={`font-medium text-[var(--ide-text-muted)] group-hover:text-[var(--ide-text)] transition-colors ${size === "xs" ? "text-[9px]" : "text-[10px]"}`}>{label}</span>
     </label>
@@ -252,7 +252,7 @@ const MiniInput: React.FC<{ label: string; value: string; onChange: (v: string) 
             value={value}
             onChange={e => onChange(e.target.value)}
             placeholder={placeholder}
-            className="w-full bg-[var(--ide-bg)] border border-[var(--ide-border)]/40 rounded px-2 py-1 text-[10px] font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/30 focus:outline-none focus:border-indigo-500/40 transition-all"
+            className="w-full bg-[var(--ide-bg)] border border-[var(--ide-border)]/40 rounded px-2 py-1 text-[10px] font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/30 focus:outline-none focus:border-white/40 transition-all"
         />
     </div>
 );
@@ -306,7 +306,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                     value={field.name}
                     onChange={e => onUpdate(field.id, { name: e.target.value.replace(/[^a-zA-Z0-9_-]/g, '') })}
                     placeholder="fieldName"
-                    className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--ide-border)]/40 focus:border-indigo-500/60 px-1 py-0.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/30 focus:outline-none transition-all"
+                    className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--ide-border)]/40 focus:border-white/60 px-1 py-0.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/30 focus:outline-none transition-all"
                 />
 
                 {/* Type Selector */}
@@ -323,7 +323,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                         }
                         onUpdate(field.id, updates);
                     }}
-                    className={`bg-[var(--ide-bg)] border border-[var(--ide-border)]/40 rounded px-2 py-1 text-[10px] font-mono font-bold ${typeInfo.color} focus:outline-none focus:border-indigo-500/50 cursor-pointer transition-all`}
+                    className={`bg-[var(--ide-bg)] border border-[var(--ide-border)]/40 rounded px-2 py-1 text-[10px] font-mono font-bold ${typeInfo.color} focus:outline-none focus:border-white/50 cursor-pointer transition-all`}
                 >
                     {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
@@ -335,7 +335,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                 {/* Delete */}
                 <button
                     onClick={() => onRemove(field.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-[var(--ide-text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+                    className="opacity-0 group-hover:opacity-100 p-1 text-[var(--ide-text-muted)] hover:text-white hover:bg-white/10 rounded transition-all"
                     title="Remove field"
                 >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,7 +360,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                                         onUpdate(field.id, { enumValues: updated });
                                     }}
                                     placeholder={`value${i + 1}`}
-                                    className="w-24 bg-[var(--ide-bg)] border border-[var(--ide-border)]/40 rounded px-2 py-0.5 text-[10px] font-mono text-[var(--ide-text)] focus:outline-none focus:border-orange-500/50 transition-all"
+                                    className="w-24 bg-[var(--ide-bg)] border border-[var(--ide-border)]/40 rounded px-2 py-0.5 text-[10px] font-mono text-[var(--ide-text)] focus:outline-none focus:border-white/50 transition-all"
                                 />
                                 <button
                                     onClick={() => {
@@ -375,7 +375,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                         ))}
                         <button
                             onClick={() => onUpdate(field.id, { enumValues: [...(field.enumValues || [""]), ""] })}
-                            className="text-[10px] text-orange-400 hover:text-orange-300 font-medium transition-colors"
+                            className="text-[10px] text-white/60 hover:text-white font-medium transition-colors"
                         >+ add</button>
                     </div>
                 </div>
@@ -421,7 +421,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                     ))}
                     <button
                         onClick={() => onAddChild(field.id)}
-                        className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors py-1.5 px-3"
+                        className="flex items-center gap-1.5 text-[10px] font-semibold text-white/60 hover:text-white transition-colors py-1.5 px-3"
                         style={{ marginLeft: `${(depth + 1) * 24 + 20}px` }}
                     >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -477,7 +477,7 @@ const SchemaManagerModal: React.FC<{
                                 value={saveName}
                                 onChange={e => setSaveName(e.target.value)}
                                 placeholder="Schema name..."
-                                className="w-full bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-2.5 text-sm text-[var(--ide-text)] focus:outline-none focus:border-indigo-500/50 transition-all"
+                                className="w-full bg-[var(--ide-bg)] border border-[var(--ide-border)] rounded-lg px-4 py-2.5 text-sm text-[var(--ide-text)] focus:outline-none focus:border-white/50 transition-all"
                                 autoFocus
                                 onKeyDown={e => { if (e.key === "Enter" && saveName.trim()) { onSave?.(saveName.trim()); onClose(); } }}
                             />
@@ -485,7 +485,7 @@ const SchemaManagerModal: React.FC<{
                                 <button
                                     onClick={() => { if (saveName.trim()) { onSave?.(saveName.trim()); onClose(); } }}
                                     disabled={!saveName.trim()}
-                                    className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold disabled:opacity-40 transition-all"
+                                    className="px-4 py-2 text-sm bg-white text-black hover:bg-white/90 rounded-lg font-semibold disabled:opacity-40 transition-all"
                                 >Save</button>
                             </div>
                         </div>
@@ -609,7 +609,7 @@ const ApplyToApiModal: React.FC<{
                                 key={t}
                                 onClick={() => setTarget(t)}
                                 className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold uppercase border transition-all ${target === t
-                                    ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
+                                    ? "bg-white/10 text-white border-white/20"
                                     : "text-[var(--ide-text-muted)] border-[var(--ide-border)] hover:text-[var(--ide-text)]"
                                     }`}
                             >{t} body</button>
@@ -641,7 +641,7 @@ const ApplyToApiModal: React.FC<{
                                 className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-white/[0.04] transition-colors"
                             >
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-[10px] font-bold font-mono ${api.method === "GET" ? "text-emerald-400" : api.method === "POST" ? "text-blue-400" : api.method === "PUT" ? "text-amber-400" : api.method === "DELETE" ? "text-red-400" : "text-gray-400"}`}>
+                                    <span className="text-[10px] font-bold font-mono text-white/40">
                                         {api.method}
                                     </span>
                                     <span className="text-xs font-mono text-[var(--ide-text)]">{api.path}</span>

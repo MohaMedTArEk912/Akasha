@@ -75,8 +75,8 @@ const DashboardLanding: React.FC = () => {
 
   const ambientBackground =
     theme === "light"
-      ? "radial-gradient(circle at 14% -8%, rgba(148, 163, 184, 0.34), transparent 40%), radial-gradient(circle at 86% 10%, rgba(99, 102, 241, 0.14), transparent 34%), linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0))"
-      : "radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.05), transparent 40%)";
+      ? "radial-gradient(circle at 14% -8%, rgba(0, 0, 0, 0.05), transparent 40%), linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0))"
+      : "radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.03), transparent 40%), radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.01), transparent 40%)";
 
   const createModeLabel = createMode === "workshop" ? "Guided flow" : "Structured import";
 
@@ -220,10 +220,10 @@ const DashboardLanding: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 animate-fade-in group">
             <div className="space-y-2">
               <h1 className="text-4xl md:text-5xl font-black tracking-[-0.04em] uppercase italic flex items-center gap-3 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                PROJECTS <span className="text-indigo-500">.</span>
+                PROJECTS <span className="text-white">.</span>
               </h1>
               <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
                 <span>WORKSPACE</span>
                 <span className="text-white/20">/</span>
                 <span className="text-white/70 truncate max-w-[200px] sm:max-w-xs md:max-w-md drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
@@ -283,7 +283,7 @@ const DashboardLanding: React.FC = () => {
 
               <button
                 onClick={openCreateModal}
-                className="h-10 px-6 rounded-xl bg-[#0ea5e9] hover:bg-[#0284c7] text-[#050508] font-bold text-xs transition-all shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] flex items-center justify-center gap-2 whitespace-nowrap"
+                className="h-10 px-6 rounded-xl bg-white text-black font-bold text-xs transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 New Project
               </button>
@@ -334,7 +334,7 @@ const DashboardLanding: React.FC = () => {
               </p>
               <button
                 onClick={openCreateModal}
-                className="btn-modern-primary !h-12 !px-12"
+                className="bg-white text-black h-12 px-12 rounded-xl font-bold text-xs hover:opacity-90 transition-all"
               >
                 Create Project
               </button>
@@ -391,13 +391,13 @@ const DashboardLanding: React.FC = () => {
             <div className="relative z-10 flex h-full w-full flex-col">
               <div className="flex items-center justify-between border-b border-white/10 bg-black/25 px-5 py-4 md:px-8">
                 <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 text-white flex items-center justify-center shadow-xl shadow-indigo-500/20 shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-white/10 text-white border border-white/20 flex items-center justify-center shadow-xl flex-shrink-0">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
                     </svg>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300/90">
+                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/50">
                       Project Setup
                     </p>
                     <h2 className="truncate text-xl md:text-2xl font-black leading-tight text-white">
@@ -412,7 +412,7 @@ const DashboardLanding: React.FC = () => {
                     onClick={() => setCreateMode("workshop")}
                     className={`h-10 px-4 rounded-xl text-[11px] font-black uppercase tracking-[0.22em] transition-all ${
                       createMode === "workshop"
-                        ? "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg shadow-indigo-500/20"
+                        ? "bg-white text-black shadow-lg"
                         : "text-[var(--ide-text-secondary)] hover:text-white"
                     }`}
                   >
@@ -428,7 +428,7 @@ const DashboardLanding: React.FC = () => {
                     }}
                     className={`h-10 px-4 rounded-xl text-[11px] font-black uppercase tracking-[0.22em] transition-all ${
                       createMode === "json"
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                        ? "bg-white/10 text-white shadow-lg border border-white/20"
                         : "text-[var(--ide-text-secondary)] hover:text-white"
                     }`}
                   >
@@ -443,7 +443,7 @@ const DashboardLanding: React.FC = () => {
                     <div className="flex h-full flex-col justify-between gap-5">
                       <div className="space-y-3">
                         <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/70">
-                          <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.8)]" />
+                          <span className="h-2 w-2 rounded-full bg-white/60 shadow-[0_0_12px_rgba(255,255,255,0.4)]" />
                           {createModeLabel}
                         </div>
                         <p className="max-w-md text-sm leading-6 text-[var(--ide-text-secondary)]">
@@ -486,13 +486,13 @@ const DashboardLanding: React.FC = () => {
                             value={projectName}
                             onChange={(event) => setProjectName(event.target.value)}
                             placeholder="e.g. Neo-Commerce"
-                            className="mt-3 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-base font-semibold text-white placeholder:text-white/25 focus:outline-none focus:ring-4 focus:ring-cyan-500/10 focus:border-cyan-500/40 transition-all"
+                            className="mt-3 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-base font-semibold text-white placeholder:text-white/25 focus:outline-none focus:ring-4 focus:ring-white/5 focus:border-white/40 transition-all"
                             required={createMode === "workshop"}
                           />
                         </div>
 
-                        <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/6 p-4">
-                          <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                          <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">
                             Recommended first step
                           </div>
                           <p className="mt-2 text-sm leading-6 text-[var(--ide-text-secondary)]">
@@ -510,17 +510,17 @@ const DashboardLanding: React.FC = () => {
                     <form onSubmit={handleNextStep} className="h-full min-h-0 overflow-auto px-5 py-5 md:px-8 lg:px-8 lg:py-6">
                       <div className="mx-auto flex max-w-5xl min-h-full flex-col justify-between gap-6">
                         <div className="space-y-5">
-                          <div className="rounded-3xl border border-emerald-500/15 bg-[linear-gradient(180deg,rgba(16,185,129,0.14),rgba(16,185,129,0.05))] p-5">
+                          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-300">
+                                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">
                                   Workshop Mode
                                 </div>
-                                <p className="mt-3 max-w-2xl text-sm leading-6 text-emerald-50/78">
+                                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
                                   Turn the idea into a clear product brief, then continue into the visual builder with a stronger plan.
                                 </p>
                               </div>
-                              <div className="hidden md:flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-200 shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+                              <div className="hidden md:flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/80 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m0 7a9 9 0 11-6-16.19" />
                                 </svg>
@@ -583,7 +583,7 @@ const DashboardLanding: React.FC = () => {
                           <button
                             type="submit"
                             disabled={!projectName.trim()}
-                            className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-500 text-white font-black text-[11px] uppercase tracking-[0.22em] hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg shadow-indigo-500/20"
+                            className="flex-1 h-11 rounded-2xl bg-white text-black font-black text-[11px] uppercase tracking-[0.22em] hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg"
                           >
                             Next: Workshop &rarr;
                           </button>
@@ -596,7 +596,7 @@ const DashboardLanding: React.FC = () => {
                         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 lg:flex lg:flex-col lg:flex-1">
                           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                             <div className="space-y-2">
-                              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">
+                              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
                                 Direct JSON Import
                               </div>
                               <p className="max-w-xl text-sm leading-6 text-[var(--ide-text-secondary)]">
@@ -646,12 +646,12 @@ const DashboardLanding: React.FC = () => {
                             onChange={handleJsonFileSelected}
                           />
 
-                          <div className="mt-4 rounded-[1.5rem] border border-cyan-500/20 bg-[#06080d] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                          <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-[#06080d] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                             <div className="flex items-center justify-between border-b border-white/5 pb-3">
                               <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/45">
                                 JSON editor
                               </div>
-                              <div className={`text-[10px] font-black uppercase tracking-[0.22em] ${jsonError ? "text-rose-300" : "text-emerald-300"}`}>
+                              <div className={`text-[10px] font-black uppercase tracking-[0.22em] ${jsonError ? "text-white/40" : "text-white"}`}>
                                 {jsonError ? "Invalid JSON" : "Valid JSON"}
                               </div>
                             </div>
@@ -666,7 +666,7 @@ const DashboardLanding: React.FC = () => {
                           </div>
 
                           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-                            <div className={`rounded-2xl border px-4 py-3 text-xs font-semibold ${jsonError ? "border-rose-500/20 bg-rose-500/8 text-rose-200" : "border-emerald-500/20 bg-emerald-500/8 text-emerald-200"}`}>
+                            <div className={`rounded-2xl border px-4 py-3 text-xs font-semibold ${jsonError ? "border-white/10 bg-white/5 text-white/60" : "border-white/20 bg-white/10 text-white"}`}>
                               {jsonError
                                 ? `Invalid JSON: ${jsonError}`
                                 : "JSON is valid and ready for direct import."}
@@ -711,7 +711,7 @@ const DashboardLanding: React.FC = () => {
                           <button
                             type="submit"
                             disabled={Boolean(jsonError) || jsonLoading}
-                            className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-[11px] uppercase tracking-[0.22em] hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg shadow-emerald-500/20"
+                            className="flex-1 h-11 rounded-2xl bg-white text-black font-black text-[11px] uppercase tracking-[0.22em] hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg"
                           >
                             Import Project JSON
                           </button>
@@ -729,7 +729,7 @@ const DashboardLanding: React.FC = () => {
           <div className="fixed inset-0 z-[10010] bg-[#050508] animate-fade-in">
             <div
               className="pointer-events-none absolute inset-0"
-              style={{ background: ambientBackground }}
+              style={{ background: "linear-gradient(135deg, #0a0a0a, #1a1a1a)" }}
             />
             <div className="relative h-full w-full">
               <IdeaWorkshop
@@ -758,14 +758,14 @@ const ProjectCard: React.FC<{
       style={{ animationDelay: `${index * 40}ms` }}
       onClick={onOpen}
     >
-      <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-indigo-500/[0.02] to-transparent pointer-events-none" />
+      <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
 
-      <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full group-hover:bg-[#0ea5e9]/20 transition-all duration-700" />
+      <div className="absolute -top-16 -right-16 w-32 h-32 bg-white/5 blur-[50px] rounded-full group-hover:bg-white/10 transition-all duration-700" />
 
       <div className="relative z-10 flex-1">
         <div className="w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center mb-6 group-hover:border-white/10 group-hover:bg-white/[0.04] transition-all duration-300 shadow-inner">
           <svg
-            className="w-5 h-5 text-indigo-400 group-hover:text-[#0ea5e9] transition-colors duration-300"
+            className="w-5 h-5 text-white/40 group-hover:text-white transition-colors duration-300"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -793,7 +793,7 @@ const ProjectCard: React.FC<{
       </div>
 
       <div className="relative z-10 flex items-center gap-3 mt-4 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-        <div className="flex-1 text-[11px] font-black text-indigo-500 uppercase tracking-widest">
+        <div className="flex-1 text-[11px] font-black text-white/60 uppercase tracking-widest">
           Open Project
         </div>
         <button

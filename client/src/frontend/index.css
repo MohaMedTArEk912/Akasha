@@ -578,6 +578,30 @@ select.input-modern {
     animation: slideUp 0.5s var(--ease-spring) both;
 }
 
+.page-shell-enter {
+    animation: pageShellEnter 0.42s var(--ease-spring) both;
+    will-change: transform, opacity, filter;
+}
+
+.page-shell-enter-strong {
+    animation: pageShellEnter 0.52s var(--ease-spring) both;
+    will-change: transform, opacity, filter;
+}
+
+@keyframes pageShellEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.992);
+        filter: blur(4px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
 /* ============================================
    LAYOUT CLASSES
    ============================================ */

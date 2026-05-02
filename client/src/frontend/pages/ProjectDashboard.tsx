@@ -34,52 +34,52 @@ const FEATURES: FeatureCard[] = [
         id: "ui", label: "UI Design",
         description: "Visual drag-and-drop interface builder with live preview",
         icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z",
-        gradient: "from-indigo-600/25 via-purple-600/15 to-blue-600/5",
-        iconColor: "text-indigo-400", glowColor: "rgba(99,102,241,0.15)",
+        gradient: "from-white/5 to-transparent",
+        iconColor: "text-white/80", glowColor: "rgba(255,255,255,0.05)",
     },
     {
         id: "usecases", label: "Use Cases",
         description: "Logic flows and business process workflows",
         icon: "M13 10V3L4 14h7v7l9-11h-7z",
-        gradient: "from-amber-600/25 via-orange-600/15 to-yellow-600/5",
-        iconColor: "text-amber-400", glowColor: "rgba(245,158,11,0.15)",
+        gradient: "from-white/5 to-transparent",
+        iconColor: "text-white/80", glowColor: "rgba(255,255,255,0.05)",
     },
     {
         id: "apis", label: "APIs",
         description: "RESTful endpoints, request/response schemas",
         icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9",
-        gradient: "from-emerald-600/25 via-green-600/15 to-teal-600/5",
-        iconColor: "text-emerald-400", glowColor: "rgba(16,185,129,0.15)",
+        gradient: "from-white/5 to-transparent",
+        iconColor: "text-white/80", glowColor: "rgba(255,255,255,0.05)",
     },
     {
         id: "database", label: "Database",
         description: "Entity-Relationship diagrams and data models",
         icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4",
-        gradient: "from-cyan-600/25 via-blue-600/15 to-sky-600/5",
-        iconColor: "text-cyan-400", glowColor: "rgba(6,182,212,0.15)",
+        gradient: "from-white/5 to-transparent",
+        iconColor: "text-white/80", glowColor: "rgba(255,255,255,0.05)",
     },
     {
         id: "diagrams", label: "Diagrams",
         description: "Architecture diagrams and system design",
         icon: "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2",
-        gradient: "from-rose-600/25 via-pink-600/15 to-fuchsia-600/5",
-        iconColor: "text-rose-400", glowColor: "rgba(244,63,94,0.15)",
+        gradient: "from-white/5 to-transparent",
+        iconColor: "text-white/80", glowColor: "rgba(255,255,255,0.05)",
     },
     {
         id: "code", label: "Source Code & Git",
         description: "File explorer, code editor, diff viewer, and version control",
         icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4",
-        gradient: "from-violet-600/25 via-purple-600/15 to-indigo-600/5",
-        iconColor: "text-violet-400", glowColor: "rgba(139,92,246,0.15)",
+        gradient: "from-white/5 to-transparent",
+        iconColor: "text-white/80", glowColor: "rgba(255,255,255,0.05)",
     },
 ];
 
 /* ─── Quick Actions ─── */
 const QUICK_ACTIONS = [
-    { label: "New Page", icon: "M12 4v16m8-8H4", page: "ui" as FeaturePage, color: "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/20" },
-    { label: "Write Code", icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4", page: "code" as FeaturePage, color: "text-violet-400 bg-violet-500/10 hover:bg-violet-500/20 border-violet-500/20" },
-    { label: "New API", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3", page: "apis" as FeaturePage, color: "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20" },
-    { label: "Add Diagram", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z", page: "diagrams" as FeaturePage, color: "text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20" },
+    { label: "New Page", icon: "M12 4v16m8-8H4", page: "ui" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
+    { label: "Write Code", icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4", page: "code" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
+    { label: "New API", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3", page: "apis" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
+    { label: "Add Diagram", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z", page: "diagrams" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
 ];
 
 /* ═══════════════════ Component ═══════════════════ */
@@ -206,7 +206,7 @@ const ProjectDashboard: React.FC = () => {
                             <button
                                 key={action.label}
                                 onClick={() => setActivePage(action.page)}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all duration-300 hover:scale-105 ${action.color}`}
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[11px] font-medium transition-all duration-300 hover:scale-[1.02] ${action.color}`}
                             >
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={action.icon} />
@@ -238,9 +238,9 @@ const ProjectDashboard: React.FC = () => {
                                 </div>
                                 {/* Content */}
                                 <div className="relative z-10">
-                                    <div className={`w-12 h-12 rounded-xl bg-white/[0.06] border border-white/[0.06] flex items-center justify-center mb-4 transition-all duration-500 group-hover:scale-110 group-hover:bg-white/[0.12] ${feature.iconColor}`}>
+                                    <div className={`w-12 h-12 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center mb-4 transition-all duration-500 group-hover:scale-110 group-hover:bg-white/[0.06] text-white/70`}>
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={feature.icon} />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" d={feature.icon} />
                                         </svg>
                                     </div>
                                     <h3 className="text-[13px] font-bold text-white mb-1.5">{feature.label}</h3>
@@ -248,7 +248,7 @@ const ProjectDashboard: React.FC = () => {
                                 </div>
                                 {/* Arrow */}
                                 <div className="absolute top-5 right-5 opacity-0 group-hover:opacity-70 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
-                                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-4 h-4 text-white/20 group-hover:text-white/60 transition-all duration-300 translate-x-2 group-hover:translate-x-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
                                     </svg>
                                 </div>
@@ -262,10 +262,10 @@ const ProjectDashboard: React.FC = () => {
                     <div style={{ animation: "fadeSlideUp 0.5s ease-out 0.8s both" }}>
                         <h2 className="text-[10px] font-black text-white/25 uppercase tracking-[0.2em] mb-3">Project Overview</h2>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <StatCard label="Pages" value={project.pages?.filter(p => !p.archived).length ?? 0} icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" color="indigo" />
-                            <StatCard label="APIs" value={project.apis?.filter(a => !a.archived).length ?? 0} icon="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3" color="emerald" />
-                            <StatCard label="Logic Flows" value={project.logic_flows?.filter(f => !f.archived).length ?? 0} icon="M13 10V3L4 14h7v7l9-11h-7z" color="amber" />
-                            <StatCard label="Models" value={project.data_models?.filter(m => !m.archived).length ?? 0} icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7" color="cyan" />
+                            <StatCard label="Pages" value={project.pages?.filter(p => !p.archived).length ?? 0} icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" color="white" />
+                            <StatCard label="APIs" value={project.apis?.filter(a => !a.archived).length ?? 0} icon="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3" color="white" />
+                            <StatCard label="Logic Flows" value={project.logic_flows?.filter(f => !f.archived).length ?? 0} icon="M13 10V3L4 14h7v7l9-11h-7z" color="white" />
+                            <StatCard label="Models" value={project.data_models?.filter(m => !m.archived).length ?? 0} icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7" color="white" />
                         </div>
                     </div>
                 )}
@@ -287,10 +287,7 @@ const ProjectDashboard: React.FC = () => {
 
 /* ─── Stats Card with animated accent ─── */
 const COLOR_MAP: Record<string, { bg: string; text: string; ring: string }> = {
-    indigo: { bg: "bg-indigo-500/10", text: "text-indigo-400", ring: "ring-indigo-500/20" },
-    emerald: { bg: "bg-emerald-500/10", text: "text-emerald-400", ring: "ring-emerald-500/20" },
-    amber: { bg: "bg-amber-500/10", text: "text-amber-400", ring: "ring-amber-500/20" },
-    cyan: { bg: "bg-cyan-500/10", text: "text-cyan-400", ring: "ring-cyan-500/20" },
+    white: { bg: "bg-white/5", text: "text-white/60", ring: "ring-white/10" },
 };
 
 const StatCard: React.FC<{ label: string; value: number; icon: string; color: string }> = ({ label, value, icon, color }) => {
@@ -303,7 +300,7 @@ const StatCard: React.FC<{ label: string; value: number; icon: string; color: st
                     style={{ animation: "pulse-ring 3s ease-in-out infinite" }} />
                 <div className={`relative w-9 h-9 rounded-lg ${c.bg} flex items-center justify-center`}>
                     <svg className={`w-4 h-4 ${c.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={icon} />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" d={icon} />
                     </svg>
                 </div>
             </div>

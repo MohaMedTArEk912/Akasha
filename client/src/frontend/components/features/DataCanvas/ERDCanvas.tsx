@@ -109,7 +109,7 @@ const ERDCanvas: React.FC = () => {
             {/* ERD Toolbar */}
             <div className="h-12 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-6 gap-3">
                 <button
-                    className="btn-ghost flex items-center gap-1 text-sm font-medium hover:text-[#28d89c] transition-colors"
+                    className="btn-ghost flex items-center gap-1 text-sm font-medium hover:text-white transition-colors"
                     onClick={handleAddModel}
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,8 +121,8 @@ const ERDCanvas: React.FC = () => {
                     <button
                         className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-all ${
                             generating
-                                ? "bg-[#28d89c]/10 text-[#28d89c] cursor-wait"
-                                : "bg-gradient-to-r from-[#28d89c]/10 to-teal-500/10 text-[#2dc7b2] hover:from-[#28d89c]/20 hover:to-teal-500/20 hover:text-[#9ff2cf] border border-[#28d89c]/10"
+                                ? "bg-white/10 text-white cursor-wait"
+                                : "bg-white/5 text-white/70 hover:bg-white/15 hover:text-white border border-white/10"
                         }`}
                         onClick={() => setShowAiMenu(!showAiMenu)}
                         disabled={generating}
@@ -161,7 +161,7 @@ const ERDCanvas: React.FC = () => {
                                         setShowAiMenu(false);
                                     }}
                                 >
-                                    <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 group-hover:bg-red-500/30">
+                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/15">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
@@ -172,14 +172,14 @@ const ERDCanvas: React.FC = () => {
                                     </div>
                                 </button>
                                 <button 
-                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-[#28d89c]/10 flex items-center gap-2 group transition-colors border-t border-white/5"
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center gap-2 group transition-colors border-t border-white/5"
                                     onClick={() => {
                                         setAiMode("fix");
                                         handleGenerateClick(); // Opens modal for fix too
                                         setShowAiMenu(false);
                                     }}
                                 >
-                                    <div className="w-8 h-8 rounded-lg bg-[#28d89c]/20 flex items-center justify-center text-[#28d89c] group-hover:bg-[#28d89c]/30">
+                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/15">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                                         </svg>
@@ -318,7 +318,7 @@ const ERDCanvas: React.FC = () => {
                                     refY="3.5"
                                     orient="auto"
                                 >
-                                    <polygon points="0 0, 10 3.5, 0 7" fill="#28d89c" />
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="white" fillOpacity="0.4" />
                                 </marker>
                             </defs>
                         </svg>
@@ -369,13 +369,13 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect, onRequ
     return (
         <div
             className={`w-64 rounded-xl border overflow-hidden bg-black/40 backdrop-blur-xl transition-all cursor-move shadow-2xl ${selected
-                ? "border-[#28d89c] shadow-[#28d89c]/20"
-                : "border-white/10 hover:border-[#28d89c]/50"
+                ? "border-white/40 shadow-white/5"
+                : "border-white/10 hover:border-white/30"
                 }`}
             onClick={onSelect}
         >
             {/* Model Header */}
-            <div className="bg-gradient-to-r from-emerald-500/20 to-teal-600/20 px-4 py-3 pb-2.5 border-b border-white/5 flex items-center gap-2">
+            <div className="bg-white/5 px-4 py-3 pb-2.5 border-b border-white/5 flex items-center gap-2">
                 <svg className="w-5 h-5 text-[var(--ide-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
                 </svg>
@@ -416,14 +416,14 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect, onRequ
             <div className="px-4 py-2 bg-black/20 flex items-center justify-between text-xs text-[var(--ide-text-muted)] border-t border-white/5">
                 <span className="flex items-center gap-1">
                     {model.timestamps && (
-                        <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">timestamps</span>
+                        <span className="px-1.5 py-0.5 rounded bg-white/5 text-white/40">timestamps</span>
                     )}
                     {model.soft_delete && (
-                        <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">soft delete</span>
+                        <span className="px-1.5 py-0.5 rounded bg-white/5 text-white/40">soft delete</span>
                     )}
                 </span>
                 <button
-                    className="hover:text-[#28d89c] transition-colors"
+                    className="hover:text-white transition-colors"
                     onClick={(e) => {
                         e.stopPropagation();
                         onRequestAddField();
@@ -448,20 +448,8 @@ interface FieldRowProps {
 const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
     const getTypeColor = (): string => {
         switch (field.field_type) {
-            case "string":
-            case "text":
-                return "text-green-400";
-            case "int":
-            case "float":
-                return "text-blue-400";
-            case "boolean":
-                return "text-yellow-400";
-            case "datetime":
-                return "text-purple-400";
-            case "uuid":
-                return "text-pink-400";
             default:
-                return "text-[var(--ide-text-muted)]";
+                return "text-white/45";
         }
     };
 
@@ -469,7 +457,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
         <div className="px-4 py-2 flex items-center gap-2 hover:bg-white/[0.03] transition-colors group">
             {/* Key Icon */}
             {field.primary_key && (
-                <svg className="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 text-white/60" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12.65 10A5.99 5.99 0 006 5c-3.31 0-6 2.69-6 6s2.68 6 6 6a5.99 5.99 0 006.65-5H18v4h4v-4h2v-2H12.65zM6 15c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" />
                 </svg>
             )}
@@ -489,7 +477,7 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
 
             {/* Unique Badge */}
             {field.unique && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                <span className="text-[10px] px-1 py-0.5 rounded bg-white/5 text-white/40">
                     unique
                 </span>
             )}
@@ -537,8 +525,8 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
     return (
         <div className="h-full flex items-center justify-center p-8">
             <div className="text-center max-w-sm w-full">
-                <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#28d89c]/20 to-teal-500/20 flex items-center justify-center shadow-lg shadow-[#28d89c]/10">
-                    <svg className="w-10 h-10 text-[#28d89c]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-lg">
+                    <svg className="w-10 h-10 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                     </svg>
                 </div>
@@ -551,7 +539,7 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                 <div className="flex flex-col gap-3 items-center">
                     <div className="relative" ref={aiHelpRef}>
                         <button
-                            className={`px-5 py-2.5 bg-[#28d89c] text-teal-950 font-bold rounded-xl shadow-lg shadow-[#28d89c]/20 hover:bg-[#2dc7b2] hover:shadow-[#2dc7b2]/30 hover:-translate-y-0.5 transition-all outline-none flex items-center gap-2 pr-2 ${generating ? "opacity-70 cursor-not-allowed" : ""}`}
+                            className={`px-5 py-2.5 bg-white/10 border border-white/20 text-white font-bold rounded-xl shadow-lg hover:bg-white/15 hover:-translate-y-0.5 transition-all outline-none flex items-center gap-2 pr-2 ${generating ? "opacity-70 cursor-not-allowed" : ""}`}
                             onClick={() => !generating && setAiHelpOpen(!aiHelpOpen)}
                         >
                             {generating ? (
@@ -584,9 +572,9 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                                 <div className="p-1.5">
                                     <button
                                         onClick={() => { onGenerate("scratch"); setAiHelpOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-[#28d89c]/10 hover:text-[#28d89c] rounded-lg transition-all text-left group"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-white/5 rounded-lg transition-all text-left group"
                                     >
-                                        <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 group-hover:bg-red-500/20 group-hover:scale-110 transition-all">
+                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:scale-110 transition-all">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                         </div>
                                         <div>
@@ -596,9 +584,9 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                                     </button>
                                     <button
                                         onClick={() => { onGenerate("fix"); setAiHelpOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-[#28d89c]/10 hover:text-[#28d89c] rounded-lg transition-all text-left group mt-1"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-white/5 rounded-lg transition-all text-left group mt-1"
                                     >
-                                        <div className="w-8 h-8 rounded-lg bg-[#28d89c]/10 flex items-center justify-center text-[#28d89c] group-hover:bg-[#28d89c]/20 group-hover:scale-110 transition-all">
+                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:scale-110 transition-all">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         </div>
                                         <div>

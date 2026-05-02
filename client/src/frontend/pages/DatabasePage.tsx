@@ -34,9 +34,8 @@ const DatabasePage: React.FC = () => {
         <div
             className="flex flex-col flex-1 min-h-0 overflow-hidden h-full w-full page-enter"
             style={{
-                background: "linear-gradient(135deg, #06120f 0%, #0b1f1a 48%, #06120f 100%)",
-                color: "#e8f7f0",
-                fontFamily: "'Outfit', 'Space Mono', sans-serif",
+                background: "var(--ide-bg)",
+                color: "var(--ide-text)",
             }}
         >
             <div
@@ -45,56 +44,44 @@ const DatabasePage: React.FC = () => {
                     inset: 0,
                     pointerEvents: "none",
                     backgroundImage:
-                        "linear-gradient(rgba(40,216,156,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(40,216,156,0.03) 1px, transparent 1px)",
+                        "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
                     backgroundSize: "44px 44px",
                 }}
             />
 
-            <div className="relative flex flex-col min-h-0 flex-1 px-8 py-6 gap-6">
-                <header className="flex items-start justify-between gap-4">
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <div
-                                style={{
-                                    width: 6,
-                                    height: 24,
-                                    borderRadius: 4,
-                                    background: "linear-gradient(180deg, #28d89c, rgba(40,216,156,0.2))",
-                                }}
-                            />
-                            <h1 className="m-0 text-[26px] font-bold tracking-[-0.02em] text-[#e8f7f0]">Database</h1>
+            <div className="relative flex flex-col min-h-0 flex-1 px-6 py-6 gap-6">
+                <header className="flex items-start justify-between gap-4" style={{ animation: "fadeSlideUp 0.5s ease-out both" }}>
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                            <span className="text-white/40 text-[10px] font-black tracking-widest">DATA</span>
                         </div>
-                        <p
-                            className="m-0 text-[13px]"
-                            style={{
-                                paddingLeft: 18,
-                                color: "rgba(184,228,209,0.62)",
-                                fontFamily: "'Space Mono', monospace",
-                            }}
-                        >
-                            {stats.models} models · {stats.relations} relations · {stats.endpointsWithShapes} API schemas
-                        </p>
+                        <div>
+                            <h1 className="m-0 text-2xl font-extrabold tracking-tight text-[var(--ide-text)]">Database</h1>
+                            <p className="m-0 mt-0.5 text-xs uppercase tracking-[0.2em] text-[var(--ide-text-secondary)]">
+                                {stats.models} models · {stats.relations} relations · {stats.endpointsWithShapes} API schemas
+                            </p>
+                        </div>
                     </div>
                 </header>
 
                 <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <MetricCard label="Models" value={stats.models} color="#28d89c" />
-                    <MetricCard label="Relations" value={stats.relations} color="#2dc7b2" />
-                    <MetricCard label="API Endpoints" value={stats.apis} color="#67e8a5" />
-                    <MetricCard label="Shaped APIs" value={stats.endpointsWithShapes} color="#5dd8ff" />
+                    <MetricCard label="Models" value={stats.models} color="#ffffff" />
+                    <MetricCard label="Relations" value={stats.relations} color="#e5e7eb" />
+                    <MetricCard label="API Endpoints" value={stats.apis} color="#d1d5db" />
+                    <MetricCard label="Shaped APIs" value={stats.endpointsWithShapes} color="#9ca3af" />
                 </section>
 
                 <section
                     className="flex flex-col min-h-0 flex-1 overflow-hidden relative"
                     style={{
-                        background: "rgba(11, 28, 23, 0.72)",
-                        border: "1px solid rgba(40,216,156,0.14)",
-                        borderRadius: 16,
+                        background: "rgba(255,255,255,0.02)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                        borderRadius: 24,
                         backdropFilter: "blur(10px)",
-                        boxShadow: "0 10px 34px rgba(0,0,0,0.35)",
+                        boxShadow: "var(--ide-shadow)",
                     }}
                 >
-                    <div className="flex px-6 pt-4 pb-0 border-b border-[rgba(40,216,156,0.12)] gap-6 z-10">
+                    <div className="flex px-6 pt-4 pb-0 border-b border-white/[0.06] gap-6 z-10">
                         <TabButton label="Schema Studio" active={tab === "schema"} onClick={() => setTab("schema")} />
                         <TabButton label="API Shape Builder" active={tab === "apiSchema"} onClick={() => setTab("apiSchema")} icon />
                     </div>
@@ -113,16 +100,14 @@ const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({
     <div
         className="rounded-xl px-5 py-4"
         style={{
-            background: "rgba(40,216,156,0.04)",
-            border: "1px solid rgba(40,216,156,0.11)",
-            borderTop: `2px solid ${color}55`,
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.07)",
         }}
     >
         <div
             className="text-[11px] tracking-[0.08em] mb-1.5"
             style={{
-                color: "rgba(184,228,209,0.48)",
-                fontFamily: "'Space Mono', monospace",
+            color: "var(--ide-text-secondary)",
             }}
         >
             {label.toUpperCase()}
@@ -140,20 +125,15 @@ const TabButton: React.FC<{ label: string; active: boolean; onClick: () => void;
         style={
             active
                 ? {
-                    color: "#9ff2cf",
-                    borderBottomColor: "#28d89c",
+                    color: "var(--ide-text)",
+                    borderBottomColor: "#ffffff",
                 }
                 : {
-                    color: "rgba(184,228,209,0.5)",
+                    color: "var(--ide-text-secondary)",
                     borderBottomColor: "transparent",
                 }
         }
     >
-        {icon && (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-        )}
         {label}
     </button>
 );

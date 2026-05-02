@@ -79,36 +79,29 @@ const FloatingBot: React.FC = () => {
     return (
         <>
             {/* Floating Bot Button */}
-            <div
-                ref={botRef}
-                className={`fixed z-[9999] select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                style={{
-                    left: position.x - 28,
-                    top: position.y - 28,
-                    transition: isDragging ? 'none' : 'box-shadow 0.3s ease',
-                }}
-                onMouseDown={handleMouseDown}
-                onClick={handleClick}
-            >
-                {/* Pulse ring */}
-                <div className={`absolute inset-0 rounded-full ${isOpen ? 'bg-indigo-500/20' : 'bg-cyan-500/20'} animate-ping`}
-                    style={{ animationDuration: '3s' }} />
+            {!isOpen && (
+                <div
+                    ref={botRef}
+                    className={`fixed z-[9999] select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                    style={{
+                        left: position.x - 28,
+                        top: position.y - 28,
+                        transition: isDragging ? 'none' : 'box-shadow 0.3s ease',
+                    }}
+                    onMouseDown={handleMouseDown}
+                    onClick={handleClick}
+                >
+                    {/* Pulse ring */}
+                    <div className={`absolute inset-0 rounded-full bg-cyan-500/20 animate-ping`}
+                        style={{ animationDuration: '3s' }} />
 
-                {/* Glow */}
-                <div className={`absolute -inset-2 rounded-full blur-xl ${isOpen ? 'bg-indigo-500/30' : 'bg-cyan-500/20'} transition-colors duration-500`} />
+                    {/* Glow */}
+                    <div className={`absolute -inset-2 rounded-full blur-xl bg-cyan-500/20 transition-colors duration-500`} />
 
-                {/* Bot body */}
-                <div className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${isOpen
-                        ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-[0_0_30px_rgba(99,102,241,0.5)]'
-                        : 'bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)]'
-                    } ${isDragging ? 'scale-110' : 'hover:scale-110'}`}>
-                    {/* Robot face */}
-                    <div className="relative">
-                        {isOpen ? (
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        ) : (
+                    {/* Bot body */}
+                    <div className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 bg-gradient-to-br from-cyan-500 to-indigo-600 shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] ${isDragging ? 'scale-110' : 'hover:scale-110'}`}>
+                        {/* Robot face */}
+                        <div className="relative">
                             <div className="flex flex-col items-center">
                                 {/* Eyes */}
                                 <div className="flex gap-1.5 mb-0.5">
@@ -118,17 +111,17 @@ const FloatingBot: React.FC = () => {
                                 {/* Mouth */}
                                 <div className="w-4 h-1.5 rounded-full border-b-2 border-white/80" />
                             </div>
-                        )}
+                        </div>
                     </div>
-                </div>
 
-                {/* Label */}
-                {!isOpen && !isDragging && (
-                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                        <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">AI Bot</span>
-                    </div>
-                )}
-            </div>
+                    {/* Label */}
+                    {!isDragging && (
+                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                            <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">AI Bot</span>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Chat Panel */}
             {isOpen && (

@@ -39,7 +39,7 @@ import ProjectDashboard from "../../pages/ProjectDashboard";
 interface FeaturePageDef {
     id: FeaturePage;
     label: string;
-    icon: string;
+    icon: string | React.ReactNode;
 }
 
 // Used for Title Bar labels and Dashboard cards (but not rail anymore)
@@ -95,12 +95,12 @@ const IDELayout: React.FC = () => {
                 className="h-10 bg-[#050508] border-b border-white/[0.04] flex items-center justify-between px-4 select-none flex-shrink-0 relative overflow-hidden"
             >
                 {/* Background glow effects */}
-                <div className="absolute top-0 left-1/4 w-1/4 h-full bg-indigo-500-[0.02] blur-xl pointer-events-none" />
-                <div className="absolute top-0 right-1/3 w-1/6 h-full bg-purple-500-[0.02] blur-xl pointer-events-none" />
+                <div className="absolute top-0 left-1/4 w-1/4 h-full bg-white/[0.02] blur-xl pointer-events-none" />
+                <div className="absolute top-0 right-1/3 w-1/6 h-full bg-white/[0.01] blur-xl pointer-events-none" />
 
-                {/* Subtle gradient line at bottom */}
+                {/* Subtle line at bottom */}
                 <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
-                    background: "linear-gradient(90deg, transparent 0%, rgba(99,102,241,0.15) 50%, transparent 100%)"
+                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)"
                 }} />
 
                 {/* Left: App name */}
@@ -117,7 +117,7 @@ const IDELayout: React.FC = () => {
                         </button>
                     )}
                     <div className="relative group flex items-center justify-center">
-                        <div className="absolute inset-0 bg-indigo-500/20 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute inset-0 bg-white/10 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
                         <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />
                     </div>
                     <span className="text-[11px] font-black tracking-[0.2em] text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
@@ -134,8 +134,11 @@ const IDELayout: React.FC = () => {
                 {/* Center: Feature Page Name */}
                 <div className="flex-1 flex justify-center items-center relative z-10">
                     <div className="px-4 py-1 rounded-full bg-white/[0.02] border border-white/[0.03] flex items-center gap-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-                        <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-indigo-100/70">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.3)]" />
+                        <span
+                            key={activePage}
+                            className="text-[9px] font-bold uppercase tracking-[0.25em] text-white/60 page-shell-enter"
+                        >
                             {FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard"}
                         </span>
                     </div>
@@ -150,13 +153,13 @@ const IDELayout: React.FC = () => {
             )}
 
             {/* ===== MAIN CONTENT AREA ===== */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden p-4 gap-4 bg-[var(--ide-bg)]">
 
                 {/* ===== LEFT: Feature Navigation Rail ===== */}
                 {!builderActive && (
-                <aside className="w-14 bg-[#0c0c14] flex flex-col items-center py-3 flex-shrink-0 border-r border-white/[0.06] relative">
+                <aside className="w-14 bg-[#0c0c14] flex flex-col items-center py-3 flex-shrink-0 border border-white/[0.06] rounded-2xl relative overflow-hidden">
                     {/* Subtle gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/[0.03] to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
 
                     {/* Home (Dashboard) */}
                     <NavRailIcon
@@ -186,9 +189,12 @@ const IDELayout: React.FC = () => {
                 )}
 
                 {/* ===== CENTER: Page Content + Terminal ===== */}
-                <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 flex flex-col overflow-hidden min-w-0 rounded-3xl border border-white/[0.06] bg-[var(--ide-bg)] shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
                     {/* Page Content */}
-                    <div className={`flex-1 relative overflow-hidden ${terminalOpen ? "h-[60%]" : ""}`}>
+                    <div
+                        key={activePage}
+                        className={`flex-1 relative overflow-hidden page-shell-enter-strong ${terminalOpen ? "h-[60%]" : ""}`}
+                    >
                         {loading && (
                             <div className="absolute inset-0 bg-black/25 backdrop-blur-sm z-50 flex items-center justify-center">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--ide-primary)]"></div>
@@ -272,8 +278,8 @@ interface NavRailIconProps {
 const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick }) => (
     <button
         className={`w-10 h-10 mx-auto my-0.5 flex items-center justify-center relative group rounded-xl transition-all duration-300 press-effect ${active
-            ? "text-indigo-400 bg-indigo-500/15"
-            : "text-white/30 hover:text-white/70 hover:bg-white/[0.06]"
+            ? "text-white bg-white/10"
+            : "text-white/20 hover:text-white/60 hover:bg-white/[0.04]"
             }`}
         onClick={onClick}
         title={label}
@@ -282,11 +288,11 @@ const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick 
         {/* Active glow */}
         {active && (
             <>
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-5 bg-indigo-400 rounded-r-full" />
-                <div className="absolute inset-0 rounded-xl bg-indigo-500/10 blur-md" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-4 bg-white/40 rounded-r-full" />
+                <div className="absolute inset-0 rounded-xl bg-white/5 blur-sm" />
             </>
         )}
-        <svg className="w-[18px] h-[18px] relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-[18px] h-[18px] relative z-10 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={icon} />
         </svg>
     </button>

@@ -13,6 +13,7 @@ interface ModalProps {
     title: string;
     children: React.ReactNode;
     size?: "sm" | "md" | "lg" | "xl";
+    width?: string;
     showCloseButton?: boolean;
     className?: string;
 }
@@ -23,6 +24,7 @@ const Modal: React.FC<ModalProps> = ({
     title,
     children,
     size = "md",
+    width,
     showCloseButton = true,
     className = ""
 }) => {
@@ -69,7 +71,8 @@ const Modal: React.FC<ModalProps> = ({
             {/* Modal Container */}
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
                 <div
-                    className={`w-full ${sizeClasses[size]} ${className || 'bg-[var(--ide-bg-panel)] shadow-[var(--ide-shadow)] border-[var(--ide-border-strong)]'} rounded-[2.5rem] border pointer-events-auto animate-slide-up overflow-hidden`}
+                    className={`w-full ${sizeClasses[size]} rounded-[2.5rem] border pointer-events-auto animate-slide-up overflow-hidden bg-[var(--ide-bg-panel)] shadow-[var(--ide-shadow)] border-[var(--ide-border-strong)] ${className}`}
+                    style={width ? { maxWidth: width } : undefined}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header: Only render if title is provided */}
@@ -94,7 +97,7 @@ const Modal: React.FC<ModalProps> = ({
                     )}
 
                     {/* Content */}
-                    <div className={className ? "" : "px-10 pb-10"}>{children}</div>
+                    <div className="px-10 pb-10">{children}</div>
                 </div>
             </div>
         </>,

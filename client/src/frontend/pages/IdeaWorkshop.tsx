@@ -258,16 +258,16 @@ function buildFeatureDecisions(analysis: any): FeatureDecision[] {
 }
 
 function getRatingStyle(value: number) {
-    if (value >= 4) return 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300';
-    if (value >= 3) return 'bg-amber-500/20 border-amber-500/40 text-amber-300';
-    return 'bg-rose-500/20 border-rose-500/40 text-rose-300';
+    if (value >= 4) return 'bg-white/15 border-white/30 text-white';
+    if (value >= 3) return 'bg-white/10 border-white/20 text-white/70';
+    return 'bg-white/5 border-white/10 text-white/40';
 }
 
 function getPriorityStyle(priority: FeaturePriority) {
-    if (priority === 'critical') return 'bg-rose-500/20 border-rose-500/40 text-rose-200';
-    if (priority === 'high') return 'bg-amber-500/20 border-amber-500/40 text-amber-200';
-    if (priority === 'medium') return 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200';
-    return 'bg-white/10 border-white/15 text-white/60';
+    if (priority === 'critical') return 'bg-white/20 border-white/40 text-white font-black';
+    if (priority === 'high') return 'bg-white/15 border-white/30 text-white/90';
+    if (priority === 'medium') return 'bg-white/10 border-white/20 text-white/70';
+    return 'bg-white/5 border-white/10 text-white/40';
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
@@ -662,9 +662,9 @@ export default function IdeaWorkshop({
     }, [phase, analysis?.summary]);
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]';
-        if (score >= 60) return 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]';
-        return 'text-red-400 drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]';
+        if (score >= 80) return 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]';
+        if (score >= 60) return 'text-white/70';
+        return 'text-white/40';
     };
 
     const appendTemplateContent = (content: string) => {
@@ -763,10 +763,19 @@ export default function IdeaWorkshop({
                 '\n\nUser request:\n' +
                 userMsg;
 
+            const workshopHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (typeof window !== 'undefined') {
+                const storedKey = localStorage.getItem('akasha_api_key')?.trim();
+                const storedModel = localStorage.getItem('akasha_model')?.trim();
+                const storedBase = localStorage.getItem('akasha_api_base_url')?.trim();
+                if (storedKey) workshopHeaders['x-ai-api-key'] = storedKey;
+                if (storedModel) workshopHeaders['x-ai-model'] = storedModel;
+                if (storedBase) workshopHeaders['x-ai-api-base-url'] = storedBase;
+            }
             const res = await fetch('http://localhost:3001/api/ai/simple-chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: contextMsg, ...(apiKey && { apiKey }), ...(model && { model }), ...(apiBaseUrl && { apiBaseUrl }) }),
+                headers: workshopHeaders,
+                body: JSON.stringify({ message: contextMsg }),
             });
 
             const data = await res.json();
@@ -1066,7 +1075,7 @@ export default function IdeaWorkshop({
                         <div
                             className={`max-w-[92%] rounded-2xl px-4 py-3 ${
                                 msg.role === 'user'
-                                    ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20 rounded-tr-sm'
+                                    ? 'bg-white/10 text-white border border-white/20 rounded-tr-sm'
                                     : 'bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] text-gray-300 rounded-tl-sm shadow-sm'
                             } ${fullScreen ? 'text-base leading-relaxed' : 'text-sm'}`}
                         >
@@ -1085,9 +1094,9 @@ export default function IdeaWorkshop({
                 {isChatting && (
                     <div className="flex justify-start">
                         <div className="bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] rounded-2xl rounded-tl-sm px-4 py-3 text-sm flex gap-1 items-center">
-                            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></div>
+                            <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                            <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                            <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce"></div>
                         </div>
                     </div>
                 )}
@@ -1100,7 +1109,7 @@ export default function IdeaWorkshop({
                     <button
                         key={prompt}
                         onClick={() => handleQuickPrompt(prompt)}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20 transition-all"
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white transition-all"
                     >
                         {prompt}
                     </button>
@@ -1120,7 +1129,7 @@ export default function IdeaWorkshop({
                 <button
                     type="submit"
                     disabled={!chatInput.trim() || isChatting}
-                    className={`bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-400 disabled:opacity-50 transition-all ${
+                    className={`bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 border border-white/10 disabled:opacity-50 transition-all ${
                         fullScreen ? 'h-10 px-5 text-sm' : 'h-8 px-4 text-xs'
                     }`}
                 >
@@ -1131,10 +1140,10 @@ export default function IdeaWorkshop({
     );
 
     const renderProgressiveConceptPreview = () => (
-        <div className="bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl p-4 space-y-4">
+        <>
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <div className="text-xs font-black text-cyan-300 uppercase tracking-widest">Live Project Concept</div>
+                    <div className="text-xs font-black text-white/70 uppercase tracking-widest">Live Project Concept</div>
                     <p className="text-[11px] text-white/45 mt-1">
                         The AI creates the structure first, then fills each section progressively.
                     </p>
@@ -1146,8 +1155,8 @@ export default function IdeaWorkshop({
             </div>
 
             {workingDoc?.summary && (
-                <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Structured Summary</div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-white/40">Structured Summary</div>
                     <p className="mt-2 text-sm text-white/80 leading-relaxed">{workingDoc.summary}</p>
                 </div>
             )}
@@ -1163,8 +1172,8 @@ export default function IdeaWorkshop({
                                 <div className="text-[11px] font-black uppercase tracking-widest text-white/60">{section.title}</div>
                                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${
                                     isReady
-                                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
-                                        : 'bg-white/10 border-white/15 text-white/45'
+                                        ? 'bg-white/10 border-white/20 text-white'
+                                        : 'bg-white/5 border-white/10 text-white/30'
                                 }`}>
                                     {isReady ? 'Ready' : 'Loading'}
                                 </span>
@@ -1174,7 +1183,7 @@ export default function IdeaWorkshop({
                                 <ul className="mt-3 space-y-1.5 text-xs text-white/80">
                                     {hasItems ? section.items.slice(0, 5).map((item, itemIndex) => (
                                         <li key={`${section.id}-${itemIndex}`} className="flex items-start gap-2">
-                                            <span className="mt-0.5 text-cyan-400/70">•</span>
+                                            <span className="mt-0.5 text-white/40">•</span>
                                             <span>{item}</span>
                                         </li>
                                     )) : (
@@ -1192,19 +1201,19 @@ export default function IdeaWorkshop({
                     );
                 })}
             </div>
-        </div>
+        </>
     );
 
     const renderFeatureDecisionBoard = () => (
-        <div className="bg-violet-500/5 border border-violet-500/15 rounded-2xl p-4 space-y-4">
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 space-y-4">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <div className="text-xs font-black text-violet-300 uppercase tracking-widest">Sequential Feature Queue</div>
-                    <p className="text-[11px] text-white/50 mt-1">Review one AI-suggested feature at a time. Rewrite it with feedback, then approve or reject it.</p>
+                    <div className="text-xs font-black text-white/60 uppercase tracking-widest">Sequential Feature Queue</div>
+                    <p className="text-[11px] text-white/30 mt-1">Review one AI-suggested feature at a time. Rewrite it with feedback, then approve or reject it.</p>
                 </div>
                 <div className="text-right">
-                    <div className="text-[10px] text-white/40 uppercase tracking-wider">Reviewed</div>
-                    <div className="text-sm font-black text-violet-300">
+                    <div className="text-[10px] text-white/20 uppercase tracking-wider">Reviewed</div>
+                    <div className="text-sm font-black text-white/70">
                         {featureDecisions.filter((feature) => feature.status !== 'pending').length}/{featureDecisions.length}
                     </div>
                 </div>
@@ -1231,12 +1240,12 @@ export default function IdeaWorkshop({
                     value={newFeature}
                     onChange={(e) => setNewFeature(e.target.value)}
                     placeholder="Add a custom feature into the queue..."
-                    className="flex-1 h-10 rounded-xl bg-black/20 border border-white/10 px-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-violet-400/40"
+                    className="flex-1 h-10 rounded-xl bg-black/20 border border-white/10 px-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
                 />
                 <button
                     onClick={handleAddFeature}
                     type="button"
-                    className="h-10 px-4 rounded-xl text-xs font-bold bg-violet-500/20 border border-violet-500/40 text-violet-200 hover:bg-violet-500/30 transition-all"
+                    className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all"
                 >
                     Add Feature
                 </button>
@@ -1248,7 +1257,7 @@ export default function IdeaWorkshop({
                         key={feature.id}
                         className={`rounded-xl border p-3 transition-all ${
                             currentFeature?.id === feature.id
-                                ? 'border-violet-400/40 bg-violet-500/10 shadow-[0_0_0_1px_rgba(139,92,246,0.2)]'
+                                ? 'border-white/30 bg-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]'
                                 : 'border-white/10 bg-black/20'
                         }`}
                     >
@@ -1261,10 +1270,10 @@ export default function IdeaWorkshop({
                                     </span>
                                     <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${
                                         feature.status === 'approved'
-                                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
+                                            ? 'bg-white/15 border-white/30 text-white'
                                             : feature.status === 'rejected'
-                                                ? 'bg-white/10 border-white/15 text-white/45'
-                                                : 'bg-amber-500/15 border-amber-500/30 text-amber-200'
+                                                ? 'bg-white/5 border-white/10 text-white/30'
+                                                : 'bg-white/10 border-white/20 text-white/70'
                                     }`}>
                                         {feature.status}
                                     </span>
@@ -1294,7 +1303,7 @@ export default function IdeaWorkshop({
                                 </p>
                             </>
                         ) : (
-                            <p className="mt-2 text-sm text-emerald-200">All queued features were reviewed. You can finalize the concept now.</p>
+                            <p className="mt-2 text-sm text-white/50">All queued features were reviewed. You can finalize the concept now.</p>
                         )}
                     </div>
                     {currentFeature && (
@@ -1331,7 +1340,7 @@ export default function IdeaWorkshop({
                             onChange={(e) => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, comment: e.target.value }))}
                             placeholder="Add feedback. The AI will rewrite this feature until you explicitly approve it."
                             rows={3}
-                            className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-3 text-sm text-white/85 placeholder:text-white/35 focus:outline-none focus:border-violet-400/40 resize-none"
+                            className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-3 text-sm text-white/85 placeholder:text-white/35 focus:outline-none focus:border-white/40 resize-none"
                         />
 
                         <div className="flex flex-wrap gap-2">
@@ -1339,7 +1348,7 @@ export default function IdeaWorkshop({
                                 type="button"
                                 onClick={() => reviewCurrentFeature('revise')}
                                 disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                className="h-10 px-4 rounded-xl text-xs font-bold bg-cyan-500/15 border border-cyan-500/30 text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-50 transition-all"
+                                className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white disabled:opacity-50 transition-all"
                             >
                                 {detailsLoadingId === currentFeature.id ? 'Rewriting...' : 'Rewrite From Feedback'}
                             </button>
@@ -1347,7 +1356,7 @@ export default function IdeaWorkshop({
                                 type="button"
                                 onClick={() => reviewCurrentFeature('approve')}
                                 disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                className="h-10 px-4 rounded-xl text-xs font-bold bg-emerald-500/20 border border-emerald-500/35 text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-50 transition-all"
+                                className="h-10 px-4 rounded-xl text-xs font-bold bg-white/15 border border-white/30 text-white hover:bg-white/20 disabled:opacity-50 transition-all"
                             >
                                 Approve & Integrate
                             </button>
@@ -1382,9 +1391,9 @@ export default function IdeaWorkshop({
 
         const listCard = (title: string, items: string[], tone: 'cyan' | 'emerald' | 'amber') => {
             const toneClasses = {
-                cyan: 'bg-cyan-500/8 border-cyan-500/20 text-cyan-100/80',
-                emerald: 'bg-emerald-500/8 border-emerald-500/20 text-emerald-100/80',
-                amber: 'bg-amber-500/8 border-amber-500/20 text-amber-100/80',
+                cyan: 'bg-white/5 border-white/10 text-white/60',
+                emerald: 'bg-white/5 border-white/10 text-white/60',
+                amber: 'bg-white/5 border-white/10 text-white/60',
             };
 
             return (
@@ -1401,8 +1410,8 @@ export default function IdeaWorkshop({
 
         return (
             <div className="space-y-4">
-                <div className="rounded-2xl bg-indigo-500/10 border border-indigo-500/20 p-4">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">JSON PRD</div>
+                <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-white/40">JSON PRD</div>
                     <h3 className="mt-1 text-xl font-black text-white">{refinedDoc.title}</h3>
                     <p className="mt-2 text-sm text-white/75 leading-relaxed">{refinedDoc.summary || 'No summary generated.'}</p>
                 </div>
@@ -1533,8 +1542,8 @@ export default function IdeaWorkshop({
 
         return (
             <div className="space-y-4">
-                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4">
-                    <div className="text-xs font-black text-indigo-300 uppercase tracking-widest mb-2">Decision Snapshot</div>
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                    <div className="text-xs font-black text-white/60 uppercase tracking-widest mb-2">Decision Snapshot</div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                         <div className="rounded-xl bg-black/20 border border-white/10 p-3">
                             <div className="text-white/50">Selected Features</div>
@@ -1570,7 +1579,7 @@ export default function IdeaWorkshop({
                                     <tr key={`table-${feature.id}`} className="border-t border-white/5">
                                         <td className="px-3 py-2 text-white/85">{feature.title}</td>
                                         <td className="px-3 py-2">
-                                            <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${feature.include ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-white/10 border-white/20 text-white/60'}`}>
+                                            <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${feature.include ? 'bg-white/15 border-white/30 text-white' : 'bg-white/5 border-white/10 text-white/30'}`}>
                                                 {feature.include ? 'Yes' : 'No'}
                                             </span>
                                         </td>
@@ -1592,21 +1601,21 @@ export default function IdeaWorkshop({
                         Priority Breakdown
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4">
-                        <div className="rounded-xl bg-emerald-500/8 border border-emerald-500/20 p-3">
-                            <div className="text-[11px] font-black text-emerald-300 uppercase tracking-wide">High (4-5)</div>
-                            <ul className="mt-2 space-y-1 text-xs text-emerald-100/80">
+                        <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                            <div className="text-[11px] font-black text-white/70 uppercase tracking-wide">High (4-5)</div>
+                            <ul className="mt-2 space-y-1 text-xs text-white/60">
                                 {high.length > 0 ? high.map((item) => <li key={`high-${item.id}`}>• {item.title}</li>) : <li>• None</li>}
                             </ul>
                         </div>
-                        <div className="rounded-xl bg-amber-500/8 border border-amber-500/20 p-3">
-                            <div className="text-[11px] font-black text-amber-300 uppercase tracking-wide">Medium (3)</div>
-                            <ul className="mt-2 space-y-1 text-xs text-amber-100/80">
+                        <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                            <div className="text-[11px] font-black text-white/70 uppercase tracking-wide">Medium (3)</div>
+                            <ul className="mt-2 space-y-1 text-xs text-white/60">
                                 {medium.length > 0 ? medium.map((item) => <li key={`medium-${item.id}`}>• {item.title}</li>) : <li>• None</li>}
                             </ul>
                         </div>
-                        <div className="rounded-xl bg-rose-500/8 border border-rose-500/20 p-3">
-                            <div className="text-[11px] font-black text-rose-300 uppercase tracking-wide">Low (1-2)</div>
-                            <ul className="mt-2 space-y-1 text-xs text-rose-100/80">
+                        <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+                            <div className="text-[11px] font-black text-white/70 uppercase tracking-wide">Low (1-2)</div>
+                            <ul className="mt-2 space-y-1 text-xs text-white/60">
                                 {low.length > 0 ? low.map((item) => <li key={`low-${item.id}`}>• {item.title}</li>) : <li>• None</li>}
                             </ul>
                         </div>
@@ -1614,9 +1623,9 @@ export default function IdeaWorkshop({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-cyan-500/8 border border-cyan-500/20 p-4">
-                        <div className="text-[11px] font-black text-cyan-300 uppercase tracking-widest mb-2">Open Questions</div>
-                        <ul className="space-y-1 text-xs text-cyan-100/80">
+                    <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                        <div className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-2">Open Questions</div>
+                        <ul className="space-y-1 text-xs text-white/60">
                             {((analysis?.questions as string[] | undefined) || []).length > 0
                                 ? ((analysis?.questions as string[] | undefined) || []).map((item: string, index: number) => (
                                     <li key={`question-${index}`}>• {item}</li>
@@ -1624,9 +1633,9 @@ export default function IdeaWorkshop({
                                 : <li>• No open questions captured.</li>}
                         </ul>
                     </div>
-                    <div className="rounded-2xl bg-emerald-500/8 border border-emerald-500/20 p-4">
-                        <div className="text-[11px] font-black text-emerald-300 uppercase tracking-widest mb-2">Idea Improvement Focus</div>
-                        <ul className="space-y-1 text-xs text-emerald-100/80">
+                    <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                        <div className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-2">Idea Improvement Focus</div>
+                        <ul className="space-y-1 text-xs text-white/60">
                             {((analysis?.suggestions as string[] | undefined) || []).length > 0
                                 ? ((analysis?.suggestions as string[] | undefined) || []).map((item: string, index: number) => (
                                     <li key={`suggestion-${index}`}>• {item}</li>
@@ -1650,7 +1659,7 @@ export default function IdeaWorkshop({
             <div className="flex-shrink-0 border-b border-[var(--ide-border)] bg-gradient-to-b from-white/[0.03] to-transparent">
                 <div className="flex items-center justify-between p-5">
                     <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <div className="w-11 h-11 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-lg border border-white/20">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
@@ -1659,7 +1668,7 @@ export default function IdeaWorkshop({
                             <h2 className="text-lg md:text-xl font-black text-[var(--ide-text)]">AI Idea Workshop</h2>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] text-[var(--ide-text-secondary)] uppercase tracking-widest font-black">Project:</span>
-                                <span className="text-xs text-indigo-400 font-bold">{projectName}</span>
+                                <span className="text-xs text-white/60 font-bold">{projectName}</span>
                             </div>
                         </div>
                     </div>
@@ -1686,10 +1695,10 @@ export default function IdeaWorkshop({
                                     key={step}
                                     className={`rounded-xl border px-3 py-2 text-xs transition-all flex flex-col justify-center min-h-[48px] ${
                                         isActive
-                                            ? 'border-indigo-400/50 bg-indigo-500/15 text-indigo-200'
+                                            ? 'border-white/40 bg-white/10 text-white'
                                             : isDone
-                                                ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200'
-                                                : 'border-white/10 bg-white/[0.02] text-white/45'
+                                                ? 'border-white/20 bg-white/5 text-white/60'
+                                                : 'border-white/10 bg-white/[0.02] text-white/35'
                                     }`}
                                 >
                                     <div className="text-[10px] font-black uppercase tracking-widest opacity-80">Step {stepNumber}</div>
@@ -1709,15 +1718,15 @@ export default function IdeaWorkshop({
                         }`}
                     >
                         <div className="space-y-4 min-w-0">
-                            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/8 p-4">
-                                <div className="text-[10px] font-black uppercase tracking-widest text-indigo-300">Idea Readiness</div>
+                            <div className="rounded-2xl border border-white/20 bg-white/5 p-4">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-white/60">Idea Readiness</div>
                                 <div className="mt-2 flex items-end justify-between">
                                     <div className="text-3xl font-black text-white">{ideaReadinessScore}%</div>
                                     <div className="text-[11px] text-white/45">{ideaWordCount} words</div>
                                 </div>
                                 <div className="mt-3 h-2 rounded-full bg-white/10 overflow-hidden">
                                     <div
-                                        className="h-full bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500 transition-all duration-300"
+                                        className="h-full bg-gradient-to-r from-white/20 via-white/40 to-white/60 transition-all duration-300"
                                         style={{ width: `${ideaReadinessScore}%` }}
                                     />
                                 </div>
@@ -1731,27 +1740,27 @@ export default function IdeaWorkshop({
                                             <span
                                                 className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black ${
                                                     check.done
-                                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                                        ? 'bg-white/20 text-white border border-white/40'
                                                         : 'bg-white/8 text-white/45 border border-white/15'
                                                 }`}
                                             >
                                                 {check.done ? '✓' : '•'}
                                             </span>
-                                            <span className={check.done ? 'text-white/85' : 'text-white/45'}>{check.label}</span>
+                                            <span className={check.done ? 'text-white/85' : 'text-white/35'}>{check.label}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
 
-                            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/8 p-4 space-y-3">
+                            <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-3">
                                 <div>
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-cyan-300">Templates</div>
-                                    <p className="mt-1 text-[11px] text-cyan-100/70">Kickstart with guided sections or a starter JSON brief.</p>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-white/60">Templates</div>
+                                    <p className="mt-1 text-[11px] text-white/40">Kickstart with guided sections or a starter JSON brief.</p>
                                 </div>
                                 <button
                                     onClick={applyFullTemplate}
                                     type="button"
-                                    className="w-full h-9 rounded-xl text-xs font-bold bg-cyan-500/20 border border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/30 transition-all"
+                                    className="w-full h-9 rounded-xl text-xs font-bold bg-white/10 border border-white/20 text-white hover:bg-white/15 transition-all"
                                 >
                                     Insert Full Template
                                 </button>
@@ -1766,10 +1775,9 @@ export default function IdeaWorkshop({
                         </div>
 
                         <div className="min-h-0 min-w-0 flex flex-col gap-4">
-                            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 flex items-start gap-4">
-                                <div className="text-xl">💡</div>
-                                <div className="text-sm text-indigo-200">
-                                    <strong className="block text-indigo-400 mb-1">Write with structure, then let AI sharpen it.</strong>
+                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-start gap-4">
+                                <div className="text-sm text-white/70">
+                                    <strong className="block text-white mb-1">Write with structure, then let AI sharpen it.</strong>
                                     Include problem, user, value, MVP scope, and constraints. Plain text or JSON both work here. Better input gives stronger analysis and better final docs.
                                 </div>
                             </div>
@@ -1794,7 +1802,7 @@ export default function IdeaWorkshop({
                                     value={idea}
                                     onChange={(e) => setIdea(e.target.value)}
                                     placeholder="Describe the problem, users, value proposition, and must-have features..."
-                                    className="block w-full h-full min-h-[280px] box-border bg-transparent rounded-xl p-3 md:p-4 text-[var(--ide-text)] text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 transition-all resize-none"
+                                    className="block w-full h-full min-h-[280px] box-border bg-transparent rounded-xl p-3 md:p-4 text-[var(--ide-text)] text-sm leading-relaxed focus:outline-none focus:border-white/20 transition-all resize-none"
                                 />
                             </div>
 
@@ -1811,8 +1819,7 @@ export default function IdeaWorkshop({
                         <div className="min-w-0 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl p-4 space-y-4">
                             <div className="flex items-center gap-3">
                                 <div className="relative">
-                                    <div className="w-14 h-14 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-                                    <div className="absolute inset-0 flex items-center justify-center text-xl">🤖</div>
+                                    <div className="w-14 h-14 border-4 border-white/10 border-t-white/60 rounded-full animate-spin"></div>
                                 </div>
                                 <div>
                                     <h3 className="text-xl font-black text-white">
@@ -1841,7 +1848,7 @@ export default function IdeaWorkshop({
                         </div>
 
                         <div className="min-w-0 bg-black/20 border border-white/10 rounded-2xl p-4 space-y-4">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-violet-300">Feature Queue Skeleton</div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-white/40">Feature Queue Skeleton</div>
                             <div className="space-y-3">
                                 {Array.from({ length: 4 }).map((_, index) => (
                                     <div key={`queue-skeleton-${index}`} className="rounded-xl border border-white/10 bg-black/20 p-4">
@@ -1884,24 +1891,24 @@ export default function IdeaWorkshop({
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4">
-                                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4">
-                                        <div className="text-xs font-black text-emerald-400 uppercase tracking-widest mb-2">Strengths</div>
+                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-2">Strengths</div>
                                         <ul className="space-y-1.5">
                                             {(analysis.strengths || []).map((s: string, i: number) => (
                                                 <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
-                                                    <span className="text-emerald-500/50 mt-0.5">•</span>
+                                                    <span className="text-white/30 mt-0.5">•</span>
                                                     {s}
                                                 </li>
                                             ))}
                                         </ul>
                                     </div>
 
-                                    <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-4">
-                                        <div className="text-xs font-black text-rose-400 uppercase tracking-widest mb-2">Risks</div>
+                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-2">Risks</div>
                                         <ul className="space-y-1.5">
                                             {(analysis.weaknesses || []).map((w: string, i: number) => (
                                                 <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
-                                                    <span className="text-rose-500/50 mt-0.5">•</span>
+                                                    <span className="text-white/30 mt-0.5">•</span>
                                                     {w}
                                                 </li>
                                             ))}
@@ -1909,14 +1916,14 @@ export default function IdeaWorkshop({
                                     </div>
                                 </div>
 
-                                <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-2xl p-4">
-                                    <div className="text-xs font-black text-cyan-400 uppercase tracking-widest mb-2">Questions</div>
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                    <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-2">Questions</div>
                                     <div className="flex flex-wrap gap-2">
                                         {(analysis.questions || []).map((q: string, i: number) => (
                                             <button
                                                 key={i}
                                                 onClick={() => handleQuickPrompt(q)}
-                                                className="px-2.5 py-1 bg-cyan-500/10 text-cyan-200 text-[11px] rounded-lg border border-cyan-500/20 hover:bg-cyan-500/20 transition-all"
+                                                className="px-2.5 py-1 bg-white/10 text-white/70 text-[11px] rounded-lg border border-white/15 hover:bg-white/20 transition-all"
                                             >
                                                 {q}
                                             </button>
@@ -1982,13 +1989,13 @@ export default function IdeaWorkshop({
                         <>
                             <button
                                 onClick={handleCopyJson}
-                                className="h-10 px-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:text-cyan-100 hover:bg-cyan-500/20 transition-all text-xs font-bold"
+                                className="h-10 px-4 rounded-xl border border-white/20 bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all text-xs font-bold"
                             >
                                 {jsonCopied ? 'JSON Copied' : 'Copy JSON'}
                             </button>
                             <button
                                 onClick={handleDownloadJson}
-                                className="h-10 px-4 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:text-cyan-100 hover:bg-cyan-500/20 transition-all text-xs font-bold"
+                                className="h-10 px-4 rounded-xl border border-white/20 bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all text-xs font-bold"
                             >
                                 Download .json
                             </button>
@@ -2023,7 +2030,7 @@ export default function IdeaWorkshop({
                         <button
                             onClick={handleRefine}
                             disabled={!canDraftFinalDoc}
-                            className="btn-modern-primary !h-10 !px-8 text-xs !bg-gradient-to-r !from-emerald-500 !to-teal-500 hover:!from-emerald-400 hover:!to-teal-400 !shadow-emerald-500/20 disabled:opacity-50"
+                            className="btn-modern-primary !h-10 !px-8 text-xs !bg-white/10 !text-white hover:!bg-white/20 !border-white/20 disabled:opacity-50"
                             title={!canDraftFinalDoc ? 'Finish reviewing the queued features before finalizing the document.' : ''}
                         >
                             Confirm & Draft Final Document
@@ -2034,7 +2041,7 @@ export default function IdeaWorkshop({
                         <button
                             onClick={() => onRefined(refinedIdea)}
                             disabled={isPersistingFinalPlan || !refinedIdea.trim()}
-                            className="btn-modern-primary !h-10 !px-8 text-xs !bg-gradient-to-r !from-emerald-500 !to-teal-500 hover:!from-emerald-400 hover:!to-teal-400 !shadow-emerald-500/20 disabled:opacity-50"
+                            className="btn-modern-primary !h-10 !px-8 text-xs !bg-white/10 !text-white hover:!bg-white/20 !border-white/20 disabled:opacity-50"
                         >
                             {isPersistingFinalPlan ? 'Saving Plan...' : 'Generate Structured Plan'}
                         </button>

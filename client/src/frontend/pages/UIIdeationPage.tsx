@@ -26,22 +26,22 @@ const UIIdeationPage: React.FC = () => {
     }
 
     return (
-        <div className="h-full w-full overflow-auto relative page-enter" style={{ background: "#080d12" }}>
+        <div className="h-full w-full overflow-auto relative page-enter" style={{ background: "var(--ide-bg)", color: "var(--ide-text)" }}>
             {/* Animated Background */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div
-                    className="absolute w-[500px] h-[500px] rounded-full opacity-25 blur-[120px]"
+                    className="absolute w-[500px] h-[500px] rounded-full opacity-10 blur-[120px]"
                     style={{
-                        background: "radial-gradient(circle, #10b981 0%, transparent 70%)",
+                        background: "radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)",
                         top: "-10%",
                         right: "10%",
                         animation: "float1 20s ease-in-out infinite",
                     }}
                 />
                 <div
-                    className="absolute w-[400px] h-[400px] rounded-full opacity-20 blur-[100px]"
+                    className="absolute w-[400px] h-[400px] rounded-full opacity-10 blur-[100px]"
                     style={{
-                        background: "radial-gradient(circle, #f59e0b 0%, transparent 70%)",
+                        background: "radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)",
                         bottom: "10%",
                         left: "5%",
                         animation: "float2 25s ease-in-out infinite",
@@ -61,8 +61,8 @@ const UIIdeationPage: React.FC = () => {
                 <div className="mb-6 flex-shrink-0" style={{ animation: "fadeSlideUp 0.5s ease-out both" }}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-amber-500/20 border border-emerald-500/20 flex items-center justify-center">
-                                <span className="text-2xl">✨</span>
+                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                                <span className="text-white/40 text-[10px] font-black tracking-widest">ARCH</span>
                             </div>
                             <div>
                                 <h1 className="text-2xl font-extrabold text-white tracking-tight">UI Architect</h1>
@@ -70,13 +70,13 @@ const UIIdeationPage: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1">
+                        <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1 backdrop-blur-sm">
                             <button
                                 onClick={() => setActiveTab("product")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                                     activeTab === "product"
-                                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
-                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        ? "bg-white/10 text-white shadow-lg shadow-white/5"
+                                        : "text-white/40 hover:text-white hover:bg-white/5"
                                 }`}
                             >
                                 Product Definition
@@ -85,8 +85,8 @@ const UIIdeationPage: React.FC = () => {
                                 onClick={() => setActiveTab("flows")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                                     activeTab === "flows"
-                                        ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"
-                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        ? "bg-white/10 text-white shadow-lg shadow-white/5"
+                                        : "text-white/40 hover:text-white hover:bg-white/5"
                                 }`}
                             >
                                 User Flows
@@ -95,8 +95,8 @@ const UIIdeationPage: React.FC = () => {
                                 onClick={() => setActiveTab("pages")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                                     activeTab === "pages"
-                                        ? "bg-gradient-to-r from-lime-500 to-emerald-500 text-white shadow-lg shadow-emerald-500/20"
-                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        ? "bg-white/10 text-white shadow-lg shadow-white/5"
+                                        : "text-white/40 hover:text-white hover:bg-white/5"
                                 }`}
                             >
                                 Pages
@@ -105,8 +105,8 @@ const UIIdeationPage: React.FC = () => {
                                 onClick={() => setActiveTab("specs")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                                     activeTab === "specs"
-                                        ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/20"
-                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        ? "bg-white/10 text-white shadow-lg shadow-white/5"
+                                        : "text-white/40 hover:text-white hover:bg-white/5"
                                 }`}
                             >
                                 Page Specs
@@ -115,8 +115,8 @@ const UIIdeationPage: React.FC = () => {
                                 onClick={() => setActiveTab("export")}
                                 className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
                                     activeTab === "export"
-                                        ? "bg-gradient-to-r from-fuchsia-500 to-pink-500 text-white shadow-lg shadow-fuchsia-500/20"
-                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        ? "bg-white/10 text-white shadow-lg shadow-white/5"
+                                        : "text-white/40 hover:text-white hover:bg-white/5"
                                 }`}
                             >
                                 Wireframe Export
@@ -125,15 +125,15 @@ const UIIdeationPage: React.FC = () => {
 
                         <button
                             onClick={() => setActiveTab("builder")}
-                            className="h-9 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-xs font-bold hover:from-emerald-400 hover:to-teal-500 transition-colors shadow-lg shadow-emerald-500/20 border border-white/10"
+                            className="h-9 px-4 rounded-lg bg-white/10 text-white text-xs font-bold hover:bg-white/15 transition-all shadow-lg shadow-white/5 border border-white/10"
                         >
                             Open Visual Builder
                         </button>
                     </div>
                 </div>
-                <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.05] rounded-3xl overflow-hidden" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
-                        <UXRootPlanner tab={activeTab} onTabChange={(t) => setActiveTab(t)} onOpenBuilder={() => setActiveTab("builder")} />
-                    </div>
+                <div className="flex-1 min-h-0 bg-white/[0.02] border border-white/[0.06] rounded-3xl overflow-hidden shadow-[var(--ide-shadow)]" style={{ animation: "fadeSlideUp 0.5s ease-out 0.2s both" }}>
+                    <UXRootPlanner tab={activeTab} onTabChange={(t) => setActiveTab(t)} onOpenBuilder={() => setActiveTab("builder")} />
+                </div>
             </div>
 
              <style>{`

@@ -327,9 +327,9 @@ const SourceCodePage: React.FC = () => {
 
     /* ── Connected → repo list ──────────────────────── */
     return (
-        <div className="h-full w-full flex flex-col overflow-hidden">
+        <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: "var(--ide-bg)", color: "var(--ide-text)" }}>
             {/* User profile bar */}
-            <div className="px-6 py-3 border-b border-white/[0.04] flex items-center justify-between flex-shrink-0 bg-white/[0.01]">
+            <div className="px-6 py-3 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0 bg-white/[0.02] backdrop-blur-sm">
                 <div className="flex items-center gap-3">
                     {user?.avatar_url && (
                         <img
@@ -339,18 +339,18 @@ const SourceCodePage: React.FC = () => {
                         />
                     )}
                     <div>
-                        <div className="text-xs font-bold text-white">{user?.name || user?.login}</div>
-                        <div className="text-[10px] text-white/30">@{user?.login}</div>
+                        <div className="text-xs font-bold text-[var(--ide-text)]">{user?.name || user?.login}</div>
+                        <div className="text-[10px] text-[var(--ide-text-secondary)]">@{user?.login}</div>
                     </div>
-                    <div className="ml-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider">Connected</span>
+                    <div className="ml-2 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+                        <div className="w-1.5 h-1.5 rounded-full bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.2)]" />
+                        <span className="text-[9px] font-bold text-white/50 uppercase tracking-wider">Connected</span>
                     </div>
                 </div>
 
                 <button
                     onClick={handleDisconnect}
-                    className="h-7 px-3 rounded-lg border border-white/[0.06] text-[10px] font-bold text-white/30 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/5 transition-all"
+                    className="h-7 px-3 rounded-lg border border-white/[0.06] text-[10px] font-bold text-[var(--ide-text-secondary)] hover:text-white hover:border-white/20 hover:bg-white/5 transition-all"
                 >
                     Disconnect
                 </button>

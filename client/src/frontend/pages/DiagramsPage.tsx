@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import useApi, { DiagramEntry } from "../hooks/useApi";
 import { useTheme } from "../context/ThemeContext";
-import AnalysisPanel from "../components/features/Akasha/AnalysisPanel";
 import "@excalidraw/excalidraw/index.css";
 
 type AppState = any;
@@ -29,10 +28,10 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError)
       return (
-        <div className="flex flex-col items-center justify-center h-full gap-4 text-red-400">
+        <div className="flex flex-col items-center justify-center h-full gap-4 text-white/70">
           {this.props.fallback}
           {this.state.error && (
-            <code className="text-xs text-red-300 bg-red-900/20 px-3 py-1 rounded">
+            <code className="text-xs text-white/40 bg-white/5 px-3 py-1 rounded border border-white/10">
               {this.state.error}
             </code>
           )}
@@ -73,23 +72,48 @@ const mkEl = (type: string, bg: string, stroke: string, text: string, id: string
 
 const buildLibrary = (stroke: string, bg: string): Record<DiagramMode, any[]> => ({
   ERD: [
-    mkEl("rectangle", bg, stroke, "📋 Table", "erd-table"),
-    mkEl("rectangle", bg, stroke, "🔑 Entity", "erd-entity"),
-    mkEl("rectangle", bg, stroke, "🔗 Junction", "erd-junction", { w: 120, h: 60 }),
+    mkEl("rectangle", bg, stroke, "Table", "erd-table"),
+    mkEl("rectangle", bg, stroke, "Entity", "erd-entity"),
+    mkEl("rectangle", bg, stroke, "Junction", "erd-junction", { w: 120, h: 60 }),
   ],
   Architecture: [
-    mkEl("rectangle", "#1a1a2e", "#7c3aed", "🟢 NestJS API", "arch-nest", { w: 150, h: 70 }),
-    mkEl("rectangle", "#0f172a", "#2563eb", "🐘 PostgreSQL", "arch-pg", { w: 150, h: 70 }),
-    mkEl("rectangle", "#1e293b", "#0ea5e9", "🐳 Docker", "arch-docker", { w: 150, h: 70 }),
-    mkEl("rectangle", "#1c1917", "#f97316", "⚛️ React UI", "arch-react", { w: 150, h: 70 }),
-    mkEl("ellipse",   "#fef3c7", "#d97706", "👤 Actor",   "arch-actor",  { w: 100, h: 100 }),
+    mkEl("rectangle", "rgba(255,255,255,0.05)", stroke, "NestJS API", "arch-nest", { w: 150, h: 70 }),
+    mkEl("rectangle", "rgba(255,255,255,0.03)", stroke, "PostgreSQL", "arch-pg", { w: 150, h: 70 }),
+    mkEl("rectangle", "rgba(255,255,255,0.05)", stroke, "Docker", "arch-docker", { w: 150, h: 70 }),
+    mkEl("rectangle", "rgba(255,255,255,0.03)", stroke, "React UI", "arch-react", { w: 150, h: 70 }),
+    mkEl("ellipse",   "rgba(255,255,255,0.05)", stroke, "Actor",   "arch-actor",  { w: 100, h: 100 }),
   ],
   UseCase: [
-    mkEl("ellipse",    bg, stroke,     "👤 Actor",    "uc-actor",   { w: 100, h: 100 }),
-    mkEl("ellipse",    bg, "#0ea5e9",  "⚙️ Use Case", "uc-usecase", { w: 160, h: 70 }),
-    mkEl("rectangle",  bg, "#16a34a",  "🖥 System",   "uc-system",  { w: 180, h: 80 }),
+    mkEl("ellipse",    bg, stroke,     "Actor",    "uc-actor",   { w: 100, h: 100 }),
+    mkEl("ellipse",    bg, stroke,  "Use Case", "uc-usecase", { w: 160, h: 70 }),
+    mkEl("rectangle",  bg, stroke,  "System",   "uc-system",  { w: 180, h: 80 }),
   ],
 });
+
+// ─── Library Persistence Helpers ────────────────────────
+const LIBRARY_STORAGE_PREFIX = "akasha_diagram_library_";
+
+const getLibraryKey = (diagramName: string) => `${LIBRARY_STORAGE_PREFIX}${diagramName}`;
+
+const loadUserLibrary = (diagramName: string): any[] => {
+  try {
+    const raw = localStorage.getItem(getLibraryKey(diagramName));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+};
+
+const saveUserLibrary = (diagramName: string, items: any[]) => {
+  try {
+    // Only save items the user added (not our presets)
+    const userItems = items.filter((item: any) => {
+      const id = item?.id || "";
+      return !id.startsWith("erd-") && !id.startsWith("arch-") && !id.startsWith("uc-");
+    });
+    localStorage.setItem(getLibraryKey(diagramName), JSON.stringify(userItems));
+  } catch { /* ignore quota errors */ }
+};
 
 // ─── Metadata types ───────────────────────────────────
 interface ElementMeta {
@@ -135,7 +159,7 @@ const InputModal: React.FC<{
           />
           <div className="flex gap-3">
             <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] text-sm">Cancel</button>
-            <button type="submit" disabled={!value.trim()} className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold disabled:opacity-40">{confirmText}</button>
+            <button type="submit" disabled={!value.trim()} className="flex-1 py-2.5 rounded-xl bg-white text-black text-sm font-semibold disabled:opacity-40">{confirmText}</button>
           </div>
         </form>
       </div>
@@ -148,12 +172,12 @@ const ConfirmDeleteModal: React.FC<{ isOpen: boolean; name: string; onConfirm: (
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
-      <div className="relative bg-[var(--ide-bg-panel)] border border-red-500/30 rounded-2xl p-6 max-w-xs w-full">
+      <div className="relative bg-[var(--ide-bg-panel)] border border-white/20 rounded-2xl p-6 max-w-xs w-full">
         <h3 className="text-base font-bold text-[var(--ide-text)] mb-2">Delete Diagram?</h3>
         <p className="text-sm text-[var(--ide-text-secondary)] mb-4 truncate">"{name}"</p>
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2 rounded-xl border border-[var(--ide-border)] text-sm text-[var(--ide-text-secondary)]">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold">Delete</button>
+          <button onClick={onConfirm} className="flex-1 py-2 rounded-xl bg-white text-black text-sm font-semibold">Delete</button>
         </div>
       </div>
     </div>
@@ -165,12 +189,12 @@ const DiscardModal: React.FC<{ isOpen: boolean; onDiscard: () => void; onCancel:
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
-      <div className="relative bg-[var(--ide-bg-panel)] rounded-2xl p-6 border border-amber-500/30 max-w-xs w-full">
+      <div className="relative bg-[var(--ide-bg-panel)] rounded-2xl p-6 border border-white/20 max-w-xs w-full">
         <h3 className="font-bold text-[var(--ide-text)] mb-2">Unsaved Changes</h3>
         <p className="text-sm text-[var(--ide-text-secondary)] mb-4">You have unsaved changes. Discard them?</p>
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2 rounded-xl border border-[var(--ide-border)] text-sm">Keep Editing</button>
-          <button onClick={onDiscard} className="flex-1 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold">Discard</button>
+          <button onClick={onDiscard} className="flex-1 py-2 rounded-xl bg-white text-black text-sm font-semibold">Discard</button>
         </div>
       </div>
     </div>
@@ -184,17 +208,17 @@ const Toast: React.FC<{ message: string | null; type?: "error" | "success" | "wa
   }, [message, onDismiss]);
   if (!message) return null;
   const styles: Record<string, string> = {
-    error:   "bg-red-950/90 border-red-500/50 text-red-300",
-    success: "bg-emerald-950/90 border-emerald-500/50 text-emerald-300",
-    warn:    "bg-amber-950/90 border-amber-500/50 text-amber-300",
+    error:   "bg-white/10 border-white/20 text-white",
+    success: "bg-white/10 border-white/20 text-white",
+    warn:    "bg-white/10 border-white/20 text-white",
   };
-  const icons: Record<string, string> = { error: "⚠️", success: "✅", warn: "🚨" };
+  const labels: Record<string, string> = { error: "ERROR", success: "SUCCESS", warn: "NOTICE" };
   return (
     <div
       className={`fixed bottom-6 right-6 z-[300] max-w-sm px-5 py-3 rounded-2xl shadow-2xl border text-sm font-medium flex items-start gap-3 backdrop-blur-xl ${styles[type]}`}
       style={{ animation: "slideUp 0.3s ease-out" }}
     >
-      <span className="text-base mt-0.5">{icons[type]}</span>
+      <span className="text-[10px] font-black uppercase tracking-widest mt-1 opacity-50">{labels[type]}</span>
       <span className="flex-1 leading-snug">{message}</span>
       <button onClick={onDismiss} className="opacity-60 hover:opacity-100 text-xs mt-0.5">✕</button>
     </div>
@@ -243,9 +267,9 @@ const MetadataSidebar: React.FC<{
 
       {!elementId ? (
         <div style={{ padding: 16, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, textAlign: "center" }}>
-          <div style={{ fontSize: 32 }}>🖱️</div>
+          <div style={{ fontSize: 10, fontWeight: "black", opacity: 0.2, textTransform: "uppercase", letterSpacing: "0.1em" }}>Selection Required</div>
           <p style={{ fontSize: 12, color: "var(--ide-text-secondary)", lineHeight: 1.5 }}>
-            Click on a rectangle or ellipse to inspect and edit its semantic metadata.
+            Select an element to edit semantic metadata.
           </p>
         </div>
       ) : (
@@ -280,9 +304,6 @@ const MetadataSidebar: React.FC<{
             <label className={labelCls}>API Method</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {(["GET", "POST", "PUT", "DELETE", "PATCH"] as const).map((m) => {
-                const colors: Record<string, string> = {
-                  GET: "#16a34a", POST: "#2563eb", PUT: "#d97706", DELETE: "#dc2626", PATCH: "#7c3aed"
-                };
                 const active = meta.apiMethod === m;
                 return (
                   <button
@@ -290,9 +311,9 @@ const MetadataSidebar: React.FC<{
                     onClick={() => commit({ apiMethod: m })}
                     style={{
                       fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
-                      border: `1.5px solid ${active ? colors[m] : "var(--ide-border)"}`,
-                      background: active ? `${colors[m]}22` : "transparent",
-                      color: active ? colors[m] : "var(--ide-text-secondary)",
+                      border: `1.5px solid ${active ? "white" : "var(--ide-border)"}`,
+                      background: active ? "rgba(255,255,255,0.1)" : "transparent",
+                      color: active ? "white" : "var(--ide-text-secondary)",
                       cursor: "pointer", letterSpacing: "0.05em",
                     }}
                   >
@@ -318,25 +339,25 @@ const MetadataSidebar: React.FC<{
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "var(--ide-bg-elevated)", border: "1px solid var(--ide-border)", cursor: "pointer" }} onClick={() => commit({ isProtected: !meta.isProtected })}>
             <div style={{
               width: 32, height: 18, borderRadius: 9, position: "relative",
-              background: meta.isProtected ? "#4f46e5" : "var(--ide-border)",
+              background: meta.isProtected ? "white" : "var(--ide-border)",
               transition: "background 0.2s",
             }}>
               <div style={{
                 position: "absolute", top: 2, left: meta.isProtected ? 16 : 2,
-                width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                width: 14, height: 14, borderRadius: "50%", background: meta.isProtected ? "black" : "#fff",
                 transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.4)"
               }} />
             </div>
             <span style={{ fontSize: 12, color: "var(--ide-text)", fontWeight: 600, userSelect: "none" }}>
-              {meta.isProtected ? "🔒 Protected Route" : "🔓 Public Route"}
+              {meta.isProtected ? "Protected Route" : "Public Route"}
             </span>
           </div>
 
           {/* Summary Preview */}
           {meta.componentName && (
-            <div style={{ borderRadius: 10, background: "#1e1b4b22", border: "1px solid #4f46e544", padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#818cf8", marginBottom: 6 }}>Preview</div>
-              <code style={{ fontSize: 11, color: "#a5b4fc", display: "block", lineHeight: 1.7 }}>
+            <div style={{ borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", padding: "10px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Preview</div>
+              <code style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", display: "block", lineHeight: 1.7 }}>
                 {`@${meta.layer || "Component"}("/${meta.componentName.toLowerCase()}")`}<br />
                 {`${meta.apiMethod} → ${meta.dataType || "any"}`}<br />
                 {meta.isProtected ? "@UseGuard(JwtGuard)" : "// No Auth"}
@@ -360,7 +381,7 @@ const DiagramsPage: React.FC = () => {
   const [editingDiagramName, setEditingDiagramName] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [currentMode, setCurrentMode] = useState<DiagramMode>("Architecture");
-  const [showAnalysis, setShowAnalysis] = useState(false);
+
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
   // Modals / Toast
@@ -372,6 +393,7 @@ const DiagramsPage: React.FC = () => {
 
   // Excalidraw
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  const [userLibraryItems, setUserLibraryItems] = useState<any[]>([]);
   const saveTimeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintCooldownRef  = useRef<Set<string>>(new Set());
   // Guard: prevent doSelectDiagram from firing again just because mode changed
@@ -387,7 +409,14 @@ const DiagramsPage: React.FC = () => {
   // Library items — memoized so Excalidraw doesn't see new references on every render
   const stroke = theme === "dark" ? "#e2e8f0" : "#0f172a";
   const bg     = theme === "dark" ? "#1e293b" : "#f8fafc";
-  const library = useMemo(() => buildLibrary(stroke, bg), [theme]);
+  const presetLibrary = useMemo(() => buildLibrary(stroke, bg), [theme]);
+
+  // Merged library: preset items for current mode + user-saved items
+  const mergedLibrary = useMemo(() => {
+    const presetIds = new Set(presetLibrary[currentMode].map((item: any) => item.id));
+    const uniqueUser = userLibraryItems.filter((item: any) => !presetIds.has(item?.id));
+    return [...presetLibrary[currentMode], ...uniqueUser];
+  }, [presetLibrary, currentMode, userLibraryItems]);
 
 
   // ── Load diagrams ────────────────────────────────────
@@ -395,6 +424,33 @@ const DiagramsPage: React.FC = () => {
     loadDiagrams();
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, []);
+
+  // ── Auto-select first diagram if none selected ───────
+  useEffect(() => {
+    if (!selectedDiagram && diagrams.length > 0) {
+      doSelectDiagram(diagrams[0].name);
+    }
+  }, [diagrams]);
+
+  // ── Listen for cross-page navigation events ──────────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.diagramName) {
+        // Navigate to this diagram from wherever in the app
+        const target = detail.diagramName;
+        // Check if this diagram exists
+        const exists = diagrams.some(d => d.name === target);
+        if (exists) {
+          doSelectDiagram(target);
+        } else {
+          showToast(`Diagram "${target}" not found`, "warn");
+        }
+      }
+    };
+    window.addEventListener("akasha:open-diagram", handler);
+    return () => window.removeEventListener("akasha:open-diagram", handler);
+  }, [diagrams]);
 
   const loadDiagrams = async () => {
     try { setDiagrams(await api.listDiagrams()); } catch {}
@@ -431,6 +487,10 @@ const DiagramsPage: React.FC = () => {
     setEditingDiagramName(name);
     setIsDirty(false);
     setSelectedElementId(null);
+
+    // Load user-saved library items for this diagram
+    setUserLibraryItems(loadUserLibrary(name));
+
     if (excalidrawAPI) excalidrawAPI.updateScene({ elements: [] });
     try {
       const content = await api.readDiagram(name);
@@ -500,11 +560,11 @@ const DiagramsPage: React.FC = () => {
         if (!lintCooldownRef.current.has(errKey)) {
           lintCooldownRef.current.add(errKey);
           setTimeout(() => lintCooldownRef.current.delete(errKey), 5000);
-          showToast("🚨 Architectural Error: Actors cannot bypass the API layer.", "warn");
+          showToast("Architectural Error: Actors cannot bypass the API layer.", "warn");
         }
-        if (el.strokeColor !== "#ef4444") {
+        if (el.strokeColor !== "#ffffff") {
           hasUpdates = true;
-          return { ...el, strokeColor: "#ef4444", strokeWidth: 3, customData: { ...el.customData, lintError: "actor-db-bypass" } };
+          return { ...el, strokeColor: "#ffffff", strokeWidth: 3, customData: { ...el.customData, lintError: "actor-db-bypass" } };
         }
         return el;
       }
@@ -529,6 +589,15 @@ const DiagramsPage: React.FC = () => {
     saveTimeoutRef.current = setTimeout(() => handleSave(true), 1500);
     lintConnections(elements);
   }, [lintConnections]);
+
+  // ── Library change handler — persist user-added items ─
+  const onLibraryChange = useCallback((items: any) => {
+    if (!selectedDiagram) return;
+    // items is the full library array from Excalidraw (LibraryItems type)
+    const libraryArray = Array.isArray(items) ? items : [];
+    setUserLibraryItems(libraryArray);
+    saveUserLibrary(selectedDiagram, libraryArray);
+  }, [selectedDiagram]);
 
   // ── Pointer → selection tracking ─────────────────────
   const onPointerUpdate = useCallback((_payload: any) => {
@@ -579,9 +648,9 @@ const DiagramsPage: React.FC = () => {
 
   // ── Mode selector styles ──────────────────────────────
   const modeColors: Record<DiagramMode, string> = {
-    Architecture: "#7c3aed",
-    ERD: "#2563eb",
-    UseCase: "#0ea5e9",
+    Architecture: "#ffffff",
+    ERD: "#ffffff",
+    UseCase: "#ffffff",
   };
 
   // ── Render ────────────────────────────────────────────
@@ -606,8 +675,8 @@ const DiagramsPage: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {diagrams.length === 0 && (
             <div className="text-center text-xs text-[var(--ide-text-muted)] py-8 px-4">
-              <div className="text-3xl mb-2">📐</div>
-              No diagrams yet.<br />Click <strong>+</strong> to create one.
+              <div style={{ fontSize: 10, fontWeight: "black", opacity: 0.2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Empty</div>
+              No diagrams.<br />Use <strong>+</strong> to start.
             </div>
           )}
           {diagrams.map((d) => (
@@ -616,15 +685,24 @@ const DiagramsPage: React.FC = () => {
               onClick={() => selectDiagram(d.name)}
               className={`group flex items-center px-3 py-2 text-xs rounded-lg cursor-pointer select-none transition-colors ${
                 selectedDiagram === d.name
-                  ? "bg-indigo-600/20 text-indigo-400 font-semibold"
+                  ? "bg-white/10 text-white font-semibold"
                   : "text-[var(--ide-text-secondary)] hover:bg-[var(--ide-bg-elevated)] hover:text-[var(--ide-text)]"
               }`}
             >
-              <span className="mr-2 text-sm">📄</span>
               <span className="truncate flex-1">{d.name.replace(/\.excalidraw$/, "")}</span>
-              <button
+              {(() => {
+                const libCount = loadUserLibrary(d.name).length;
+                return libCount > 0 ? (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-white/10 text-white border border-white/20"
+                    title={`${libCount} saved library item${libCount > 1 ? 's' : ''}`}
+                  >
+                    LIB {libCount}
+                  </span>
+                ) : null;
+              })()}
+               <button
                 onClick={(e) => { e.stopPropagation(); setDeleteTarget(d.name); }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-red-400 transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-white transition-all"
                 title="Delete"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -659,7 +737,7 @@ const DiagramsPage: React.FC = () => {
                   minWidth: 0, flexShrink: 1, maxWidth: 220,
                 }}
               />
-              {isDirty && <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700 }}>● UNSAVED</span>}
+              {isDirty && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontWeight: 700 }}>● UNSAVED</span>}
             </div>
 
             {/* Center: Mode Selector */}
@@ -670,13 +748,13 @@ const DiagramsPage: React.FC = () => {
                   onClick={() => setCurrentMode(m)}
                   style={{
                     fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8,
-                    border: `1.5px solid ${currentMode === m ? modeColors[m] : "var(--ide-border)"}`,
-                    background: currentMode === m ? `${modeColors[m]}22` : "transparent",
-                    color: currentMode === m ? modeColors[m] : "var(--ide-text-secondary)",
+                    border: `1.5px solid ${currentMode === m ? "var(--ide-text)" : "var(--ide-border)"}`,
+                    background: "transparent",
+                    color: currentMode === m ? "var(--ide-text)" : "var(--ide-text-secondary)",
                     cursor: "pointer", letterSpacing: "0.04em", transition: "all 0.15s",
                   }}
                 >
-                  {m === "Architecture" ? "🏗 Arch" : m === "ERD" ? "🗃 ERD" : "👤 UseCase"}
+                  {m === "Architecture" ? "ARCH" : m === "ERD" ? "ERD" : "USE CASE"}
                 </button>
               ))}
             </div>
@@ -687,34 +765,50 @@ const DiagramsPage: React.FC = () => {
                 onClick={() => handleSave(false)}
                 style={{
                   fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 8,
-                  background: "#15803d22", border: "1.5px solid #16a34a66",
-                  color: "#4ade80", cursor: "pointer",
+                  background: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.2)",
+                  color: "white", cursor: "pointer",
                 }}
               >
-                💾 Save
+                Save
               </button>
               <button
                 onClick={handleGenerateCode}
                 style={{
                   fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 8,
-                  background: "#4f46e522", border: "1.5px solid #7c3aed66",
-                  color: "#a78bfa", cursor: "pointer",
+                  background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.8)", cursor: "pointer",
                 }}
               >
-                ⚡ Export
+                Export
               </button>
-              <button
-                onClick={() => setShowAnalysis(!showAnalysis)}
-                style={{
-                  fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 8,
-                  background: showAnalysis ? "#0ea5e922" : "transparent",
-                  border: `1.5px solid ${showAnalysis ? "#0ea5e9" : "var(--ide-border)"}`,
-                  color: showAnalysis ? "#38bdf8" : "var(--ide-text-secondary)",
-                  cursor: "pointer",
-                }}
-              >
-                🧠 Akasha
-              </button>
+              {userLibraryItems.length > 0 && (
+                <span
+                  style={{
+                    fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 8,
+                    background: "rgba(255,255,255,0.03)", border: "1.5px solid rgba(255,255,255,0.1)",
+                    color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center", gap: 4,
+                  }}
+                  title={`${userLibraryItems.length} custom library items saved for this diagram`}
+                >
+                  LIB {userLibraryItems.length} items
+                  <button
+                    onClick={() => {
+                      if (selectedDiagram) {
+                        localStorage.removeItem(getLibraryKey(selectedDiagram));
+                        setUserLibraryItems([]);
+                        showToast("Library cleared", "success");
+                      }
+                    }}
+                    style={{
+                      marginLeft: 2, padding: "0 3px", borderRadius: 4,
+                      background: "transparent", border: "none", color: "#f87171",
+                      cursor: "pointer", fontSize: 10, lineHeight: 1,
+                    }}
+                    title="Clear custom library"
+                  >✕</button>
+                </span>
+              )}
+
             </div>
           </div>
         )}
@@ -722,13 +816,13 @@ const DiagramsPage: React.FC = () => {
         {/* Canvas or empty state */}
         {!selectedDiagram ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[var(--ide-text-secondary)]">
-            <div style={{ fontSize: 64 }}>📐</div>
+            <div style={{ fontSize: 10, fontWeight: "black", opacity: 0.2, textTransform: "uppercase", letterSpacing: "0.1em" }}>Empty Editor</div>
             <p style={{ fontSize: 14, fontWeight: 600 }}>Select or create a diagram to begin</p>
             <button
               onClick={() => setShowCreateModal(true)}
               style={{
                 fontSize: 13, fontWeight: 600, padding: "8px 20px", borderRadius: 10,
-                background: "#4f46e5", color: "#fff", border: "none", cursor: "pointer",
+                background: "white", color: "black", border: "none", cursor: "pointer",
               }}
             >
               + New Diagram
@@ -763,9 +857,10 @@ const DiagramsPage: React.FC = () => {
                       }}
                       onChange={onChange}
                       onPointerUpdate={onPointerUpdate}
+                      onLibraryChange={onLibraryChange}
                       theme={theme}
                       // @ts-ignore
-                      libraryItems={library[currentMode]}
+                      libraryItems={mergedLibrary}
                       UIOptions={{
                         canvasActions: {
                           saveToActiveFile: false,
@@ -796,10 +891,7 @@ const DiagramsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Analysis Panel */}
-      {showAnalysis && selectedDiagram && (
-        <AnalysisPanel onAnalyze={() => {}} result={null} loading={false} error={null} />
-      )}
+
 
       {/* Modals */}
       <InputModal

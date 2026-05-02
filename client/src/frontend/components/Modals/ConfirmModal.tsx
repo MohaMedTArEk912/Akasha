@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import React from "react";
+import Modal from "../ui/Modal";
 
 interface ConfirmModalProps {
     isOpen: boolean;
@@ -36,15 +36,6 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     isLoading = false,
     checkboxConfig,
 }) => {
-
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-        return () => setMounted(false);
-    }, []);
-
-    if (!isOpen || !mounted) return null;
 
     const variantConfig = {
         danger: {
@@ -90,45 +81,25 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
     const config = variantConfig[variant];
 
-    return createPortal(
-        <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
-            style={{ animation: "fadeIn 0.2s ease-out" }}
-        >
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/80 backdrop-blur-md"
-                onClick={onCancel}
-            />
-
-            {/* Modal Container */}
-            <div
-                className={`relative w-full max-w-md overflow-hidden rounded-3xl border border-[var(--ide-border-strong)] bg-[var(--ide-bg-panel)] ${config.borderGlow}`}
-                style={{ animation: "scaleIn 0.25s ease-out" }}
-            >
-                {/* Gradient Accent */}
+    return (
+        <Modal isOpen={isOpen} onClose={onCancel} title={title} size="sm" width="440px">
+            <div className="relative overflow-hidden">
                 <div className={`absolute inset-0 bg-gradient-to-b ${config.gradient} pointer-events-none`} />
-
-                {/* Decorative Orbs */}
                 <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-[var(--ide-text)]/8 to-transparent rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-gradient-to-tr from-[var(--ide-text)]/8 to-transparent rounded-full blur-2xl pointer-events-none" />
 
-                {/* Content */}
                 <div className="relative p-8">
-                    {/* Icon */}
                     <div className="flex justify-center mb-6">
                         <div className={`w-20 h-20 rounded-2xl ${config.iconBg} ${config.iconColor} flex items-center justify-center border border-[var(--ide-border)] backdrop-blur-sm`}>
                             {config.icon}
                         </div>
                     </div>
 
-                    {/* Text */}
                     <div className="text-center mb-6">
                         <h3 className="text-2xl font-bold text-[var(--ide-text)] mb-3 tracking-tight">{title}</h3>
                         <p className="text-base text-[var(--ide-text-secondary)] leading-relaxed max-w-sm mx-auto">{message}</p>
                     </div>
 
-                    {/* Optional Checkbox */}
                     {checkboxConfig && (
                         <label className="flex items-center justify-center gap-3 mb-6 cursor-pointer group">
                             <input
@@ -142,8 +113,6 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                             </span>
                         </label>
                     )}
-
-                    {/* Actions */}
 
                     <div className="flex gap-4">
                         <button
@@ -173,26 +142,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
                     </div>
                 </div>
             </div>
-
-            {/* Keyframes for animations */}
-            <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes scaleIn {
-                    from {
-                        opacity: 0;
-                        transform: scale(0.95) translateY(10px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: scale(1) translateY(0);
-                    }
-                }
-            `}</style>
-        </div>,
-        document.body
+        </Modal>
     );
 };
 

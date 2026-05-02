@@ -33,17 +33,17 @@ const SEED: UseCase[] = [];
 const uid = () => `uc-${Math.random().toString(36).slice(2, 8)}`;
 
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string; dot: string }> = {
-  critical: { label: "Critical", color: "#ff4560", bg: "rgba(255,69,96,0.12)", dot: "#ff4560" },
-  high:     { label: "High",     color: "#f5a623", bg: "rgba(245,166,35,0.12)", dot: "#f5a623" },
-  medium:   { label: "Medium",   color: "#00b4d8", bg: "rgba(0,180,216,0.12)", dot: "#00b4d8" },
-  low:      { label: "Low",      color: "#6bcb77", bg: "rgba(107,203,119,0.12)", dot: "#6bcb77" },
+  critical: { label: "Critical", color: "#ffffff", bg: "rgba(255,255,255,0.1)", dot: "#ffffff" },
+  high:     { label: "High",     color: "#e5e7eb", bg: "rgba(255,255,255,0.08)", dot: "#e5e7eb" },
+  medium:   { label: "Medium",   color: "#9ca3af", bg: "rgba(255,255,255,0.06)", dot: "#9ca3af" },
+  low:      { label: "Low",      color: "#4b5563", bg: "rgba(255,255,255,0.04)", dot: "#4b5563" },
 };
 
 const STATUS_META: Record<Status, { label: string; color: string; bg: string }> = {
-  active:    { label: "Active",    color: "#00d4ff", bg: "rgba(0,212,255,0.1)"  },
-  draft:     { label: "Draft",     color: "#8b9cba", bg: "rgba(139,156,186,0.1)" },
-  completed: { label: "Completed", color: "#6bcb77", bg: "rgba(107,203,119,0.1)" },
-  archived:  { label: "Archived",  color: "#5a6a82", bg: "rgba(90,106,130,0.1)"  },
+  active:    { label: "Active",    color: "#ffffff", bg: "rgba(255,255,255,0.1)"  },
+  draft:     { label: "Draft",     color: "#9ca3af", bg: "rgba(255,255,255,0.05)" },
+  completed: { label: "Completed", color: "#e5e7eb", bg: "rgba(255,255,255,0.08)" },
+  archived:  { label: "Archived",  color: "#6b7280", bg: "rgba(255,255,255,0.03)"  },
 };
 
 // ─── Sub-Components ────────────────────────────────────────────────────────────
@@ -128,16 +128,16 @@ const UseCaseCard = ({
       style={{
         position: "relative",
         background: hovered
-          ? "linear-gradient(135deg, rgba(0,212,255,0.04) 0%, rgba(10,21,32,0.95) 60%)"
-          : "rgba(10,21,32,0.85)",
-        border: `1px solid ${hovered ? "rgba(0,212,255,0.35)" : "rgba(0,212,255,0.1)"}`,
+          ? "rgba(255,255,255,0.06)"
+          : "rgba(255,255,255,0.02)",
+        border: `1px solid ${hovered ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`,
         borderRadius: 12,
         padding: "20px 22px",
         cursor: "pointer",
         transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)",
         backdropFilter: "blur(12px)",
         boxShadow: hovered
-          ? "0 0 0 1px rgba(0,212,255,0.12), 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(0,212,255,0.05)"
+          ? "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)"
           : "0 2px 8px rgba(0,0,0,0.3)",
         transform: hovered ? "translateY(-2px)" : "none",
         overflow: "hidden",
@@ -146,7 +146,7 @@ const UseCaseCard = ({
       {/* Accent line top */}
       <div style={{
         position: "absolute", top: 0, left: 22, right: 22, height: 1,
-        background: hovered ? `linear-gradient(90deg, transparent, ${pm.dot}88, transparent)` : "transparent",
+        background: hovered ? `linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)` : "transparent",
         transition: "all 0.3s ease",
       }} />
 
@@ -154,7 +154,7 @@ const UseCaseCard = ({
       <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{
           fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: "0.08em",
-          color: "rgba(0,212,255,0.5)", textTransform: "uppercase",
+          color: "rgba(255,255,255,0.4)", textTransform: "uppercase",
         }}>
           {uc.category}
         </span>
@@ -162,16 +162,16 @@ const UseCaseCard = ({
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(uc); }}
             style={{
-              background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
-              borderRadius: 6, color: "#00d4ff", cursor: "pointer", padding: "4px 8px",
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 6, color: "white", cursor: "pointer", padding: "4px 8px",
               display: "flex", alignItems: "center",
             }}
           ><IconEdit /></button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(uc.id); }}
             style={{
-              background: "rgba(255,69,96,0.08)", border: "1px solid rgba(255,69,96,0.2)",
-              borderRadius: 6, color: "#ff4560", cursor: "pointer", padding: "4px 8px",
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 6, color: "rgba(255,255,255,0.6)", cursor: "pointer", padding: "4px 8px",
               display: "flex", alignItems: "center",
             }}
           ><IconTrash /></button>
@@ -199,16 +199,16 @@ const UseCaseCard = ({
 
       {/* Footer meta */}
       <div style={{
-        borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: 12,
+        borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12,
         display: "flex", gap: 16, alignItems: "center",
       }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(0,212,255,0.45)" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>
           <IconUsers />
-          <span style={{ color: "rgba(180,210,225,0.55)" }}>{uc.actors.length} actor{uc.actors.length !== 1 ? "s" : ""}</span>
+          <span style={{ color: "rgba(255,255,255,0.5)" }}>{uc.actors.length} actor{uc.actors.length !== 1 ? "s" : ""}</span>
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(0,212,255,0.45)" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>
           <IconSteps />
-          <span style={{ color: "rgba(180,210,225,0.55)" }}>{uc.steps.length} steps</span>
+          <span style={{ color: "rgba(255,255,255,0.5)" }}>{uc.steps.length} steps</span>
         </span>
       </div>
     </div>
@@ -269,8 +269,8 @@ const Modal = ({
   };
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", background: "rgba(0,212,255,0.04)",
-    border: "1px solid rgba(0,212,255,0.15)", borderRadius: 8,
+    width: "100%", background: "rgba(255,255,255,0.02)",
+    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
     color: "#e8f4f8", fontSize: 13, padding: "9px 12px",
     outline: "none", fontFamily: "inherit", boxSizing: "border-box",
     transition: "border-color 0.2s",
@@ -278,7 +278,7 @@ const Modal = ({
 
   const labelStyle: React.CSSProperties = {
     fontSize: 10.5, fontFamily: "'Space Mono', monospace",
-    letterSpacing: "0.08em", color: "rgba(0,212,255,0.55)",
+    letterSpacing: "0.08em", color: "rgba(255,255,255,0.4)",
     textTransform: "uppercase", display: "block", marginBottom: 6,
   };
 
@@ -291,25 +291,25 @@ const Modal = ({
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(2,8,18,0.85)", backdropFilter: "blur(8px)",
+      background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)",
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: 20,
     }}>
       <div style={{
-        background: "linear-gradient(145deg, #0d1f31 0%, #091628 100%)",
-        border: "1px solid rgba(0,212,255,0.2)",
+        background: "#0a0a0a",
+        border: "1px solid rgba(255,255,255,0.1)",
         borderRadius: 16, width: "100%", maxWidth: 620,
         maxHeight: "90vh", display: "flex", flexDirection: "column",
-        boxShadow: "0 0 0 1px rgba(0,212,255,0.05), 0 24px 80px rgba(0,0,0,0.7)",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.8)",
         overflow: "hidden",
       }}>
         {/* Header */}
         <div style={{
-          padding: "20px 24px", borderBottom: "1px solid rgba(0,212,255,0.08)",
+          padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)",
           display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
         }}>
           <div>
-            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.1em", marginBottom: 4 }}>
+            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", marginBottom: 4 }}>
               {initial ? "EDIT USE CASE" : "NEW USE CASE"}
             </div>
             <h2 style={{ margin: 0, fontSize: 17, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#e8f4f8" }}>
@@ -324,7 +324,7 @@ const Modal = ({
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(0,212,255,0.08)", flexShrink: 0 }}>
+        <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -333,8 +333,8 @@ const Modal = ({
                 background: "none", border: "none", cursor: "pointer",
                 padding: "12px 16px 10px", fontSize: 12.5,
                 fontFamily: "'Space Mono', monospace", letterSpacing: "0.03em",
-                color: activeTab === t.key ? "#00d4ff" : "rgba(180,210,225,0.45)",
-                borderBottom: `2px solid ${activeTab === t.key ? "#00d4ff" : "transparent"}`,
+                color: activeTab === t.key ? "white" : "rgba(255,255,255,0.3)",
+                borderBottom: `2px solid ${activeTab === t.key ? "white" : "transparent"}`,
                 transition: "all 0.2s", marginBottom: -1,
               }}
             >{t.label}</button>
@@ -397,8 +397,8 @@ const Modal = ({
                     onChange={(e) => setActorInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && addActor()} />
                   <button onClick={addActor} style={{
-                    background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.25)",
-                    borderRadius: 8, color: "#00d4ff", cursor: "pointer", padding: "0 14px",
+                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 8, color: "white", cursor: "pointer", padding: "0 14px",
                     fontSize: 18, display: "flex", alignItems: "center",
                   }}>+</button>
                 </div>
@@ -406,8 +406,8 @@ const Modal = ({
                   {form.actors.map((a, i) => (
                     <span key={i} style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
-                      background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
-                      borderRadius: 20, padding: "4px 10px", fontSize: 12, color: "#00d4ff",
+                      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 20, padding: "4px 10px", fontSize: 12, color: "white",
                     }}>
                       {a}
                       <span onClick={() => set("actors", form.actors.filter((_, j) => j !== i))}
@@ -425,10 +425,10 @@ const Modal = ({
                     <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <span style={{
                         width: 24, height: 24, borderRadius: "50%",
-                        background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.25)",
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 10, fontFamily: "'Space Mono', monospace",
-                        color: "#00d4ff", flexShrink: 0,
+                        color: "white", flexShrink: 0,
                       }}>{s.order}</span>
                       <input style={{ ...inputStyle, flex: 1 }} value={s.description}
                         placeholder={`Step ${s.order} description…`}
@@ -444,9 +444,9 @@ const Modal = ({
                   ))}
                 </div>
                 <button onClick={addStep} style={{
-                  marginTop: 10, background: "rgba(0,212,255,0.05)",
-                  border: "1px dashed rgba(0,212,255,0.2)", borderRadius: 8,
-                  color: "rgba(0,212,255,0.5)", cursor: "pointer", padding: "8px 16px",
+                  marginTop: 10, background: "rgba(255,255,255,0.02)",
+                  border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 8,
+                  color: "rgba(255,255,255,0.3)", cursor: "pointer", padding: "8px 16px",
                   fontSize: 12, fontFamily: "'Space Mono', monospace", width: "100%",
                   transition: "all 0.2s",
                 }}>+ Add Step</button>
@@ -460,7 +460,7 @@ const Modal = ({
               <div>
                 <label style={labelStyle}>Preconditions</label>
                 <div style={{
-                  fontSize: 11, color: "rgba(0,212,255,0.4)", marginBottom: 8,
+                  fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 8,
                   fontFamily: "'Space Mono', monospace",
                 }}>State that must be true before this interaction begins</div>
                 <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
@@ -470,7 +470,7 @@ const Modal = ({
               <div>
                 <label style={labelStyle}>Postconditions</label>
                 <div style={{
-                  fontSize: 11, color: "rgba(0,212,255,0.4)", marginBottom: 8,
+                  fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 8,
                   fontFamily: "'Space Mono', monospace",
                 }}>Expected outcome after successful completion</div>
                 <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
@@ -483,20 +483,20 @@ const Modal = ({
 
         {/* Footer */}
         <div style={{
-          padding: "14px 24px", borderTop: "1px solid rgba(0,212,255,0.08)",
+          padding: "14px 24px", borderTop: "1px solid rgba(255,255,255,0.06)",
           display: "flex", justifyContent: "flex-end", gap: 10, flexShrink: 0,
         }}>
           <button onClick={onClose} style={{
             background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 8, color: "rgba(180,210,225,0.6)", cursor: "pointer",
+            borderRadius: 8, color: "rgba(255,255,255,0.5)", cursor: "pointer",
             padding: "9px 20px", fontSize: 13, fontFamily: "inherit",
           }}>Cancel</button>
           <button onClick={handleSave} style={{
-            background: "linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(0,180,216,0.15) 100%)",
-            border: "1px solid rgba(0,212,255,0.4)", borderRadius: 8,
-            color: "#00d4ff", cursor: "pointer", padding: "9px 22px",
-            fontSize: 13, fontFamily: "inherit", fontWeight: 500,
-            boxShadow: "0 0 16px rgba(0,212,255,0.1)",
+            background: "white",
+            border: "none", borderRadius: 8,
+            color: "black", cursor: "pointer", padding: "9px 22px",
+            fontSize: 13, fontFamily: "inherit", fontWeight: 700,
+            boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
           }}>
             {initial ? "Save Changes" : "Create Use Case"}
           </button>
@@ -520,9 +520,9 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 440, height: "100%", overflowY: "auto",
-          background: "linear-gradient(180deg, #0d1f31 0%, #091628 100%)",
-          borderLeft: "1px solid rgba(0,212,255,0.15)",
-          boxShadow: "-20px 0 60px rgba(0,0,0,0.6)",
+          background: "#050508",
+          borderLeft: "1px solid rgba(255,255,255,0.1)",
+          boxShadow: "-20px 0 60px rgba(0,0,0,0.8)",
           padding: "28px 28px 40px",
           display: "flex", flexDirection: "column", gap: 20,
         }}
@@ -530,15 +530,15 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, paddingRight: 12 }}>
-            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.1em", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em", marginBottom: 6 }}>
               {uc.category} · {uc.id.toUpperCase()}
             </div>
             <h2 style={{ margin: 0, fontSize: 18, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#e8f4f8", lineHeight: 1.3 }}>{uc.name}</h2>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <button onClick={onEdit} style={{
-              background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
-              borderRadius: 8, color: "#00d4ff", cursor: "pointer", padding: "7px 12px",
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 8, color: "white", cursor: "pointer", padding: "7px 12px",
               display: "flex", alignItems: "center", gap: 6, fontSize: 12,
             }}><IconEdit /> Edit</button>
             <button onClick={onClose} style={{
@@ -558,15 +558,15 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
         {/* Description */}
         <p style={{ margin: 0, fontSize: 13.5, color: "rgba(180,210,225,0.65)", lineHeight: 1.7 }}>{uc.description}</p>
 
-        <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: 4 }} />
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }} />
 
         {/* Actors */}
         <div>
-          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.08em", marginBottom: 10 }}>ACTORS</div>
+          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: 10 }}>ACTORS</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {uc.actors.map((a, i) => (
               <span key={i} style={{
-                background: "rgba(0,212,255,0.07)", border: "1px solid rgba(0,212,255,0.18)",
+                background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.18)",
                 borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#a8d8ea",
               }}>{a}</span>
             ))}
@@ -575,7 +575,7 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
 
         {/* Steps */}
         <div>
-          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(0,212,255,0.45)", letterSpacing: "0.08em", marginBottom: 12 }}>FLOW — {uc.steps.length} STEPS</div>
+          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: 12 }}>FLOW — {uc.steps.length} STEPS</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {uc.steps.map((s, i) => (
               <div key={i} style={{ display: "flex", gap: 14 }}>
@@ -583,12 +583,12 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                   <div style={{
                     width: 22, height: 22, borderRadius: "50%",
-                    background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)",
+                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 9, fontFamily: "'Space Mono', monospace", color: "#00d4ff",
+                    fontSize: 9, fontFamily: "'Space Mono', monospace", color: "white",
                   }}>{s.order}</div>
                   {i < uc.steps.length - 1 && (
-                    <div style={{ width: 1, flex: 1, minHeight: 16, background: "linear-gradient(180deg, rgba(0,212,255,0.25) 0%, rgba(0,212,255,0.05) 100%)", marginTop: 4 }} />
+                    <div style={{ width: 1, flex: 1, minHeight: 16, background: "linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.05) 100%)", marginTop: 4 }} />
                   )}
                 </div>
                 <div style={{ paddingBottom: i < uc.steps.length - 1 ? 14 : 0, paddingTop: 2 }}>
@@ -602,17 +602,17 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
         {/* Conditions */}
         {(uc.preconditions || uc.postconditions) && (
           <>
-            <div style={{ borderTop: "1px solid rgba(0,212,255,0.08)", paddingTop: 4 }} />
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }} />
             {uc.preconditions && (
               <div>
-                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(245,166,35,0.6)", letterSpacing: "0.08em", marginBottom: 8 }}>PRECONDITIONS</div>
-                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(180,210,225,0.6)", lineHeight: 1.6, background: "rgba(245,166,35,0.04)", border: "1px solid rgba(245,166,35,0.12)", borderRadius: 8, padding: "10px 12px" }}>{uc.preconditions}</p>
+                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", marginBottom: 8 }}>PRECONDITIONS</div>
+                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px" }}>{uc.preconditions}</p>
               </div>
             )}
             {uc.postconditions && (
               <div>
-                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(107,203,119,0.6)", letterSpacing: "0.08em", marginBottom: 8 }}>POSTCONDITIONS</div>
-                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(180,210,225,0.6)", lineHeight: 1.6, background: "rgba(107,203,119,0.04)", border: "1px solid rgba(107,203,119,0.12)", borderRadius: 8, padding: "10px 12px" }}>{uc.postconditions}</p>
+                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", marginBottom: 8 }}>POSTCONDITIONS</div>
+                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px" }}>{uc.postconditions}</p>
               </div>
             )}
           </>
@@ -757,25 +757,26 @@ export default function UseCasesPage() {
   };
 
   const selectStyle: React.CSSProperties = {
-    background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.15)",
-    borderRadius: 8, color: "#a8d8ea", fontSize: 12.5,
-    padding: "8px 12px", cursor: "pointer", outline: "none",
-    fontFamily: "'Space Mono', monospace",
+    width: "100%", background: "rgba(255,255,255,0.02)",
+    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
+    color: "#e8f4f8", fontSize: 12.5, padding: "8px 12px",
+    outline: "none", fontFamily: "'Space Mono', monospace",
+    boxSizing: "border-box", transition: "border-color 0.2s",
+    cursor: "pointer",
   };
 
   return (
     <div style={{
       height: "100%", overflowY: "auto", position: "relative",
-      background: "linear-gradient(135deg, #020c18 0%, #051525 50%, #020c18 100%)",
-      fontFamily: "'Outfit', 'Space Mono', sans-serif",
-      color: "#e8f4f8",
+      background: "var(--ide-bg)",
+      color: "var(--ide-text)",
     }}>
       {/* Background grid */}
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none",
         backgroundImage: `
-          linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px)
+          linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)
         `,
         backgroundSize: "48px 48px",
       }} />
@@ -783,18 +784,18 @@ export default function UseCasesPage() {
       <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
 
         {/* ── Header ── */}
-        <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, animation: "fadeSlideUp 0.5s ease-out both" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <div style={{
-                width: 6, height: 24, background: "linear-gradient(180deg, #00d4ff, rgba(0,212,255,0.2))",
+            <div style={{
+                width: 6, height: 24, background: "linear-gradient(180deg, #ffffff, rgba(255,255,255,0.1))",
                 borderRadius: 3,
               }} />
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", color: "#e8f4f8" }}>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", color: "var(--ide-text)" }}>
                 Use Cases
               </h1>
             </div>
-            <p style={{ margin: 0, fontSize: 13.5, color: "rgba(180,210,225,0.5)", paddingLeft: 16, fontFamily: "'Space Mono', monospace" }}>
+            <p style={{ margin: 0, fontSize: 13.5, color: "var(--ide-text-secondary)", paddingLeft: 16, fontFamily: "'Space Mono', monospace" }}>
               {stats.total} total · {stats.active} active · {stats.critical} critical
             </p>
           </div>
@@ -802,11 +803,11 @@ export default function UseCasesPage() {
             onClick={() => { setEditTarget(undefined); setModalOpen(true); }}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              background: "linear-gradient(135deg, rgba(0,212,255,0.18) 0%, rgba(0,150,200,0.12) 100%)",
-              border: "1px solid rgba(0,212,255,0.35)", borderRadius: 10,
-              color: "#00d4ff", cursor: "pointer", padding: "10px 20px",
-              fontSize: 13.5, fontFamily: "inherit", fontWeight: 500,
-              boxShadow: "0 0 20px rgba(0,212,255,0.08), inset 0 1px 0 rgba(255,255,255,0.05)",
+              background: "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)",
+              border: "1px solid rgba(255,255,255,0.25)", borderRadius: 10,
+              color: "#ffffff", cursor: "pointer", padding: "10px 20px",
+              fontSize: 13.5, fontFamily: "inherit", fontWeight: 600,
+              boxShadow: "0 0 20px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.05)",
               transition: "all 0.2s",
             }}
           >
@@ -817,17 +818,17 @@ export default function UseCasesPage() {
         {/* ── Stats ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
           {[
-            { label: "Total", value: stats.total, color: "#00d4ff" },
-            { label: "Active", value: stats.active, color: "#6bcb77" },
-            { label: "Critical", value: stats.critical, color: "#ff4560" },
-            { label: "Draft", value: stats.draft, color: "#8b9cba" },
+            { label: "Total", value: stats.total, color: "#ffffff" },
+            { label: "Active", value: stats.active, color: "#e5e7eb" },
+            { label: "Critical", value: stats.critical, color: "#ffffff" },
+            { label: "Draft", value: stats.draft, color: "#9ca3af" },
           ].map((s) => (
             <div key={s.label} style={{
-              background: "rgba(0,212,255,0.03)", border: "1px solid rgba(0,212,255,0.08)",
+              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
               borderRadius: 10, padding: "14px 18px",
               borderTop: `2px solid ${s.color}33`,
             }}>
-              <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(180,210,225,0.4)", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label.toUpperCase()}</div>
+              <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label.toUpperCase()}</div>
               <div style={{ fontSize: 26, fontWeight: 700, color: s.color, letterSpacing: "-0.02em", fontFamily: "'Outfit', sans-serif" }}>{s.value}</div>
             </div>
           ))}
@@ -836,19 +837,19 @@ export default function UseCasesPage() {
         {/* ── Filters ── */}
         <div style={{
           display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24,
-          background: "rgba(0,212,255,0.02)", border: "1px solid rgba(0,212,255,0.08)",
+          background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
           borderRadius: 12, padding: "14px 16px",
         }}>
           {/* Search */}
           <div style={{ flex: 1, minWidth: 200, position: "relative", display: "flex", alignItems: "center" }}>
-            <span style={{ position: "absolute", left: 12, color: "rgba(0,212,255,0.4)", display: "flex" }}><IconSearch /></span>
+            <span style={{ position: "absolute", left: 12, color: "rgba(255,255,255,0.4)", display: "flex" }}><IconSearch /></span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search use cases…"
               style={{
-                width: "100%", background: "rgba(0,212,255,0.04)",
-                border: "1px solid rgba(0,212,255,0.15)", borderRadius: 8,
+                width: "100%", background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8,
                 color: "#e8f4f8", fontSize: 13, padding: "8px 12px 8px 36px",
                 outline: "none", fontFamily: "inherit", boxSizing: "border-box",
               }}
@@ -879,8 +880,8 @@ export default function UseCasesPage() {
           {(search || filterStatus !== "all" || filterPriority !== "all" || filterActor !== "all") && (
             <button onClick={() => { setSearch(""); setFilterStatus("all"); setFilterPriority("all"); setFilterActor("all"); }}
               style={{
-                background: "rgba(255,69,96,0.07)", border: "1px solid rgba(255,69,96,0.2)",
-                borderRadius: 8, color: "#ff4560", cursor: "pointer", padding: "8px 14px",
+                background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.2)",
+                borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 14px",
                 fontSize: 11.5, fontFamily: "'Space Mono', monospace",
               }}>Clear</button>
           )}
@@ -890,7 +891,7 @@ export default function UseCasesPage() {
         {filtered.length === 0 ? (
           <div style={{
             textAlign: "center", padding: "80px 0",
-            color: "rgba(180,210,225,0.3)", fontFamily: "'Space Mono', monospace", fontSize: 13,
+              color: "var(--ide-text-secondary)", fontFamily: "'Space Mono', monospace", fontSize: 13,
           }}>
             <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>◈</div>
             No use cases match your filters.
@@ -931,8 +932,8 @@ export default function UseCasesPage() {
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 3px; }
-        input::placeholder, textarea::placeholder { color: rgba(0,212,255,0.25); }
-        select option { background: #0d1f31; color: #e8f4f8; }
+        input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.25); }
+        select option { background: #0a0a0a; color: #e8f4f8; }
       `}</style>
     </div>
   );

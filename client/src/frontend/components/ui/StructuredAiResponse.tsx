@@ -1,4 +1,5 @@
-import { marked } from 'marked';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { StructuredAiResponse } from '../../utils/aiResponse';
 
 interface StructuredAiResponseProps {
@@ -10,9 +11,9 @@ function renderList(title: string, items: string[], tone: 'info' | 'action' | 'w
     if (items.length === 0) return null;
 
     const tones = {
-        info: 'border-cyan-500/20 bg-cyan-500/5 text-cyan-200',
-        action: 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200',
-        warn: 'border-amber-500/20 bg-amber-500/5 text-amber-200',
+        info: 'border-white/5 bg-white/[0.02] text-white/60',
+        action: 'border-white/15 bg-white/[0.04] text-white/90',
+        warn: 'border-white/30 bg-white/[0.06] text-white font-semibold',
     };
 
     return (
@@ -34,19 +35,26 @@ export default function StructuredAiResponseCard({ response, compact = false }: 
     const hasLists = response.highlights.length > 0 || response.next_actions.length > 0 || response.warnings.length > 0;
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3 text-[13px] leading-relaxed text-[var(--ide-text)]">
             {response.summary && (
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-white/50">Summary</div>
-                    <p className="mt-1 text-xs text-white/80 leading-relaxed">{response.summary}</p>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 shadow-sm">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Summary</div>
+                    <div className="mt-2 prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-strong:text-white prose-headings:text-white prose-a:text-white/60 hover:prose-a:text-white transition-colors">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {response.summary}
+                        </ReactMarkdown>
+                    </div>
                 </div>
             )}
 
             {response.answer_markdown && (
-                <div
-                    className="prose prose-invert prose-sm max-w-none text-inherit"
-                    dangerouslySetInnerHTML={{ __html: marked.parse(response.answer_markdown, { async: false }) as string }}
-                />
+                <div className="rounded-2xl border border-white/5 bg-black/15 px-4 py-3 shadow-sm">
+                    <div className="prose prose-invert prose-sm max-w-none text-inherit prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:text-white prose-headings:text-white prose-a:text-white/60 hover:prose-a:text-white transition-colors prose-code:text-white/80 prose-code:bg-white/5 prose-code:px-1 prose-code:py-0.5 prose-code:rounded-md prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-pre:rounded-xl">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {response.answer_markdown}
+                        </ReactMarkdown>
+                    </div>
+                </div>
             )}
 
             {hasLists && (

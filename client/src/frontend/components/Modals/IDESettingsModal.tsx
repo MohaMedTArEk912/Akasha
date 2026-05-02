@@ -25,7 +25,7 @@ const IDESettingsModal: React.FC<IDESettingsModalProps> = ({ isOpen, onClose }) 
     }, [isOpen, apiKey, model, apiBaseUrl]);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="SETTINGS" size="xl" className="bg-[#0a0a0f] border-white/5 shadow-2xl">
+        <Modal isOpen={isOpen} onClose={onClose} title="SETTINGS" size="xl" width="900px">
             <div className="relative pt-2 pb-8 px-8 overflow-hidden">
                 {/* Background Glow */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[150%] bg-indigo-500/5 blur-3xl pointer-events-none rounded-full" />

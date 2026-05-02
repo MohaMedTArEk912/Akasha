@@ -632,11 +632,11 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                 value={definition.productName}
                                 onChange={(event) => setDefinition((prev) => ({ ...prev, productName: event.target.value }))}
                                 disabled={lockedByIdea.productName}
-                                className="h-10 w-full rounded-lg border border-white/15 bg-black/20 disabled:opacity-60 disabled:cursor-not-allowed px-3 text-sm text-white focus:outline-none focus:border-emerald-400/40"
+                                className="h-10 w-full rounded-lg border border-white/15 bg-black/20 disabled:opacity-60 disabled:cursor-not-allowed px-3 text-sm text-white focus:outline-none focus:border-white/30"
                                 placeholder="Fitness App"
                             />
                             {lockedByIdea.productName && (
-                                <span className="text-[10px] text-amber-300/90">Locked: sourced from Idea page metadata</span>
+                                <span className="text-[10px] text-white/40">Locked: sourced from Idea page metadata</span>
                             )}
                         </label>
 
@@ -690,7 +690,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                 placeholder="profile, dashboard, analytics"
                             />
                             {lockedByIdea.coreFeatures && (
-                                <span className="text-[10px] text-amber-300/90">Locked: sourced from Idea page product features</span>
+                                <span className="text-[10px] text-white/40">Locked: sourced from Idea page product features</span>
                             )}
                         </label>
 
@@ -704,7 +704,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                 placeholder="users, orders, invoices"
                             />
                             {lockedByIdea.dataEntities && (
-                                <span className="text-[10px] text-amber-300/90">Locked: sourced from Idea page data model entities</span>
+                                <span className="text-[10px] text-white/40">Locked: sourced from Idea page data model entities</span>
                             )}
                         </label>
                     </div>
@@ -727,7 +727,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                             }))
                                         }
                                         disabled={lockedByIdea.targetUsers}
-                                        className={`px-3 h-8 rounded-full border text-xs disabled:opacity-60 disabled:cursor-not-allowed ${checked ? "border-emerald-400/70 bg-emerald-400/20 text-emerald-100" : "border-white/15 text-white/70"}`}
+                                        className={`px-3 h-8 rounded-full border text-xs disabled:opacity-60 disabled:cursor-not-allowed ${checked ? "border-white/40 bg-white/10 text-white" : "border-white/15 text-white/70"}`}
                                     >
                                         {option}
                                     </button>
@@ -735,7 +735,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                             })}
                         </div>
                         {lockedByIdea.targetUsers && (
-                            <p className="text-[10px] text-amber-300/90">Locked: sourced from Idea page target market definitions</p>
+                            <p className="text-[10px] text-white/40">Locked: sourced from Idea page target market definitions</p>
                         )}
                     </div>
 
@@ -755,7 +755,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                                     : [...prev.userRoles, role],
                                             }))
                                         }
-                                        className={`px-3 h-8 rounded-full border text-xs ${checked ? "border-amber-300/70 bg-amber-300/20 text-amber-100" : "border-white/15 text-white/70"}`}
+                                        className={`px-3 h-8 rounded-full border text-xs ${checked ? "border-white/40 bg-white/10 text-white" : "border-white/15 text-white/70"}`}
                                     >
                                         {role}
                                     </button>
@@ -798,7 +798,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                     <div className="flex items-center gap-2 pt-2">
                         <button
                             onClick={generateFlows}
-                            className="h-10 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-sm font-semibold text-white"
+                            className="h-10 px-4 rounded-lg bg-white/10 border border-white/20 text-sm font-semibold text-white hover:bg-white/15 transition-all"
                         >
                             Generate User Flows
                         </button>
@@ -813,7 +813,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
 
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                     <h2 className="text-lg font-semibold text-white mb-3">Definition Output</h2>
-                    <pre className="overflow-auto rounded-lg border border-white/10 bg-black/30 p-4 text-xs text-emerald-100/90 whitespace-pre-wrap">
+                    <pre className="overflow-auto rounded-lg border border-white/10 bg-black/30 p-4 text-xs text-white/60 whitespace-pre-wrap">
 {JSON.stringify(
     {
         product: definition.productName || "Untitled Product",
@@ -836,8 +836,8 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-white">User Flow Generator</h2>
                     <div className="flex gap-2">
-                        <button onClick={generateFlows} className="h-9 px-3 rounded-lg border border-white/20 text-sm text-white/80">Regenerate Flows</button>
-                        <button onClick={generatePages} className="h-9 px-3 rounded-lg bg-gradient-to-r from-lime-500 to-emerald-500 text-sm font-semibold text-white">Generate Pages</button>
+                        <button onClick={generateFlows} className="h-9 px-3 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/5 transition-all">Regenerate Flows</button>
+                        <button onClick={generatePages} className="h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-sm font-semibold text-white hover:bg-white/15 transition-all">Generate Pages</button>
                     </div>
                 </div>
 
@@ -880,7 +880,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                         </button>
                                         <button
                                             onClick={() => removeFlowStep(flow.id, index)}
-                                            className="h-9 w-9 rounded-lg border border-red-400/30 text-red-200"
+                                            className="h-9 w-9 rounded-lg border border-white/15 text-white/40 hover:text-white/70 transition-all"
                                         >
                                             ×
                                         </button>
@@ -900,8 +900,8 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-white">Auto Page Generator</h2>
                     <div className="flex gap-2">
-                        <button onClick={addManualPage} className="h-9 px-3 rounded-lg border border-white/20 text-sm text-white/80">Add Page</button>
-                        <button onClick={() => onTabChange("specs")} className="h-9 px-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-sm font-semibold text-white">Open Page Specs</button>
+                        <button onClick={addManualPage} className="h-9 px-3 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/5 transition-all">Add Page</button>
+                        <button onClick={() => onTabChange("specs")} className="h-9 px-3 rounded-lg bg-white/10 border border-white/20 text-sm font-semibold text-white hover:bg-white/15 transition-all">Open Page Specs</button>
                     </div>
                 </div>
 
@@ -955,7 +955,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                                                 ),
                                                             )
                                                         }
-                                                        className={`h-7 px-2 rounded-full border text-xs ${hasRole ? "border-emerald-400/60 bg-emerald-400/20 text-emerald-100" : "border-white/20 text-white/70"}`}
+                                                        className={`h-7 px-2 rounded-full border text-xs ${hasRole ? "border-white/40 bg-white/10 text-white" : "border-white/20 text-white/70"}`}
                                                     >
                                                         {role}
                                                     </button>
@@ -964,7 +964,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                                         </div>
                                     </td>
                                     <td className="p-3 text-right">
-                                        <button onClick={() => deletePage(page.id)} className="h-8 px-3 rounded border border-red-400/30 text-red-200">Delete</button>
+                                        <button onClick={() => deletePage(page.id)} className="h-8 px-3 rounded border border-white/15 text-white/40 hover:text-white/70 transition-all">Delete</button>
                                     </td>
                                 </tr>
                             ))}
@@ -992,7 +992,7 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                             <button
                                 key={page.id}
                                 onClick={() => setSelectedPageId(page.id)}
-                                className={`w-full text-left rounded-lg border px-3 py-2 text-sm ${selectedPageId === page.id ? "border-cyan-400/60 bg-cyan-500/20 text-cyan-100" : "border-white/15 text-white/70"}`}
+                                className={`w-full text-left rounded-lg border px-3 py-2 text-sm ${selectedPageId === page.id ? "border-white/40 bg-white/10 text-white" : "border-white/15 text-white/70"}`}
                             >
                                 <div>{page.name}</div>
                                 <div className="text-xs opacity-70">{page.path}</div>
@@ -1130,10 +1130,10 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                     </div>
 
                     <div className="flex flex-wrap gap-2 pt-2">
-                        <button onClick={exportHtmlWireframes} className="h-10 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-sm font-semibold text-white">Export HTML Files</button>
-                        <button onClick={exportJsonSpec} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80">Export JSON UX Spec</button>
-                        <button onClick={exportFlowDiagram} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80">Export Flow Diagram</button>
-                        <button onClick={exportComponentList} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80">Export Component List</button>
+                        <button onClick={exportHtmlWireframes} className="h-10 px-4 rounded-lg bg-white/10 border border-white/20 text-sm font-semibold text-white hover:bg-white/15 transition-all">Export HTML Files</button>
+                        <button onClick={exportJsonSpec} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/5 transition-all">Export JSON UX Spec</button>
+                        <button onClick={exportFlowDiagram} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/5 transition-all">Export Flow Diagram</button>
+                        <button onClick={exportComponentList} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/5 transition-all">Export Component List</button>
                     </div>
                 </section>
 
@@ -1152,16 +1152,16 @@ const UXRootPlanner: React.FC<UXRootPlannerProps> = ({ tab, onTabChange, onOpenB
                             onClick={async () => {
                                 await syncPagesToVisualBuilder();
                             }}
-                            className="h-10 px-4 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-sm font-semibold text-white"
+                            className="h-10 px-4 rounded-lg bg-white/10 border border-white/20 text-sm font-semibold text-white hover:bg-white/15 transition-all"
                         >
                             Sync Pages To Builder
                         </button>
-                        <button onClick={onOpenBuilder} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80">
+                        <button onClick={onOpenBuilder} className="h-10 px-4 rounded-lg border border-white/20 text-sm text-white/80 hover:bg-white/5 transition-all">
                             Open Visual Builder
                         </button>
                     </div>
 
-                    <div className="rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-emerald-100/80 overflow-auto max-h-[280px] whitespace-pre-wrap">
+                    <div className="rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-white/60 overflow-auto max-h-[280px] whitespace-pre-wrap">
 {JSON.stringify(plannerOutput, null, 2)}
                     </div>
                 </section>
