@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import prisma from "../lib/prisma.js";
-import { getLLMProvider } from "../lib/llmProvider.js";
+import { getLLMProvider, aiConfigStorage } from "../lib/llmProvider.js";
 import {
   buildProjectImportSample,
   importProjectFromPayload,
@@ -532,9 +532,10 @@ export async function generateStructuredIdea(req: Request, res: Response) {
     }
 
     const provider = getLLMProvider();
-    const apiKey = req.body.apiKey || undefined;
-    const modelOverride = req.body.model || undefined;
-    const apiBaseUrl = req.body.apiBaseUrl || undefined;
+    const store = aiConfigStorage.getStore();
+    const apiKey = store?.apiKey || req.body.apiKey || undefined;
+    const modelOverride = store?.model || req.body.model || undefined;
+    const apiBaseUrl = store?.apiBaseUrl || req.body.apiBaseUrl || undefined;
     const systemPrompt = `You are a product architect. Return ONLY valid JSON with this structure:
 {
   "ideaMetadata": {
@@ -579,7 +580,7 @@ export async function generateStructuredIdea(req: Request, res: Response) {
 }`;
 
     const completion = await provider.chat({
-      model: modelOverride || process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it:free",
+      model: modelOverride || process.env.OPENROUTER_MODEL || undefined,
       temperature: 0.2,
       max_tokens: 1400,
       apiKey,
@@ -597,7 +598,7 @@ export async function generateStructuredIdea(req: Request, res: Response) {
       console.warn("Structured idea output was not valid JSON, attempting repair:", parseError);
       try {
         const repairCompletion = await provider.chat({
-          model: modelOverride || process.env.OPENROUTER_MODEL || "google/gemma-3-4b-it:free",
+          model: modelOverride || process.env.OPENROUTER_MODEL || undefined,
           temperature: 0,
           max_tokens: 1800,
           apiKey,
@@ -608,7 +609,7 @@ export async function generateStructuredIdea(req: Request, res: Response) {
               content:
                 "You repair malformed JSON. Return ONLY valid JSON with the same keys and values. Do not add markdown fences or commentary.",
             },
-            { role: "user", content: extractJsonObject(completion) },
+            { role: "user", content: completion },
           ],
         });
 

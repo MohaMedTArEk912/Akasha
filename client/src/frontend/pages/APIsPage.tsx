@@ -172,7 +172,7 @@ const ApiModal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; 
 );
 
 // ─── Toast ───
-const Toast: React.FC<{ message: string; type?: "success" | "error"; onDone: () => void }> = ({ message, type = "success", onDone }) => {
+const Toast: React.FC<{ message: string; type?: "success" | "error"; onDone: () => void }> = ({ message, type: _type = "success", onDone }) => {
     useEffect(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); }, [onDone]);
     return (
         <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, padding: "12px 20px", borderRadius: 12, fontSize: 13, fontFamily: "'Outfit', sans-serif", fontWeight: 500, background: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.2)", backdropFilter: "blur(20px)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>

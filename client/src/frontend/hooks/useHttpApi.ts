@@ -699,4 +699,8 @@ export const httpApi = {
     const res = await client.post("/github/disconnect");
     return res.data;
   },
+  testConnection: async (payload: { apiKey?: string; model?: string; apiBaseUrl?: string }) => {
+    const res = await client.post("/ai/test-connection", payload);
+    return res.data;
+  },
 };

@@ -646,12 +646,7 @@ const DiagramsPage: React.FC = () => {
     showToast(`Exported ${result.components.length} components, ${result.connections.length} connections`, "success");
   };
 
-  // ── Mode selector styles ──────────────────────────────
-  const modeColors: Record<DiagramMode, string> = {
-    Architecture: "#ffffff",
-    ERD: "#ffffff",
-    UseCase: "#ffffff",
-  };
+
 
   // ── Render ────────────────────────────────────────────
   return (

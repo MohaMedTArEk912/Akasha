@@ -40,7 +40,7 @@ interface ChatMessage {
 
 const API_BASE = "http://localhost:3001/api/ai";
 
-const QUICK_PROMPTS: Record<string, string[]> = {
+export const QUICK_PROMPTS: Record<string, string[]> = {
     global: [
         "What should I build first?",
         "Suggest improvements",
@@ -89,7 +89,7 @@ const CodeBlock: React.FC<{ inline?: boolean; className?: string; children?: Rea
             <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-black/20 text-[10px] text-white/40 font-mono">
                 <span>{lang}</span>
                 <button
-                    onClick={() => copyToClipboard(code, (fb) => { /* feedback for inline code */ })}
+                    onClick={() => copyToClipboard(code, (_fb) => { /* feedback for inline code */ })}
                     className="px-2 py-0.5 rounded text-[9px] bg-white/5 hover:bg-white/10 text-white/30 hover:text-white opacity-0 group-hover/code:opacity-100 transition-all font-bold"
                 >
                     COPY
@@ -112,7 +112,7 @@ const copyToClipboard = async (text: string, feedback: (msg: string) => void) =>
     }
 };
 
-const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName, anchorX, anchorY: _anchorY }) => {
+const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName: _projectName, anchorX, anchorY: _anchorY }) => {
     const [currentContext, setCurrentContext] = useState(getPageContext());
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
@@ -199,7 +199,7 @@ const BotChat: React.FC<BotChatProps> = ({ onClose, projectId, projectName, anch
         if (!resizing || isMaximized) return;
         const handleMouseMove = (e: MouseEvent) => {
             if (resizing === 'se') {
-                setFsSize(prev => ({
+                setFsSize(() => ({
                     w: Math.max(400, e.clientX - fsPos.x),
                     h: Math.max(300, e.clientY - fsPos.y),
                 }));

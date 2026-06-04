@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { useToast } from '../context/ToastContext';
-import { useSettings } from '../context/SettingsContext';
 import { httpApi } from '../hooks/useHttpApi';
 import StructuredAiResponseCard from '../components/ui/StructuredAiResponse';
 import { normalizeAiResponse, type StructuredAiResponse } from '../utils/aiResponse';
@@ -43,6 +42,7 @@ interface FeatureDecision {
     comment: string;
     integratedSummary: string;
     detailsRequested: boolean;
+    clarifying_questions?: string[];
 }
 
 interface IdeaAnalysisResult {
@@ -222,6 +222,11 @@ function buildFeatureDecisions(analysis: any): FeatureDecision[] {
                             ? item.integratedSummary.trim()
                             : '',
                     detailsRequested: false,
+                    clarifying_questions: Array.isArray(item?.clarifying_questions)
+                        ? item.clarifying_questions.filter((q: any) => typeof q === 'string')
+                        : Array.isArray(item?.clarifyingQuestions)
+                            ? item.clarifyingQuestions.filter((q: any) => typeof q === 'string')
+                            : [],
                 };
             })
             .filter((item: FeatureDecision | null): item is FeatureDecision => item !== null)
@@ -544,7 +549,6 @@ export default function IdeaWorkshop({
     onCancel,
 }: IdeaWorkshopProps) {
     const toast = useToast();
-    const { apiKey, model, apiBaseUrl } = useSettings();
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const [phase, setPhase] = useState<Phase>('input');
@@ -563,6 +567,10 @@ export default function IdeaWorkshop({
     const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
     const [previewRevealCount, setPreviewRevealCount] = useState(0);
     const [isPersistingFinalPlan, setIsPersistingFinalPlan] = useState(false);
+
+    // Guided Refinement States
+    const [activeWizardStep, setActiveWizardStep] = useState<number>(1);
+    const [questionAnswers, setQuestionAnswers] = useState<Record<number, string>>({});
 
     const draftStorageKey = useMemo(
         () => `akasha:idea-workshop:draft:${projectId || projectName}`,
@@ -596,6 +604,21 @@ export default function IdeaWorkshop({
         [featureDecisions]
     );
     const currentFeature = currentFeatureIndex >= 0 ? featureDecisions[currentFeatureIndex] : null;
+    const wizardSteps = useMemo(() => {
+        if (!currentFeature) return [];
+        const questions = currentFeature.clarifying_questions || [];
+        return [
+            { id: 'details', label: 'Details', questionIndex: -1, question: '' },
+            { id: 'priority', label: 'Priority', questionIndex: -1, question: '' },
+            ...questions.map((q, idx) => ({
+                id: `question-${idx}`,
+                label: `Q${idx + 1}`,
+                questionIndex: idx,
+                question: q
+            })),
+            { id: 'actions', label: 'Decide', questionIndex: -1, question: '' }
+        ];
+    }, [currentFeature]);
     const previewSections = useMemo(
         () => buildPreviewSections(workingDoc, analysis?.understanding || null),
         [analysis?.understanding, workingDoc]
@@ -810,8 +833,69 @@ export default function IdeaWorkshop({
 
     const reviewCurrentFeature = async (action: 'revise' | 'approve' | 'reject') => {
         if (!currentFeature || isChatting) return;
-        if (action === 'revise' && !currentFeature.comment.trim()) {
-            toast.showToast('Add feedback before asking the AI to rewrite the feature.', 'warning');
+
+        if (action === 'approve' || action === 'reject') {
+            // OPTIZTOKEN: Handle approve/reject client-side instantly
+            const nextStatus: FeatureStatus = action === 'approve' ? 'approved' : 'rejected';
+            
+            // 1. Update the feature queue
+            setFeatureDecisions((prev) =>
+                prev.map((feature) =>
+                    feature.id === currentFeature.id
+                        ? {
+                            ...feature,
+                            status: nextStatus,
+                            include: action === 'approve',
+                        }
+                        : feature
+                )
+            );
+
+            // 2. Synchronize directly with workingDoc concept draft
+            if (workingDoc) {
+                const updatedFeatures = workingDoc.key_features.map((f) =>
+                    f.feature === currentFeature.title
+                        ? { ...f, include: action === 'approve', rating: currentFeature.rating, rationale: currentFeature.description || currentFeature.rationale || '' }
+                        : f
+                );
+                const exists = workingDoc.key_features.some((f) => f.feature === currentFeature.title);
+                if (!exists && action === 'approve') {
+                    updatedFeatures.push({
+                        feature: currentFeature.title,
+                        include: true,
+                        rating: currentFeature.rating,
+                        rationale: currentFeature.description || currentFeature.rationale || '',
+                    });
+                }
+                setWorkingDoc({
+                    ...workingDoc,
+                    key_features: updatedFeatures,
+                });
+            }
+
+            // Reset local wizard states for the next feature
+            setActiveWizardStep(1);
+            setQuestionAnswers({});
+            return;
+        }
+
+        // Action is 'revise'
+        // Construct detailed feedback from AI questions and user answers
+        const questionsList = currentFeature.clarifying_questions || [];
+        let qaText = '';
+        if (questionsList.length > 0) {
+            const answeredQAs = questionsList.map((q, idx) => {
+                const answer = questionAnswers[idx] || '';
+                return `Q: ${q}\nA: ${answer || 'No answer provided.'}`;
+            }).join('\n\n');
+            qaText = `User answers to clarifying questions:\n${answeredQAs}`;
+        }
+
+        const customFeedback = currentFeature.comment.trim();
+        const combinedFeedback = [qaText, customFeedback ? `Additional feedback: ${customFeedback}` : ''].filter(Boolean).join('\n\n');
+
+        if (!combinedFeedback.trim()) {
+            toast.showToast('Please answer the questions or add custom feedback before asking the AI to rewrite.', 'warning');
             return;
         }
 
@@ -820,34 +904,18 @@ export default function IdeaWorkshop({
         try {
             const response = await httpApi.reviewIdeaFeature({
                 idea,
-                action,
+                action: 'revise',
                 feature: {
                     ...currentFeature,
-                    user_comment: currentFeature.comment,
+                    user_comment: combinedFeedback,
                     integrated_summary: currentFeature.integratedSummary,
                 },
-                structuredConcept: workingDoc,
-                feedback: currentFeature.comment,
-                approvedFeatures: featureDecisions
-                    .filter((feature) => feature.status === 'approved')
-                    .map((feature) => ({
-                        ...feature,
-                        user_comment: feature.comment,
-                        integrated_summary: feature.integratedSummary,
-                    })),
-                rejectedFeatures: featureDecisions
-                    .filter((feature) => feature.status === 'rejected')
-                    .map((feature) => ({
-                        ...feature,
-                        user_comment: feature.comment,
-                        integrated_summary: feature.integratedSummary,
-                    })),
+                feedback: combinedFeedback,
             });
 
             const reviewedFeature = buildFeatureDecisions({
                 feature_queue: [response?.feature],
             })[0];
-            const nextDoc = normalizeRefinedDoc(response?.structured_concept);
 
             if (reviewedFeature) {
                 setFeatureDecisions((prev) =>
@@ -856,24 +924,24 @@ export default function IdeaWorkshop({
                             ? {
                                 ...feature,
                                 ...reviewedFeature,
-                                include: reviewedFeature.status !== 'rejected',
-                                comment: reviewedFeature.comment || feature.comment,
+                                include: true,
+                                comment: '', // clear comments after revision
                                 integratedSummary: reviewedFeature.integratedSummary,
                             }
                             : feature
                     )
                 );
-            }
-
-            if (nextDoc) {
-                setWorkingDoc(nextDoc);
+                // Reset questions wizard
+                setActiveWizardStep(1);
+                setQuestionAnswers({});
             }
 
             if (typeof response?.integration_note === 'string' && response.integration_note.trim()) {
                 setHistory((prev) => [...prev, { role: 'assistant', content: response.integration_note.trim() }]);
             }
+            toast.showToast('Feature rewritten successfully using your answers!', 'success');
         } catch (err: any) {
-            toast.showToast(err?.message || 'Failed to review feature', 'error');
+            toast.showToast(err?.message || 'Failed to rewrite feature', 'error');
         } finally {
             setDetailsLoadingId(null);
             setIsChatting(false);
@@ -1204,180 +1272,408 @@ export default function IdeaWorkshop({
         </>
     );
 
-    const renderFeatureDecisionBoard = () => (
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <div className="text-xs font-black text-white/60 uppercase tracking-widest">Sequential Feature Queue</div>
-                    <p className="text-[11px] text-white/30 mt-1">Review one AI-suggested feature at a time. Rewrite it with feedback, then approve or reject it.</p>
-                </div>
-                <div className="text-right">
-                    <div className="text-[10px] text-white/20 uppercase tracking-wider">Reviewed</div>
-                    <div className="text-sm font-black text-white/70">
-                        {featureDecisions.filter((feature) => feature.status !== 'pending').length}/{featureDecisions.length}
+    const renderFeatureDecisionBoard = () => {
+        const reviewedCount = featureDecisions.filter((feature) => feature.status !== 'pending').length;
+        const totalCount = featureDecisions.length;
+        
+        return (
+            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <div className="text-xs font-black text-white/60 uppercase tracking-widest">Feature Refinement Wizard</div>
+                        <p className="text-[11px] text-white/35 mt-1">Review AI feature suggestions step-by-step. Provide feedback, answer questions, and finalize the scope.</p>
                     </div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                    <div className="text-white/45">Approved</div>
-                    <div className="mt-1 text-lg font-black text-white">{selectedFeatures.length}</div>
-                </div>
-                <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                    <div className="text-white/45">Pending</div>
-                    <div className="mt-1 text-lg font-black text-white">{featureDecisions.filter((feature) => feature.status === 'pending').length}</div>
-                </div>
-                <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                    <div className="text-white/45">Queue Ready</div>
-                    <div className="mt-1 text-lg font-black text-white">{queueComplete ? 'Yes' : 'No'}</div>
-                </div>
-            </div>
-
-            <div className="flex gap-2">
-                <input
-                    type="text"
-                    value={newFeature}
-                    onChange={(e) => setNewFeature(e.target.value)}
-                    placeholder="Add a custom feature into the queue..."
-                    className="flex-1 h-10 rounded-xl bg-black/20 border border-white/10 px-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
-                />
-                <button
-                    onClick={handleAddFeature}
-                    type="button"
-                    className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all"
-                >
-                    Add Feature
-                </button>
-            </div>
-
-            <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
-                {featureDecisions.map((feature, index) => (
-                    <div
-                        key={feature.id}
-                        className={`rounded-xl border p-3 transition-all ${
-                            currentFeature?.id === feature.id
-                                ? 'border-white/30 bg-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]'
-                                : 'border-white/10 bg-black/20'
-                        }`}
-                    >
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/35">#{index + 1}</span>
-                                    <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${getPriorityStyle(feature.priority)}`}>
-                                        {feature.priority}
-                                    </span>
-                                    <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${
-                                        feature.status === 'approved'
-                                            ? 'bg-white/15 border-white/30 text-white'
-                                            : feature.status === 'rejected'
-                                                ? 'bg-white/5 border-white/10 text-white/30'
-                                                : 'bg-white/10 border-white/20 text-white/70'
-                                    }`}>
-                                        {feature.status}
-                                    </span>
-                                </div>
-                                <div className="mt-2 text-sm font-semibold text-white">{feature.title}</div>
-                                <div className="mt-1 text-xs text-white/55 leading-relaxed">
-                                    {feature.integratedSummary || feature.description || feature.rationale || 'Waiting for review.'}
-                                </div>
-                            </div>
-                            <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${getRatingStyle(feature.rating)}`}>
-                                {feature.rating}/5
-                            </span>
+                    <div className="text-right">
+                        <div className="text-[10px] text-white/20 uppercase tracking-wider">Reviewed</div>
+                        <div className="text-sm font-black text-white/70">
+                            {reviewedCount}/{totalCount}
                         </div>
                     </div>
-                ))}
-            </div>
+                </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Current Suggestion</div>
-                        {currentFeature ? (
-                            <>
-                                <h4 className="mt-2 text-lg font-black text-white">{currentFeature.title}</h4>
-                                <p className="mt-2 text-sm text-white/70 leading-relaxed">
-                                    {currentFeature.description || currentFeature.rationale || 'The AI will refine this feature when you add feedback.'}
-                                </p>
-                            </>
-                        ) : (
-                            <p className="mt-2 text-sm text-white/50">All queued features were reviewed. You can finalize the concept now.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="rounded-xl bg-black/20 border border-white/10 p-3">
+                        <div className="text-white/45">Approved</div>
+                        <div className="mt-1 text-lg font-black text-white">{selectedFeatures.length}</div>
+                    </div>
+                    <div className="rounded-xl bg-black/20 border border-white/10 p-3">
+                        <div className="text-white/45">Pending Review</div>
+                        <div className="mt-1 text-lg font-black text-white">{totalCount - reviewedCount}</div>
+                    </div>
+                    <div className="rounded-xl bg-black/20 border border-white/10 p-3">
+                        <div className="text-white/45">Queue Complete</div>
+                        <div className="mt-1 text-lg font-black text-white">{queueComplete ? 'Yes' : 'No'}</div>
+                    </div>
+                </div>
+
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={newFeature}
+                        onChange={(e) => setNewFeature(e.target.value)}
+                        placeholder="Add a custom feature into the queue..."
+                        className="flex-1 h-10 rounded-xl bg-black/20 border border-white/10 px-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
+                    />
+                    <button
+                        onClick={handleAddFeature}
+                        type="button"
+                        className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all"
+                    >
+                        Add Feature
+                    </button>
+                </div>
+
+                {/* Queue list */}
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                    {featureDecisions.map((feature, index) => (
+                        <div
+                            key={feature.id}
+                            className={`rounded-xl border p-3 transition-all ${
+                                currentFeature?.id === feature.id
+                                    ? 'border-white/30 bg-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]'
+                                    : 'border-white/10 bg-black/20'
+                            }`}
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/35">#{index + 1}</span>
+                                        <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${getPriorityStyle(feature.priority)}`}>
+                                            {feature.priority}
+                                        </span>
+                                        <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${
+                                            feature.status === 'approved'
+                                                ? 'bg-white/15 border-white/30 text-white'
+                                                : feature.status === 'rejected'
+                                                    ? 'bg-white/5 border-white/10 text-white/30'
+                                                    : 'bg-white/10 border-white/20 text-white/70'
+                                        }`}>
+                                            {feature.status}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 text-sm font-semibold text-white">{feature.title}</div>
+                                    <div className="mt-1 text-xs text-white/55 leading-relaxed">
+                                        {feature.integratedSummary || feature.description || feature.rationale || 'Waiting for review.'}
+                                    </div>
+                                </div>
+                                <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${getRatingStyle(feature.rating)}`}>
+                                    {feature.rating}/5
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Refinement guided wizard */}
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-3">
+                        <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Active Editor Panel</div>
+                            {currentFeature ? (
+                                <>
+                                    <h4 className="mt-1 text-base font-black text-white">{currentFeature.title}</h4>
+                                    <p className="mt-1 text-xs text-white/65 leading-relaxed">
+                                        {currentFeature.description || currentFeature.rationale}
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="mt-1 text-xs text-white/50">All queued features were reviewed. You can click 'Finalize Concept' below.</p>
+                            )}
+                        </div>
+                        {currentFeature && (
+                            <span className={`inline-flex px-2 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${getPriorityStyle(currentFeature.priority)}`}>
+                                {currentFeature.priority}
+                            </span>
                         )}
                     </div>
-                    {currentFeature && (
-                        <span className={`inline-flex px-2 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${getPriorityStyle(currentFeature.priority)}`}>
-                            {currentFeature.priority}
-                        </span>
-                    )}
+
+                    {currentFeature && (() => {
+                        const activeStepObj = wizardSteps[activeWizardStep - 1] || wizardSteps[0];
+                        if (!activeStepObj) return null;
+                        return (
+                            <>
+                                {/* Step Wizard Nav Header */}
+                                <div className="flex flex-wrap gap-1 bg-black/40 border border-white/5 rounded-xl p-1 shrink-0">
+                                    {wizardSteps.map((tab, idx) => {
+                                        const stepNum = idx + 1;
+                                        const isActive = activeWizardStep === stepNum;
+                                        return (
+                                            <button
+                                                key={tab.id}
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(stepNum)}
+                                                className={`px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all flex-1 text-center min-w-[50px] ${
+                                                    isActive
+                                                        ? 'bg-white/10 text-white border border-white/10 shadow-lg'
+                                                        : 'text-white/40 hover:text-white/60'
+                                                }`}
+                                            >
+                                                {tab.id === 'details' ? 'Details' :
+                                                 tab.id === 'priority' ? 'Priority' :
+                                                 tab.id === 'actions' ? 'Decide' :
+                                                 `Q${tab.questionIndex + 1}`}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Step Progress Indicator */}
+                                <div className="flex items-center justify-between px-1 mt-2">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-white/45">
+                                        Step {activeWizardStep} of {wizardSteps.length} — {
+                                            activeStepObj.id === 'details' ? 'Details' :
+                                            activeStepObj.id === 'priority' ? 'Priority & Rating' :
+                                            activeStepObj.id === 'actions' ? 'Decide & Rewrite' :
+                                            'Clarifying Question'
+                                        }
+                                    </div>
+                                    <div className="h-1.5 w-32 rounded-full bg-white/10 overflow-hidden">
+                                        <div
+                                            className="h-full bg-white/60 transition-all duration-300"
+                                            style={{ width: `${(activeWizardStep / wizardSteps.length) * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Wizard Steps Content */}
+                                {activeStepObj.id === 'details' && (
+                                    <div className="space-y-3 animate-fade-in p-1">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/45">Feature Title</label>
+                                            <input
+                                                type="text"
+                                                value={currentFeature.title}
+                                                onChange={(e) => setFeatureDecision(currentFeature.id, (f) => ({ ...f, title: e.target.value }))}
+                                                placeholder="E.g. OAuth User Authentication"
+                                                className="w-full h-9 rounded-xl bg-black/25 border border-white/10 px-3 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/45">Description</label>
+                                            <textarea
+                                                value={currentFeature.description}
+                                                onChange={(e) => setFeatureDecision(currentFeature.id, (f) => ({ ...f, description: e.target.value }))}
+                                                placeholder="What does this feature do?"
+                                                rows={3}
+                                                className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-2 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none font-sans"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/45">Rationale / Why it matters</label>
+                                            <textarea
+                                                value={currentFeature.rationale}
+                                                onChange={(e) => setFeatureDecision(currentFeature.id, (f) => ({ ...f, rationale: e.target.value }))}
+                                                placeholder="Why is this feature important for the MVP?"
+                                                rows={2}
+                                                className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-2 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none font-sans"
+                                            />
+                                        </div>
+                                        <div className="flex justify-end pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(2)}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/80 transition-all border border-white/5"
+                                            >
+                                                Next: Priority & Rating →
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeStepObj.id === 'priority' && (
+                                    <div className="space-y-4 animate-fade-in p-1">
+                                        <div className="space-y-2">
+                                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Feature Priority</div>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {(['critical', 'high', 'medium', 'low'] as FeaturePriority[]).map((level) => (
+                                                    <button
+                                                        key={`${currentFeature.id}-priority-${level}`}
+                                                        type="button"
+                                                        onClick={() => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, priority: level }))}
+                                                        className={`py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                                            currentFeature.priority === level
+                                                                ? getPriorityStyle(level)
+                                                                : 'border-white/10 bg-white/5 text-white/40 hover:text-white/60'
+                                                        }`}
+                                                    >
+                                                        {level}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Implementation Rating (1-5)</div>
+                                            <div className="flex items-center gap-2">
+                                                {[1, 2, 3, 4, 5].map((level) => (
+                                                    <button
+                                                        key={`${currentFeature.id}-rating-${level}`}
+                                                        type="button"
+                                                        onClick={() => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, rating: level as 1 | 2 | 3 | 4 | 5 }))}
+                                                        className={`h-8 w-8 rounded-lg border text-[11px] font-black transition-all ${
+                                                            currentFeature.rating === level
+                                                                ? getRatingStyle(level)
+                                                                : 'border-white/10 bg-white/5 text-white/40 hover:text-white/60'
+                                                        }`}
+                                                    >
+                                                        {level}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex justify-between pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(1)}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/60 transition-all"
+                                            >
+                                                ← Back
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(3)}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/80 transition-all border border-white/5"
+                                            >
+                                                Next: AI Questions →
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeStepObj.id.startsWith('question-') && (
+                                    <div className="space-y-4 animate-fade-in p-1">
+                                        <div className="space-y-2 p-4 rounded-xl border border-white/5 bg-black/30">
+                                            <label className="text-xs font-semibold text-white/90 block leading-relaxed">
+                                                {activeStepObj.question}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={questionAnswers[activeStepObj.questionIndex] || ''}
+                                                onChange={(e) => setQuestionAnswers(prev => ({ ...prev, [activeStepObj.questionIndex]: e.target.value }))}
+                                                placeholder="Type your answer or select a quick option below..."
+                                                className="w-full h-10 rounded-lg bg-black/40 border border-white/10 px-3 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 mt-2"
+                                            />
+                                            <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                                                {['Yes', 'No', 'Not sure', 'Standard approach', 'Needs research', 'Custom design'].map((pill) => (
+                                                    <button
+                                                        key={pill}
+                                                        type="button"
+                                                        onClick={() => setQuestionAnswers(prev => ({ ...prev, [activeStepObj.questionIndex]: pill }))}
+                                                        className={`px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-white/50 hover:text-white transition-all`}
+                                                    >
+                                                        {pill}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-between pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(activeWizardStep - 1)}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/60 transition-all"
+                                            >
+                                                ← Back
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(activeWizardStep + 1)}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/80 transition-all border border-white/5"
+                                            >
+                                                Next →
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeStepObj.id === 'actions' && (
+                                    <div className="space-y-4 animate-fade-in p-1">
+                                        {Object.keys(questionAnswers).length > 0 && (
+                                            <div className="rounded-xl border border-white/5 bg-black/40 p-3 space-y-2">
+                                                <div className="text-[9px] font-black uppercase tracking-widest text-white/45">Summary of your answers</div>
+                                                <div className="space-y-1.5 max-h-[120px] overflow-y-auto custom-scrollbar">
+                                                    {(currentFeature.clarifying_questions || []).map((q, idx) => {
+                                                        const ans = questionAnswers[idx];
+                                                        if (!ans) return null;
+                                                        return (
+                                                            <div key={idx} className="text-[11px] text-white/70">
+                                                                <span className="font-semibold text-white/50 block">Q: {q}</span>
+                                                                <span className="text-white block pl-2 mt-0.5">• {ans}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2">
+                                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Additional Custom Notes / Revision Requests</div>
+                                            <textarea
+                                                value={currentFeature.comment}
+                                                onChange={(e) => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, comment: e.target.value }))}
+                                                placeholder="Type any specific changes you want the AI to make when rewriting, or general thoughts..."
+                                                rows={2}
+                                                className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-2.5 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none font-sans"
+                                            />
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => reviewCurrentFeature('revise')}
+                                                disabled={isChatting || detailsLoadingId === currentFeature.id}
+                                                className="h-10 px-4 flex-1 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                {detailsLoadingId === currentFeature.id ? (
+                                                    <>
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-white/55 animate-bounce" />
+                                                        Rewriting...
+                                                    </>
+                                                ) : (
+                                                    'Ask AI to Rewrite'
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => reviewCurrentFeature('approve')}
+                                                disabled={isChatting || detailsLoadingId === currentFeature.id}
+                                                className="h-10 px-4 rounded-xl text-xs font-black bg-white text-black hover:bg-white/90 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                                            >
+                                                Approve & Integrate
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => reviewCurrentFeature('reject')}
+                                                disabled={isChatting || detailsLoadingId === currentFeature.id}
+                                                className="h-10 px-3 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/40 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/5 disabled:opacity-50 transition-all"
+                                            >
+                                                Reject
+                                            </button>
+                                        </div>
+
+                                        <div className="flex justify-start">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveWizardStep(wizardSteps.length - 1)}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/60 transition-all"
+                                            >
+                                                ← Back to Questions
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
                 </div>
 
-                {currentFeature && (
-                    <>
-                        <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45 mb-2">Priority Rating</div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {[1, 2, 3, 4, 5].map((level) => (
-                                    <button
-                                        key={`${currentFeature.id}-rating-${level}`}
-                                        type="button"
-                                        onClick={() => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, rating: level as 1 | 2 | 3 | 4 | 5 }))}
-                                        className={`h-8 w-8 rounded-lg border text-[11px] font-black transition-all ${
-                                            currentFeature.rating === level
-                                                ? getRatingStyle(level)
-                                                : 'border-white/15 bg-white/5 text-white/50 hover:text-white'
-                                        }`}
-                                    >
-                                        {level}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <textarea
-                            value={currentFeature.comment}
-                            onChange={(e) => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, comment: e.target.value }))}
-                            placeholder="Add feedback. The AI will rewrite this feature until you explicitly approve it."
-                            rows={3}
-                            className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-3 text-sm text-white/85 placeholder:text-white/35 focus:outline-none focus:border-white/40 resize-none"
-                        />
-
-                        <div className="flex flex-wrap gap-2">
-                            <button
-                                type="button"
-                                onClick={() => reviewCurrentFeature('revise')}
-                                disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white disabled:opacity-50 transition-all"
-                            >
-                                {detailsLoadingId === currentFeature.id ? 'Rewriting...' : 'Rewrite From Feedback'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => reviewCurrentFeature('approve')}
-                                disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                className="h-10 px-4 rounded-xl text-xs font-bold bg-white/15 border border-white/30 text-white hover:bg-white/20 disabled:opacity-50 transition-all"
-                            >
-                                Approve & Integrate
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => reviewCurrentFeature('reject')}
-                                disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                className="h-10 px-4 rounded-xl text-xs font-bold bg-white/8 border border-white/15 text-white/70 hover:bg-white/12 disabled:opacity-50 transition-all"
-                            >
-                                Reject
-                            </button>
-                        </div>
-                    </>
-                )}
+                <div className="text-[11px] text-white/45">
+                    Final draft readiness: {selectedFeatures.length} approved feature(s), average rating {averageRating || 0}/5.
+                </div>
             </div>
-
-            <div className="text-[11px] text-white/45">
-                Final draft readiness: {selectedFeatures.length} approved feature(s), average rating {averageRating || 0}/5.
-            </div>
-        </div>
-    );
+        );
+    };
 
     const renderRefinedDoc = () => {
         if (!refinedDoc) return null;

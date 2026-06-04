@@ -958,6 +958,128 @@ function toPrdNormalizedPayload(source: JsonRecord): NormalizedImportPayload {
         archived: false,
     }));
 
+    const ideaDetails = {
+        ideaMetadata: {
+            ideaName: title.slice(0, 80),
+            tagline: summary.slice(0, 160),
+            summary: summary,
+            industry: "",
+            category: "",
+            innovationType: "",
+            creationDate: new Date().toISOString(),
+        },
+        problem: {
+            problemStatement: listFromUnknown(source.problem_statement).join("\n") || summary,
+            problemContext: listFromUnknown(source.problem_statement).join("\n"),
+            whoHasThisProblem: listFromUnknown(source.target_audience),
+            painPoints: listFromUnknown(source.problem_statement),
+            currentSolutions: [],
+            whyCurrentSolutionsFail: [],
+            urgencyLevel: "medium",
+        },
+        solution: {
+            productDescription: summary,
+            coreInnovation: "",
+            valueProposition: listFromUnknown(source.core_value_proposition).join("\n"),
+            keyBenefits: listFromUnknown(source.core_value_proposition),
+            useCases: listFromUnknown(source.user_flows),
+        },
+        targetMarket: {
+            primaryUsers: listFromUnknown(source.target_audience),
+            customerSegments: listFromUnknown(source.target_audience),
+            marketSize: { tam: "", sam: "", som: "" },
+            geographicFocus: "",
+            earlyAdopters: [],
+        },
+        competition: {
+            directCompetitors: [],
+            indirectCompetitors: [],
+            competitiveAdvantages: [],
+            weaknessesOfCompetitors: [],
+            differentiationStrategy: "",
+        },
+        product: {
+            coreFeatures: listFromUnknown(source.key_features),
+            advancedFeatures: [],
+            futureFeatures: [],
+            platforms: listFromUnknown(source.technical_architecture),
+        },
+        userExperience: {
+            onboardingFlow: [],
+            mainUserJourney: listFromUnknown(source.user_flows),
+            retentionMechanisms: [],
+            viralityMechanisms: [],
+        },
+        monetization: {
+            revenueModel: "",
+            pricingStrategy: "",
+            pricingTiers: { free: "", pro: "", enterprise: "" },
+            estimatedLTV: "",
+            estimatedCAC: "",
+        },
+        goToMarket: {
+            launchStrategy: [],
+            marketingChannels: [],
+            growthLoops: [],
+            partnerships: [],
+        },
+        technicalArchitecture: {
+            frontend: "",
+            backend: "",
+            database: "",
+            aiComponents: "",
+            infrastructure: "",
+            integrations: [],
+            security: [],
+            scalabilityPlan: "",
+        },
+        dataModel: {
+            coreEntities: [],
+            relationships: [],
+            dataPrivacy: "",
+        },
+        aiStrategy: {
+            aiRoleInProduct: "",
+            modelsUsed: [],
+            trainingDataSources: [],
+            aiRisks: [],
+        },
+        mvpPlan: {
+            mvpGoal: "",
+            mustHaveFeatures: listFromUnknown(source.implementation_checklist),
+            developmentTimeEstimate: "",
+            teamRequired: [],
+        },
+        validation: {
+            assumptions: [],
+            validationMethods: [],
+            successCriteria: [],
+        },
+        risks: {
+            technicalRisks: listFromUnknown(source.risks),
+            marketRisks: [],
+            legalRisks: [],
+            businessRisks: [],
+        },
+        metrics: {
+            northStarMetric: "",
+            kpis: listFromUnknown(source.success_metrics),
+        },
+        roadmap: {
+            phase1: listFromUnknown(source.milestones).join("\n"),
+            phase2: "",
+            phase3: "",
+            phase4: "",
+        },
+        ideaScore: {
+            marketPotential: "",
+            technicalFeasibility: "",
+            competitionLevel: "",
+            buildDifficulty: "",
+            overallScore: 0,
+        },
+    };
+
     return {
         version: "1.0.0",
         project: {
@@ -965,6 +1087,7 @@ function toPrdNormalizedPayload(source: JsonRecord): NormalizedImportPayload {
             description: summary || "Imported product vision",
             settings: {
                 source_format: "product_vision_prd",
+                ideaDetails,
             },
         },
         pages: [
@@ -988,6 +1111,141 @@ function toPrdNormalizedPayload(source: JsonRecord): NormalizedImportPayload {
     };
 }
 
+function buildSummaryFromIdea(rawIdea: string): string {
+    const compact = rawIdea.replace(/\s+/g, " ").trim();
+    if (!compact) return "";
+    const firstSentence = compact.split(/[.!?]/)[0]?.trim() || compact;
+    return firstSentence.slice(0, 160);
+}
+
+function buildFallbackStructuredIdea(rawIdea: string) {
+    const summary = buildSummaryFromIdea(rawIdea);
+    const trimmedIdea = rawIdea.trim();
+    const ideaName = summary || trimmedIdea.split(/\r?\n/)[0]?.trim() || "Untitled Idea";
+
+    return {
+        ideaMetadata: {
+            ideaName: ideaName.slice(0, 80),
+            tagline: summary,
+            summary,
+            industry: "",
+            category: "",
+            innovationType: "",
+            creationDate: new Date().toISOString(),
+        },
+        problem: {
+            problemStatement: summary || trimmedIdea,
+            problemContext: trimmedIdea,
+            whoHasThisProblem: [],
+            painPoints: [],
+            currentSolutions: [],
+            whyCurrentSolutionsFail: [],
+            urgencyLevel: "medium",
+        },
+        solution: {
+            productDescription: summary,
+            coreInnovation: "",
+            valueProposition: "",
+            keyBenefits: [],
+            useCases: [],
+        },
+        targetMarket: {
+            primaryUsers: [],
+            customerSegments: [],
+            marketSize: { tam: "", sam: "", som: "" },
+            geographicFocus: "",
+            earlyAdopters: [],
+        },
+        competition: {
+            directCompetitors: [],
+            indirectCompetitors: [],
+            competitiveAdvantages: [],
+            weaknessesOfCompetitors: [],
+            differentiationStrategy: "",
+        },
+        product: {
+            coreFeatures: [],
+            advancedFeatures: [],
+            futureFeatures: [],
+            platforms: [],
+        },
+        userExperience: {
+            onboardingFlow: [],
+            mainUserJourney: [],
+            retentionMechanisms: [],
+            viralityMechanisms: [],
+        },
+        monetization: {
+            revenueModel: "",
+            pricingStrategy: "",
+            pricingTiers: { free: "", pro: "", enterprise: "" },
+            estimatedLTV: "",
+            estimatedCAC: "",
+        },
+        goToMarket: {
+            launchStrategy: [],
+            marketingChannels: [],
+            growthLoops: [],
+            partnerships: [],
+        },
+        technicalArchitecture: {
+            frontend: "",
+            backend: "",
+            database: "",
+            aiComponents: "",
+            infrastructure: "",
+            integrations: [],
+            security: [],
+            scalabilityPlan: "",
+        },
+        dataModel: {
+            coreEntities: [],
+            relationships: [],
+            dataPrivacy: "",
+        },
+        aiStrategy: {
+            aiRoleInProduct: "",
+            modelsUsed: [],
+            trainingDataSources: [],
+            aiRisks: [],
+        },
+        mvpPlan: {
+            mvpGoal: "",
+            mustHaveFeatures: [],
+            developmentTimeEstimate: "",
+            teamRequired: [],
+        },
+        validation: {
+            assumptions: [],
+            validationMethods: [],
+            successCriteria: [],
+        },
+        risks: {
+            technicalRisks: [],
+            marketRisks: [],
+            legalRisks: [],
+            businessRisks: [],
+        },
+        metrics: {
+            northStarMetric: "",
+            kpis: [],
+        },
+        roadmap: {
+            phase1: "",
+            phase2: "",
+            phase3: "",
+            phase4: "",
+        },
+        ideaScore: {
+            marketPotential: "",
+            technicalFeasibility: "",
+            competitionLevel: "",
+            buildDifficulty: "",
+            overallScore: 0,
+        },
+    };
+}
+
 function normalizeImportPayload(rawPayload: unknown): NormalizedImportPayload {
     const source = extractImportRoot(rawPayload);
 
@@ -996,13 +1254,23 @@ function normalizeImportPayload(rawPayload: unknown): NormalizedImportPayload {
     }
 
     const projectNode = isRecord(source.project) ? source.project : source;
+    const settings = asRecord(projectNode.settings);
+    if (!settings.ideaDetails) {
+        const desc = asString(projectNode.description);
+        const fallbackIdeaDetails = buildFallbackStructuredIdea(desc);
+        const metadata = (fallbackIdeaDetails as any).ideaMetadata || {};
+        metadata.ideaName = asString(projectNode.name);
+        metadata.summary = desc;
+        metadata.tagline = desc;
+        settings.ideaDetails = fallbackIdeaDetails;
+    }
 
     return {
         version: asString(source.version, "1.0.0"),
         project: {
             name: asString(projectNode.name, "Imported Project"),
             description: asString(projectNode.description),
-            settings: asRecord(projectNode.settings),
+            settings: settings,
         },
         pages: normalizePages(asRecordArray(source.pages)),
         blocks: normalizeBlocks(asRecordArray(source.blocks), "page"),

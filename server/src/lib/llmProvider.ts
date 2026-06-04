@@ -22,6 +22,7 @@ export interface LLMCompletionOptions {
     top_p?: number;
     apiKey?: string;
     apiBaseUrl?: string;
+    bypassStore?: boolean;
 }
 
 export interface LLMProvider {
@@ -43,8 +44,8 @@ class OpenAICompatibleProvider implements LLMProvider {
             'https://openrouter.ai/api/v1';
     }
 
-    private getClient(apiKey?: string, apiBaseUrl?: string): OpenAI {
-        const store = aiConfigStorage.getStore();
+    private getClient(apiKey?: string, apiBaseUrl?: string, bypassStore?: boolean): OpenAI {
+        const store = bypassStore ? undefined : aiConfigStorage.getStore();
         let baseURL = apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl;
         
         let key = apiKey || store?.apiKey;
@@ -70,17 +71,21 @@ class OpenAICompatibleProvider implements LLMProvider {
     }
 
     async chat(options: LLMCompletionOptions): Promise<string> {
-        const store = aiConfigStorage.getStore();
+        const store = options.bypassStore ? undefined : aiConfigStorage.getStore();
         try {
-            const client = this.getClient(options.apiKey, options.apiBaseUrl);
+            const client = this.getClient(options.apiKey, options.apiBaseUrl, options.bypassStore);
+            const activeModel = (options.bypassStore ? undefined : store?.model) || options.model || 'google/gemma-3-4b-it:free';
             const completion = await client.chat.completions.create({
-                model: options.model || store?.model || 'google/gemma-3-4b-it:free',
+                model: activeModel,
                 messages: options.messages as any,
                 temperature: options.temperature ?? 0.3,
                 max_tokens: options.max_tokens ?? 2048,
                 top_p: options.top_p,
             });
 
+            if (!completion.choices || completion.choices.length === 0) {
+                throw new Error(`Invalid response schema. Raw response: ${JSON.stringify(completion)}`);
+            }
             return completion.choices[0]?.message?.content || '';
         } catch (error: any) {
             throw new Error(`LLM API error: ${error.message}`);
@@ -88,10 +93,11 @@ class OpenAICompatibleProvider implements LLMProvider {
     }
 
     async *chatStream(options: LLMCompletionOptions): AsyncGenerator<string, void, undefined> {
-        const store = aiConfigStorage.getStore();
-        const client = this.getClient(options.apiKey, options.apiBaseUrl);
+        const store = options.bypassStore ? undefined : aiConfigStorage.getStore();
+        const client = this.getClient(options.apiKey, options.apiBaseUrl, options.bypassStore);
+        const activeModel = (options.bypassStore ? undefined : store?.model) || options.model || 'google/gemma-3-4b-it:free';
         const stream = await client.chat.completions.create({
-            model: options.model || store?.model || 'google/gemma-3-4b-it:free',
+            model: activeModel,
             messages: options.messages as any,
             temperature: options.temperature ?? 0.3,
             max_tokens: options.max_tokens ?? 2048,

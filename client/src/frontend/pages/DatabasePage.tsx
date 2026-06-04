@@ -118,7 +118,7 @@ const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({
     </div>
 );
 
-const TabButton: React.FC<{ label: string; active: boolean; onClick: () => void; icon?: boolean }> = ({ label, active, onClick, icon }) => (
+const TabButton: React.FC<{ label: string; active: boolean; onClick: () => void; icon?: boolean }> = ({ label, active, onClick, icon: _icon }) => (
     <button
         onClick={onClick}
         className="px-4 py-3 text-[14px] font-semibold transition-all flex items-center gap-2 border-b-2"

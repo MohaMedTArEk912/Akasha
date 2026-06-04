@@ -13,14 +13,10 @@
  * └──────────────────────────────────────────────┘
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
 import { setActivePage, installProjectDependencies, clearInstallStatus, toggleTerminal, goBackPage } from "../../stores/projectStore";
 import type { FeaturePage } from "../../stores/projectStore";
-
-
-
-import ProjectSettingsModal from "../Modals/ProjectSettingsModal";
 
 import { Logo } from "../ui/Logo";
 
@@ -32,6 +28,7 @@ import DatabasePage from "../../pages/DatabasePage";
 import DiagramsPage from "../../pages/DiagramsPage";
 import SourceCodePage from "../../pages/SourceCodePage";
 import IdeaPage from "../../pages/IdeaPage";
+import SettingsPage from "../../pages/SettingsPage";
 
 import ProjectDashboard from "../../pages/ProjectDashboard";
 
@@ -52,6 +49,7 @@ const FEATURE_PAGES: FeaturePageDef[] = [
     { id: "database", label: "Database", icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" },
     { id: "diagrams", label: "Diagrams", icon: "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" },
     { id: "code", label: "Source Code", icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" },
+    { id: "settings", label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
 ];
 
 /**
@@ -59,7 +57,6 @@ const FEATURE_PAGES: FeaturePageDef[] = [
  */
 const IDELayout: React.FC = () => {
     const { project, activePage, loading, loadingMessage, installLog, installError, terminalOpen, builderActive, pageHistory } = useProjectStore();
-    const [settingsOpen, setSettingsOpen] = useState(false);
     
     const canGoBack = pageHistory && pageHistory.length > 0;
 
@@ -80,6 +77,7 @@ const IDELayout: React.FC = () => {
             case "apis": return <APIsPage />;
             case "database": return <DatabasePage />;
             case "diagrams": return <DiagramsPage />;
+            case "settings": return <SettingsPage />;
             case "code":
             case "git": return <SourceCodePage />;
             default: return <UIIdeationPage />;
@@ -182,8 +180,8 @@ const IDELayout: React.FC = () => {
                     <NavRailIcon
                         icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                         label="Settings"
-                        active={settingsOpen}
-                        onClick={() => setSettingsOpen(true)}
+                        active={activePage === "settings"}
+                        onClick={() => setActivePage("settings")}
                     />
                 </aside>
                 )}
@@ -261,8 +259,6 @@ const IDELayout: React.FC = () => {
             )}
 
 
-            {/* Settings Modal */}
-            <ProjectSettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
         </div>
     );
 };

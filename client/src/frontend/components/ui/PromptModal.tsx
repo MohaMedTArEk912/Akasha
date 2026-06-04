@@ -23,7 +23,7 @@ interface PromptModalProps {
 }
 
 interface FieldError {
-    [fieldName: string]: string;
+    [fieldName: string]: string | undefined;
 }
 
 // Validation helper functions
@@ -164,7 +164,7 @@ const PromptModal: React.FC<PromptModalProps> = ({
                 {fields.map((field) => {
                     const fieldError = errors[field.name];
                     const isFieldTouched = touched[field.name];
-                    const hasError = isFieldTouched && fieldError;
+                    const hasError = !!(isFieldTouched && fieldError);
                     
                     return (
                         <div key={field.name} className="animate-fade-in" style={{ animationDelay: '50ms' }}>

@@ -21,7 +21,7 @@ interface ProjectState {
     selectedBlockId: string | null;
     selectedPageId: string | null;
     selectedComponentId: string | null;
-    activePage: "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+    activePage: FeaturePage;
     viewport: "desktop" | "tablet" | "mobile";
     editMode: "visual" | "code";
     inspectorOpen: boolean;
@@ -159,41 +159,6 @@ function normalizePagePath(path: string): string {
     return `/${slug}`;
 }
 
-function extractIdeaSeedFromImportJson(rawJson: string, fallbackProjectDescription?: string | null): string {
-    try {
-        const parsed = JSON.parse(rawJson) as Record<string, unknown>;
-
-        const pick = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
-        const listToText = (value: unknown): string => {
-            if (!Array.isArray(value)) return "";
-            const lines = value
-                .map((item) => (typeof item === "string" ? item.trim() : ""))
-                .filter(Boolean);
-            return lines.join("\n");
-        };
-
-        const descriptionFromProjectNode = (() => {
-            const projectNode = parsed.project;
-            if (projectNode && typeof projectNode === "object" && !Array.isArray(projectNode)) {
-                return pick((projectNode as Record<string, unknown>).description);
-            }
-            return "";
-        })();
-
-        const candidates = [
-            pick(parsed.summary),
-            pick(parsed.description),
-            descriptionFromProjectNode,
-            listToText(parsed.problem_statement),
-            listToText(parsed.core_value_proposition),
-            fallbackProjectDescription?.trim() || "",
-        ].filter(Boolean);
-
-        return candidates.join("\n\n").slice(0, 8000);
-    } catch {
-        return (fallbackProjectDescription || "").trim();
-    }
-}
 
 export async function installProjectDependencies(): Promise<boolean> {
     updateState(() => ({
@@ -333,13 +298,13 @@ export async function updateProjectSettings(settings: Record<string, unknown>): 
 /**
  * Generate Structured Idea logic (AI)
  */
-export async function generateStructuredIdea(ideaContent?: string, apiKey?: string, model?: string, apiBaseUrl?: string): Promise<void> {
+export async function generateStructuredIdea(ideaContent?: string, _apiKey?: string, _model?: string, _apiBaseUrl?: string): Promise<void> {
     const projectId = state.project?.id;
     if (!projectId) throw new Error("No active project");
 
     updateState(() => ({ loading: true, error: null, loadingMessage: "Generating AI Structured Plan..." }));
     try {
-        const project = await api.generateStructuredIdea(projectId, ideaContent, apiKey, model, apiBaseUrl);
+        const project = await api.generateStructuredIdea(projectId, ideaContent);
         updateState(() => ({ project }));
     } catch (err) {
         updateState(() => ({ error: String(err) }));
@@ -829,20 +794,6 @@ export async function importProject(json: string, name?: string): Promise<void> 
             }
         }
 
-        // Automatically generate AI structured plan after a successful import.
-        const ideaSeed = extractIdeaSeedFromImportJson(json, project.description);
-        if (ideaSeed) {
-            updateState(() => ({ loadingMessage: "Generating AI Structured Plan..." }));
-            try {
-                const enrichedProject = await api.generateStructuredIdea(project.id, ideaSeed);
-                if (enrichedProject) {
-                    project = enrichedProject;
-                }
-            } catch (structuredError) {
-                // Import should still succeed if AI enrichment fails.
-                console.warn("Project imported, but structured plan generation failed:", structuredError);
-            }
-        }
 
         updateState(() => ({
             project,
@@ -1437,7 +1388,7 @@ export function setBuilderActive(active: boolean): void {
 /**
  * Switch the active feature page
  */
-export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git";
+export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings";
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";

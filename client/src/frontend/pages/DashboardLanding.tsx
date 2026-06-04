@@ -18,7 +18,7 @@ import {
 } from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
 import { useTheme } from "../context/ThemeContext";
-import IDESettingsModal from "../components/Modals/IDESettingsModal";
+import SettingsPage from "./SettingsPage";
 import IdeaWorkshop from "./IdeaWorkshop";
 
 interface ProjectSummary {
@@ -32,7 +32,7 @@ type CreateMode = "workshop" | "json";
 const DashboardLanding: React.FC = () => {
   const { projects, workspacePath } = useProjectStore();
   const { theme } = useTheme();
-  const { apiKey, model, apiBaseUrl } = useSettings();
+  const { apiKey, model, apiBaseUrl, noAi } = useSettings();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -44,7 +44,7 @@ const DashboardLanding: React.FC = () => {
   const [createMode, setCreateMode] = useState<CreateMode>("workshop");
   const [jsonLoading, setJsonLoading] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showSettingsPage, setShowSettingsPage] = useState(false);
 
   const filteredProjects = useMemo(
     () =>
@@ -99,9 +99,24 @@ const DashboardLanding: React.FC = () => {
     setProjectJson("");
   };
 
-  const handleNextStep = (event: React.FormEvent) => {
+  const handleNextStep = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!projectName.trim()) return;
+
+    if (noAi) {
+      try {
+        await createProject(projectName.trim(), "Blank project created in offline mode.");
+        setActivePage("idea");
+        setProjectName("");
+        setProjectJson("");
+        setIsCreateModalOpen(false);
+        toast.showToast("Project created successfully (Offline mode).", "success");
+      } catch (error) {
+        toast.showToast(`Failed to create project: ${error}`, "error");
+      }
+      return;
+    }
+
     setIsCreateModalOpen(false);
     setIsCreateWorkshopOpen(true);
   };
@@ -208,6 +223,18 @@ const DashboardLanding: React.FC = () => {
     }
   };
 
+  if (showSettingsPage) {
+    return (
+      <div className="relative h-full w-full bg-[#050508] text-white flex flex-col overflow-hidden selection:bg-indigo-500/30">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: ambientBackground }}
+        />
+        <SettingsPage onBack={() => setShowSettingsPage(false)} />
+      </div>
+    );
+  }
+
   return (
     <div className="relative h-full w-full bg-[#050508] text-white flex flex-col overflow-hidden selection:bg-indigo-500/30">
       <div
@@ -235,7 +262,7 @@ const DashboardLanding: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setShowSettingsModal(true)}
+                  onClick={() => setShowSettingsPage(true)}
                   className="h-10 w-10 flex items-center justify-center rounded-xl text-white/40 hover:text-white transition-all border border-white/5 hover:border-white/20 hover:bg-white/5"
                   title="IDE Settings"
                 >
@@ -290,6 +317,35 @@ const DashboardLanding: React.FC = () => {
             </div>
           </div>
 
+          {/* Onboarding Settings Redirect Banner */}
+          {!apiKey && !noAi && (
+            <div className="bg-gradient-to-r from-[#111116] to-[#141420] border border-amber-500/20 rounded-3xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.03)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-6 animate-fade-in relative overflow-hidden">
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute w-[300px] h-[300px] rounded-full opacity-[0.02] blur-[80px] bg-amber-500 -top-[50%] -left-[20%]" />
+              </div>
+              <div className="relative z-10 flex-1 space-y-1">
+                <h3 className="text-sm font-black text-amber-400 tracking-tight uppercase flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                  ⚠️ AI Credentials Required
+                </h3>
+                <p className="text-xs text-white/50 leading-relaxed max-w-2xl">
+                  To use Akasha's visual tools, code generation, and product workshop, please add your OpenRouter or Gemini API key.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSettingsPage(true)}
+                className="relative z-10 h-10 px-6 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)] shrink-0 flex items-center justify-center gap-2 font-bold"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                Configure API Key
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between text-[11px] text-white/30 font-bold tracking-widest uppercase">
             <span>
               {filteredProjects.length} project
@@ -342,10 +398,7 @@ const DashboardLanding: React.FC = () => {
           )}
         </div>
 
-        <IDESettingsModal
-          isOpen={showSettingsModal}
-          onClose={() => setShowSettingsModal(false)}
-        />
+        {/* Settings modal removed to use the SettingsPage inline instead */}
 
         {confirmDeleteId && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -499,6 +552,31 @@ const DashboardLanding: React.FC = () => {
                             Use the workshop if you want the app to turn an idea into a product brief before implementation.
                           </p>
                         </div>
+
+                        {!apiKey && !noAi && (
+                          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.02] p-4 space-y-3">
+                            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-400 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              AI Credentials Required
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-white/45">
+                              The guided workshop uses AI to design your project. Please set up your API Key in Settings to continue.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCreateModalOpen(false);
+                                setShowSettingsPage(true);
+                              }}
+                              className="w-full h-9 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 font-bold"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                              </svg>
+                              Configure in Settings
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="hidden lg:block rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-white/35">
                         Left panel stays full height for project setup context.

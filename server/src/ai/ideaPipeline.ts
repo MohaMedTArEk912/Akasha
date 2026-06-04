@@ -60,7 +60,7 @@ export function collectTemplateFeatures(categories: string[]): string[] {
 }
 
 // --- 5. Light Idea Scoring (Pipeline Step 1 replacement) ---
-export async function lightScoreIdea(idea: string) {
+export async function lightScoreIdea(idea: string, options?: { apiKey?: string; model?: string; apiBaseUrl?: string }) {
     const prompt = `You are a professional innovation evaluator.
 Evaluate the startup idea for Feasibility (1-10), Innovation (1-10), MarketPotential (1-10), and Complexity (1-10).
 Respond ONLY in JSON matching this structure exactly:
@@ -80,8 +80,10 @@ ${idea}`;
 
     const llmProvider = getLLMProvider();
     const response = await llmProvider.chat({
-        model: 'google/gemma-3-4b-it:free',
+        model: options?.model || 'google/gemma-3-4b-it:free',
         temperature: 0.2,
+        apiKey: options?.apiKey,
+        apiBaseUrl: options?.apiBaseUrl,
         messages: [{ role: 'user', content: prompt }]
     });
 
@@ -116,7 +118,7 @@ ${idea}`;
 }
 
 // --- 6. Full Pipeline Implementation ---
-export async function runFullPipeline(idea: string) {
+export async function runFullPipeline(idea: string, options?: { apiKey?: string; model?: string; apiBaseUrl?: string }) {
     const llmProvider = getLLMProvider();
 
     // Stage 1 & 2 & 4: Deep Extraction & Merging
@@ -142,8 +144,10 @@ Return ONLY valid JSON:
     let mergedFeatures: any = { core: [], secondary: [], admin: [] };
     try {
         const res = await llmProvider.chat({
-            model: 'google/gemini-2.5-flash',
+            model: options?.model || 'google/gemini-2.5-flash',
             temperature: 0.2,
+            apiKey: options?.apiKey,
+            apiBaseUrl: options?.apiBaseUrl,
             messages: [{ role: 'user', content: featurePrompt }]
         });
         mergedFeatures = JSON.parse(extractJsonObject(res));
@@ -171,8 +175,10 @@ Return ONLY valid JSON:
     let reqsAndCases: any = { requirements: { functional: [], non_functional: [] }, use_cases: [] };
     try {
         const res = await llmProvider.chat({
-            model: 'google/gemini-2.5-flash',
+            model: options?.model || 'google/gemini-2.5-flash',
             temperature: 0.2,
+            apiKey: options?.apiKey,
+            apiBaseUrl: options?.apiBaseUrl,
             messages: [{ role: 'user', content: reqPrompt }]
         });
         reqsAndCases = JSON.parse(extractJsonObject(res));
@@ -209,8 +215,10 @@ ${JSON.stringify(currentSpec)}`;
 
         try {
             const res = await llmProvider.chat({
-                model: 'google/gemma-3-4b-it:free',
+                model: options?.model || 'google/gemma-3-4b-it:free',
                 temperature: 0.1,
+                apiKey: options?.apiKey,
+                apiBaseUrl: options?.apiBaseUrl,
                 messages: [{ role: 'user', content: verifyPrompt }]
             });
             const verification = JSON.parse(extractJsonObject(res));

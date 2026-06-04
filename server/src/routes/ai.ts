@@ -47,4 +47,7 @@ router.post('/refine-idea', ctrl.refineIdea);
 // Database Schema Generation
 router.post('/generate-schema', ctrl.generateSchemaFromIdea);
 
+// Connection Health Check
+router.post('/test-connection', ctrl.testConnection);
+
 export default router;

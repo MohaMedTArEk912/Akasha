@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
-import { getLLMProvider } from '../lib/llmProvider.js';
+import { getLLMProvider, aiConfigStorage } from '../lib/llmProvider.js';
 
 interface StructuredChatResponse {
     answer_markdown: string;
@@ -34,6 +34,7 @@ interface FeatureQueueItem {
     status: FeatureStatus;
     user_comment: string;
     integrated_summary: string;
+    clarifying_questions?: string[];
 }
 
 const STRUCTURED_CHAT_SYSTEM_PROMPT = `You are Akasha AI.
@@ -64,78 +65,26 @@ function normalizeStringArray(value: unknown, maxItems = 5): string[] {
 
 function extractJsonObject(raw: string): string {
     let text = raw.trim();
-    // Remove potential markdown code fences
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-
-    if (!text) {
+    
+    const startObj = text.indexOf('{');
+    const startArr = text.indexOf('[');
+    
+    let start = -1;
+    let end = -1;
+    
+    if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
+        start = startObj;
+        end = text.lastIndexOf('}');
+    } else if (startArr !== -1) {
+        start = startArr;
+        end = text.lastIndexOf(']');
+    }
+    
+    if (start === -1 || end === -1 || end <= start) {
         throw new Error('No JSON object found in model output');
     }
-
-    // If the whole response is already JSON, return it directly.
-    if (text.startsWith('{') || text.startsWith('[')) {
-        try {
-            JSON.parse(text);
-            return text;
-        } catch {
-            // Continue with balanced object extraction.
-        }
-    }
-
-    let inString = false;
-    let escapeNext = false;
-    let depth = 0;
-    let start = -1;
-    let bestCandidate = '';
-
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-
-        if (escapeNext) {
-            escapeNext = false;
-            continue;
-        }
-        if (ch === '\\') {
-            escapeNext = true;
-            continue;
-        }
-        if (ch === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString) {
-            continue;
-        }
-
-        if (ch === '{') {
-            if (depth === 0) {
-                start = i;
-            }
-            depth += 1;
-            continue;
-        }
-
-        if (ch === '}' && depth > 0) {
-            depth -= 1;
-            if (depth === 0 && start >= 0) {
-                const candidate = text.slice(start, i + 1).trim();
-                try {
-                    JSON.parse(candidate);
-                    return candidate;
-                } catch {
-                    if (candidate.length > bestCandidate.length) {
-                        bestCandidate = candidate;
-                    }
-                }
-                start = -1;
-            }
-        }
-    }
-
-    if (bestCandidate) {
-        return bestCandidate;
-    }
-
-    throw new Error('No JSON object found in model output');
+    
+    return text.slice(start, end + 1);
 }
 
 /**
@@ -148,44 +97,44 @@ async function safeParseJson(
     raw: string,
     options?: { model?: string; apiKey?: string; apiBaseUrl?: string }
 ): Promise<any> {
-    const jsonText = extractJsonObject(raw);
-    
-    // 1. Try direct parse
+    let jsonText = '';
     try {
-        return JSON.parse(jsonText);
-    } catch (err) {
-        // 2. Basic cleanup for common small mistakes (like trailing commas)
+        jsonText = extractJsonObject(raw);
+        // 1. Try direct parse
         try {
+            return JSON.parse(jsonText);
+        } catch (err) {
+            // 2. Basic cleanup for common small mistakes (like trailing commas)
             const cleaned = jsonText
                 .replace(/,\s*([}\]])/g, '$1') // Remove trailing commas
                 .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":'); // Fix missing quotes on keys (basic)
             return JSON.parse(cleaned);
-        } catch {
-            // 3. Last resort: LLM Repair
-            const llmProvider = getLLMProvider();
-            try {
-                const repaired = await llmProvider.chat({
-                    model: options?.model || 'google/gemma-3-4b-it:free',
-                    temperature: 0,
-                    max_tokens: 3000,
-                    apiKey: options?.apiKey,
-                    apiBaseUrl: options?.apiBaseUrl,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'You repair malformed JSON. Return ONLY valid JSON with the same keys and values. Do not add markdown fences or commentary.'
-                        },
-                        {
-                            role: 'user',
-                            content: jsonText
-                        }
-                    ]
-                });
-                return JSON.parse(extractJsonObject(repaired));
-            } catch (repairErr) {
-                console.error('[AI] JSON Repair failed:', repairErr);
-                throw new Error('AI output was malformed and repair failed.');
-            }
+        }
+    } catch (extractOrParseErr) {
+        // 3. Last resort: LLM Repair
+        const llmProvider = getLLMProvider();
+        try {
+            const repaired = await llmProvider.chat({
+                model: options?.model || 'google/gemma-3-4b-it:free',
+                temperature: 0,
+                max_tokens: 3000,
+                apiKey: options?.apiKey,
+                apiBaseUrl: options?.apiBaseUrl,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You repair malformed JSON. Return ONLY valid JSON with the same keys and values. Do not add markdown fences or commentary.'
+                    },
+                    {
+                        role: 'user',
+                        content: jsonText || raw
+                    }
+                ]
+            });
+            return JSON.parse(extractJsonObject(repaired));
+        } catch (repairErr) {
+            console.error('[AI] JSON Repair failed:', repairErr);
+            throw new Error('AI output was malformed and repair failed.');
         }
     }
 }
@@ -239,7 +188,7 @@ function normalizeIdeaUnderstanding(value: unknown): IdeaUnderstanding {
 function normalizeFeatureQueue(value: unknown, fallbackItems: string[] = []): FeatureQueueItem[] {
     const parsedItems = Array.isArray(value)
         ? value
-            .map((item, index) => {
+            .map((item, index): FeatureQueueItem | null => {
                 const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
                 if (!source) return null;
                 const title = typeof source.title === 'string' ? source.title.trim() : '';
@@ -264,6 +213,11 @@ function normalizeFeatureQueue(value: unknown, fallbackItems: string[] = []): Fe
                         : typeof source.integratedSummary === 'string'
                             ? source.integratedSummary.trim()
                             : '',
+                    clarifying_questions: Array.isArray(source.clarifying_questions)
+                        ? normalizeStringArray(source.clarifying_questions, 4)
+                        : Array.isArray(source.clarifyingQuestions)
+                            ? normalizeStringArray(source.clarifyingQuestions, 4)
+                            : [],
                 } satisfies FeatureQueueItem;
             })
             .filter((item): item is FeatureQueueItem => !!item)
@@ -460,11 +414,12 @@ export async function teamChat(req: Request, res: Response) {
         chatHistory.push({ role: 'user', content: `${member.username}: ${message}` });
 
         console.log(`AI Chat for team ${team.name} by ${member.username}`);
-        const apiKey = req.body.apiKey || undefined;
-        const modelOverride = req.body.model || undefined;
+        const store = aiConfigStorage.getStore();
+        const apiKey = store?.apiKey || req.body.apiKey || undefined;
+        const modelOverride = store?.model || req.body.model || undefined;
 
         const structured = await getStructuredChatResponse(chatHistory, {
-            model: modelOverride || 'google/gemma-3-4b-it:free',
+            model: modelOverride || undefined,
             temperature: 0.3,
             apiKey: apiKey,
         });
@@ -534,9 +489,14 @@ export async function submitIdea(req: Request, res: Response) {
         res.json({ ...newIdea, idea, evaluation: null });
 
         // Background AI Evaluation
+        const storeForBg = aiConfigStorage.getStore();
         try {
             const { lightScoreIdea } = await import('../ai/ideaPipeline.js');
-            const evaluation = await lightScoreIdea(idea);
+            const evaluation = await lightScoreIdea(idea, {
+                apiKey: storeForBg?.apiKey,
+                model: storeForBg?.model,
+                apiBaseUrl: storeForBg?.apiBaseUrl,
+            });
             await prisma.teamIdea.update({ 
                 where: { id: newIdea.id }, 
                 data: { 
@@ -583,9 +543,14 @@ export async function triggerPipeline(req: Request, res: Response) {
         res.json({ success: true, message: 'Pipeline started in background' });
 
         // Background process
+        const storeForBg = aiConfigStorage.getStore();
         try {
             const { runFullPipeline } = await import('../ai/ideaPipeline.js');
-            const result = await runFullPipeline(idea.content);
+            const result = await runFullPipeline(idea.content, {
+                apiKey: storeForBg?.apiKey,
+                model: storeForBg?.model,
+                apiBaseUrl: storeForBg?.apiBaseUrl,
+            });
             
             await prisma.ideaPipeline.create({
                 data: {
@@ -635,14 +600,18 @@ export async function simpleChat(req: Request, res: Response) {
     if (!message || typeof message !== 'string') {
         return res.status(400).json({ error: 'Invalid message' });
     }
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
     try {
         const structured = await getStructuredChatResponse([
             { role: 'user', content: message }
         ], {
-            model: model || 'google/gemma-3-4b-it:free',
+            model: activeModel || undefined,
             temperature: 0.3,
-            apiKey: apiKey || undefined,
-            apiBaseUrl: apiBaseUrl || undefined,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
         });
         res.json({ reply: structured.answer_markdown, response: structured });
     } catch (err: any) {
@@ -698,12 +667,13 @@ Your role:
 
         messages.push({ role: 'user', content: message });
 
-        const apiKey = req.body.apiKey || undefined;
-        const modelOverride = req.body.model || undefined;
-        const apiBaseUrl = req.body.apiBaseUrl || undefined;
+        const store = aiConfigStorage.getStore();
+        const apiKey = store?.apiKey || req.body.apiKey || undefined;
+        const modelOverride = store?.model || req.body.model || undefined;
+        const apiBaseUrl = store?.apiBaseUrl || req.body.apiBaseUrl || undefined;
 
         const structured = await getStructuredChatResponse(messages, {
-            model: modelOverride || 'google/gemma-3-4b-it:free',
+            model: modelOverride || undefined,
             temperature: 0.4,
             apiKey: apiKey,
             apiBaseUrl: apiBaseUrl,
@@ -888,6 +858,10 @@ export async function analyzeIdea(req: Request, res: Response) {
     if (!idea || typeof idea !== 'string') {
         return res.status(400).json({ error: 'Valid idea string is required' });
     }
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
 
     try {
         const systemPrompt = `You are an elite startup mentor, product manager, and technical architect.
@@ -923,8 +897,8 @@ JSON schema:
       "priority": "critical|high|medium|low",
       "rating": 5,
       "status": "pending",
-      "user_comment": "",
-      "integrated_summary": ""
+      "integrated_summary": "",
+      "clarifying_questions": ["string"]
     }
   ],
   "structured_concept": {
@@ -956,6 +930,7 @@ Rules:
 - Fill ALL relevant fields in structured_concept, including inferred fields when the user omits them.
 - Identify the most critical capabilities and make them major features with priority critical/high and rating 4-5.
 - feature_queue must contain 4 to 8 sequential feature suggestions ordered for user review.
+- Generate exactly 3 highly specific and clarifying questions in clarifying_questions for each feature to guide the user in Step 3.
 - Keep strengths/weaknesses/questions/suggestions concise: max 4 items each.
 - Keep the concept practical, specific, and implementation-aware.`;
 
@@ -972,11 +947,11 @@ Rules:
         const llmProvider = getLLMProvider();
 
         const response = await llmProvider.chat({
-            model: model || 'google/gemini-2.5-flash',
+            model: activeModel || undefined,
             temperature: 0.2,
             max_tokens: 2600,
-            apiKey: apiKey || undefined,
-            apiBaseUrl: apiBaseUrl || undefined,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: idea }
@@ -986,9 +961,9 @@ Rules:
         let parsed: any = null;
         try {
             parsed = await safeParseJson(response, {
-                model: model || 'google/gemini-2.5-flash',
-                apiKey: apiKey || undefined,
-                apiBaseUrl: apiBaseUrl || undefined,
+                model: activeModel || undefined,
+                apiKey: activeApiKey,
+                apiBaseUrl: activeApiBaseUrl,
             });
         } catch (parseError: any) {
             console.warn('Idea analysis returned non-JSON output, using fallback seed:', parseError?.message || parseError);
@@ -1258,6 +1233,10 @@ function refinedDocToMarkdown(doc: RefinedIdeaDocument): string {
 
 export async function reviewIdeaFeature(req: Request, res: Response) {
     const { idea, feature, structuredConcept, action, feedback, approvedFeatures, rejectedFeatures, apiKey, model, apiBaseUrl } = req.body;
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
     if (!idea || typeof idea !== 'string' || !idea.trim()) {
         return res.status(400).json({ error: 'Original idea is required' });
     }
@@ -1285,7 +1264,28 @@ export async function reviewIdeaFeature(req: Request, res: Response) {
             ? baseConcept
             : buildSeedRefinedIdeaDoc(safeIdea, normalizeIdeaUnderstanding({}), safeApproved.length > 0 ? safeApproved : [safeFeature]);
 
-        const systemPrompt = `You are an elite product manager running an interactive feature refinement queue.
+        let systemPrompt = '';
+        if (normalizedAction === 'revise') {
+            systemPrompt = `You are an elite product manager. Rewrite the given feature description and rationale based on the user's feedback/answers to clarifying questions. Also, generate 3 new specific, targeted clarifying questions to help refine this feature further.
+Return ONLY valid JSON and nothing else.
+
+JSON schema:
+{
+  "feature": {
+    "id": "feature-1",
+    "title": "string",
+    "description": "string",
+    "rationale": "string",
+    "priority": "critical|high|medium|low",
+    "rating": 5,
+    "status": "pending",
+    "user_comment": "string",
+    "integrated_summary": "string",
+    "clarifying_questions": ["string"]
+  }
+}`;
+        } else {
+            systemPrompt = `You are an elite product manager running an interactive feature refinement queue.
 You must deeply understand the original idea, the current structured concept, and the current feature before responding.
 Return ONLY valid JSON and nothing else.
 
@@ -1300,7 +1300,8 @@ JSON schema:
     "rating": 4,
     "status": "pending|approved|rejected",
     "user_comment": "string",
-    "integrated_summary": "string"
+    "integrated_summary": "string",
+    "clarifying_questions": ["string"]
   },
   "structured_concept": {
     "title": "Product Vision",
@@ -1334,35 +1335,43 @@ Rules:
 - If action is "reject", mark the feature rejected and keep it out of the included key features. Update decision_summary or open_questions only if useful.
 - Preserve the already approved features as part of the concept.
 - Keep the concept complete, inferred where necessary, and practical for implementation.`;
+        }
 
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: model || 'google/gemma-3-4b-it:free',
+            model: activeModel || undefined,
             temperature: 0.2,
             max_tokens: 2400,
-            apiKey: apiKey || undefined,
-            apiBaseUrl: apiBaseUrl || undefined,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
             messages: [
                 { role: 'system', content: systemPrompt },
                 {
                     role: 'user',
-                    content: JSON.stringify({
-                        originalIdea: safeIdea,
-                        action: normalizedAction,
-                        feedback: typeof feedback === 'string' ? feedback.trim().slice(0, 1600) : '',
-                        currentFeature: safeFeature,
-                        approvedFeatures: safeApproved,
-                        rejectedFeatures: safeRejected,
-                        structuredConcept: seededConcept,
-                    }),
+                    content: normalizedAction === 'revise'
+                        ? JSON.stringify({
+                            originalIdea: safeIdea,
+                            action: normalizedAction,
+                            feedback: typeof feedback === 'string' ? feedback.trim().slice(0, 1600) : '',
+                            currentFeature: safeFeature,
+                        })
+                        : JSON.stringify({
+                            originalIdea: safeIdea,
+                            action: normalizedAction,
+                            feedback: typeof feedback === 'string' ? feedback.trim().slice(0, 1600) : '',
+                            currentFeature: safeFeature,
+                            approvedFeatures: safeApproved,
+                            rejectedFeatures: safeRejected,
+                            structuredConcept: seededConcept,
+                        }),
                 },
             ],
         });
 
         const parsed = await safeParseJson(modelOutput, {
-            model: model || 'google/gemma-3-4b-it:free',
-            apiKey: apiKey || undefined,
-            apiBaseUrl: apiBaseUrl || undefined,
+            model: activeModel || undefined,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
         });
         const reviewedFeatureStatus = normalizedAction === 'approve'
             ? 'approved'
@@ -1398,6 +1407,10 @@ export async function refineIdea(req: Request, res: Response) {
     if (!idea || typeof idea !== 'string' || !idea.trim()) {
         return res.status(400).json({ error: 'Original idea is required' });
     }
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
 
     try {
         const systemPrompt = `You are an elite product manager and technical architect.
@@ -1481,11 +1494,11 @@ Rules:
 
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: model || 'google/gemma-3-4b-it:free',
+            model: activeModel || undefined,
             temperature: 0.3,
             max_tokens: 2200,
-            apiKey: apiKey || undefined,
-            apiBaseUrl: apiBaseUrl || undefined,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
             messages
         });
 
@@ -1496,9 +1509,9 @@ Rules:
         let refinedDoc: RefinedIdeaDocument;
         try {
             const parsed = await safeParseJson(modelOutput, {
-                model: model || 'google/gemma-3-4b-it:free',
-                apiKey: apiKey || undefined,
-                apiBaseUrl: apiBaseUrl || undefined,
+                model: activeModel || undefined,
+                apiKey: activeApiKey,
+                apiBaseUrl: activeApiBaseUrl,
             });
             refinedDoc = normalizeRefinedIdeaDoc(parsed, modelOutput);
         } catch {
@@ -1620,6 +1633,10 @@ export async function generateSchemaFromIdea(req: Request, res: Response) {
     if (!projectId || typeof projectId !== 'string') {
         return res.status(400).json({ error: 'projectId is required' });
     }
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
 
     try {
         let parsedModels: GeneratedModel[] = [];
@@ -1704,11 +1721,11 @@ ${mode === 'fix'
 
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: model || 'google/gemini-2.5-flash',
+            model: activeModel || undefined,
             temperature: 0.2,
             max_tokens: 3000,
-            apiKey: apiKey || undefined,
-            apiBaseUrl: apiBaseUrl || undefined,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: `PROJECT IDEA:\n${ideaText.slice(0, 8000)}${existingSchemaContext}` },
@@ -1717,24 +1734,24 @@ ${mode === 'fix'
 
         try {
             const parsed = await safeParseJson(modelOutput, {
-                model: model || 'google/gemini-2.5-flash',
-                apiKey: apiKey || undefined,
-                apiBaseUrl: apiBaseUrl || undefined,
+                model: activeModel || undefined,
+                apiKey: activeApiKey,
+                apiBaseUrl: activeApiBaseUrl,
             });
             parsedModels = normalizeGeneratedModels(parsed);
         } catch (parseErr: any) {
-                        console.warn('Schema generation parse error. Attempting repair pass:', parseErr?.message || parseErr);
-                        try {
-                                const repairedOutput = await llmProvider.chat({
-                                    model: model || 'google/gemma-3-4b-it:free',
-                                        temperature: 0,
-                                        max_tokens: 3200,
-                                    apiKey: apiKey || undefined,
-                                    apiBaseUrl: apiBaseUrl || undefined,
-                                        messages: [
-                                                {
-                                                        role: 'system',
-                                                        content: `You convert malformed or non-JSON model output into strict valid JSON.
+            console.warn('Schema generation parse error. Attempting repair pass:', parseErr?.message || parseErr);
+            try {
+                const repairedOutput = await llmProvider.chat({
+                    model: activeModel || undefined,
+                    temperature: 0,
+                    max_tokens: 3200,
+                    apiKey: activeApiKey,
+                    apiBaseUrl: activeApiBaseUrl,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You convert malformed or non-JSON model output into strict valid JSON.
 Return ONLY valid JSON and nothing else.
 Required schema:
 {
@@ -1756,24 +1773,24 @@ Rules:
 - field_type must be one of: uuid, string, text, int, float, boolean, datetime, json.
 - relation_type must be one of: one-to-one, one-to-many, many-to-many.
 - No markdown fences, no explanation, JSON only.`
-                                                },
-                                                {
-                                                        role: 'user',
-                                                        content: `PROJECT IDEA:\n${ideaText.slice(0, 8000)}${existingSchemaContext}\n\nMODEL OUTPUT TO REPAIR:\n${modelOutput.slice(0, 12000)}`
-                                                }
-                                        ]
-                                });
-
-                                const repairedParsed = await safeParseJson(repairedOutput, {
-                                    model: model || 'google/gemma-3-4b-it:free',
-                                    apiKey: apiKey || undefined,
-                                    apiBaseUrl: apiBaseUrl || undefined,
-                                });
-                                parsedModels = normalizeGeneratedModels(repairedParsed);
-                        } catch (repairErr: any) {
-                                console.error('Schema generation repair failed:', repairErr?.message || repairErr);
-                                return res.status(500).json({ error: 'AI returned invalid schema. Please try again.' });
+                        },
+                        {
+                            role: 'user',
+                            content: `PROJECT IDEA:\n${ideaText.slice(0, 8000)}${existingSchemaContext}\n\nMODEL OUTPUT TO REPAIR:\n${modelOutput.slice(0, 12000)}`
                         }
+                    ]
+                });
+
+                const repairedParsed = await safeParseJson(repairedOutput, {
+                    model: activeModel || undefined,
+                    apiKey: activeApiKey,
+                    apiBaseUrl: activeApiBaseUrl,
+                });
+                parsedModels = normalizeGeneratedModels(repairedParsed);
+            } catch (repairErr: any) {
+                console.error('Schema generation repair failed:', repairErr?.message || repairErr);
+                return res.status(500).json({ error: 'AI returned invalid schema. Please try again.' });
+            }
         }
 
         if (parsedModels.length === 0) {
@@ -1853,3 +1870,31 @@ Rules:
         res.status(500).json({ error: 'Failed to generate schema: ' + err.message });
     }
 }
+
+export async function testConnection(req: Request, res: Response) {
+    const { apiKey, model, apiBaseUrl } = req.body;
+    try {
+        const llmProvider = getLLMProvider();
+        const modelOutput = await llmProvider.chat({
+            model: model || 'google/gemma-3-4b-it:free',
+            temperature: 0.1,
+            max_tokens: 10,
+            apiKey: apiKey || undefined,
+            apiBaseUrl: apiBaseUrl || undefined,
+            bypassStore: true,
+            messages: [
+                { role: 'user', content: 'respond with exactly the word "ok".' }
+            ]
+        });
+        
+        if (!modelOutput || modelOutput.trim().length === 0) {
+            throw new Error('No response received from the custom AI endpoint.');
+        }
+
+        res.json({ success: true, message: 'Connection successful!', response: modelOutput.trim() });
+    } catch (err: any) {
+        console.error('AI connection test error:', err.message);
+        res.status(400).json({ error: err.message });
+    }
+}
+

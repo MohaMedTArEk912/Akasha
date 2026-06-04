@@ -5,7 +5,7 @@
  * Allows creating data models with fields and relations.
  */
 
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { addDataModel, addField, archiveDataModel, deleteField, generateSchemaFromIdea } from "../../../stores/projectStore";
 import { useProjectStore } from "../../../hooks/useProjectStore";
 import { DataModelSchema, FieldSchema } from "../../../hooks/useApi";
