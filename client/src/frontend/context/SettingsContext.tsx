@@ -17,7 +17,7 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [apiKey, setApiKeyState] = useState('');
-  const [model, setModelState] = useState('google/gemma-3-4b-it:free');
+  const [model, setModelState] = useState('openrouter/free');
   const [apiBaseUrl, setApiBaseUrlState] = useState('https://openrouter.ai/api/v1');
   const [provider, setProviderState] = useState('openrouter');
   const [noAi, setNoAiState] = useState(false);

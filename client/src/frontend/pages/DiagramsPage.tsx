@@ -1,7 +1,9 @@
 import React, { useRef, useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import useApi, { DiagramEntry } from "../hooks/useApi";
+import { useProjectStore } from "../hooks/useProjectStore";
 import { useTheme } from "../context/ThemeContext";
 import "@excalidraw/excalidraw/index.css";
+import DiagramAIPanel from "../components/features/Diagram/DiagramAIPanel";
 
 type AppState = any;
 type ExcalidrawImperativeAPI = any;
@@ -229,7 +231,8 @@ const Toast: React.FC<{ message: string | null; type?: "error" | "success" | "wa
 const MetadataSidebar: React.FC<{
   elementId: string | null;
   excalidrawAPI: ExcalidrawImperativeAPI | null;
-}> = ({ elementId, excalidrawAPI }) => {
+  onClose?: () => void;
+}> = ({ elementId, excalidrawAPI, onClose }) => {
   const [meta, setMeta] = useState<ElementMeta>(defaultMeta());
 
   useEffect(() => {
@@ -256,13 +259,26 @@ const MetadataSidebar: React.FC<{
   return (
     <div style={{ width: 260, background: "var(--ide-bg-panel)", borderLeft: "1px solid var(--ide-border)", height: "100%", overflowY: "auto", display: "flex", flexDirection: "column" }}>
       {/* Header */}
-      <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid var(--ide-border)" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ide-text-secondary)", marginBottom: 2 }}>
-          Semantic Metadata
+      <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid var(--ide-border)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ide-text-secondary)", marginBottom: 2 }}>
+            Semantic Metadata
+          </div>
+          <div style={{ fontSize: 12, color: "var(--ide-text)" }}>
+            {elementId ? "Editing selected element" : "No element selected"}
+          </div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--ide-text)" }}>
-          {elementId ? "Editing selected element" : "No element selected"}
-        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "var(--ide-text-secondary)", cursor: "pointer", padding: 4, borderRadius: 6, lineHeight: 1 }}
+            title="Close metadata panel"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {!elementId ? (
@@ -381,8 +397,17 @@ const DiagramsPage: React.FC = () => {
   const [editingDiagramName, setEditingDiagramName] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [currentMode, setCurrentMode] = useState<DiagramMode>("Architecture");
+  const [diagramModesData, setDiagramModesData] = useState<Record<DiagramMode, { elements: any[]; appState?: any }>>({
+    Architecture: { elements: [] },
+    ERD: { elements: [] },
+    UseCase: { elements: [] }
+  });
+  const [autoPrompt, setAutoPrompt] = useState<{ text: string; timestamp: number } | null>(null);
 
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showMetadataPanel, setShowMetadataPanel] = useState(false);
+  const { project } = useProjectStore();
 
   // Modals / Toast
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -427,8 +452,8 @@ const DiagramsPage: React.FC = () => {
 
   // ── Auto-select first diagram if none selected ───────
   useEffect(() => {
-    if (!selectedDiagram && diagrams.length > 0) {
-      doSelectDiagram(diagrams[0].name);
+    if (!selectedDiagram && diagrams.length > 0 && diagrams[0]?.name) {
+      doSelectDiagram(diagrams[0]!.name);
     }
   }, [diagrams]);
 
@@ -459,7 +484,7 @@ const DiagramsPage: React.FC = () => {
   // ── CRUD ─────────────────────────────────────────────
   const handleCreate = async (name: string) => {
     try {
-      const fileName = name.endsWith(".excalidraw") ? name : `${name}-${Date.now()}.excalidraw`;
+      const fileName = name.endsWith(".excalidraw") ? name : `${name}.excalidraw`;
       await api.createDiagram(fileName);
       await loadDiagrams();
       doSelectDiagram(fileName);
@@ -472,14 +497,19 @@ const DiagramsPage: React.FC = () => {
     if (!deleteTarget) return;
     try {
       await api.deleteDiagram(deleteTarget);
-      if (selectedDiagram === deleteTarget) setSelectedDiagram(null);
+      if (selectedDiagram === deleteTarget) {
+        setSelectedDiagram(null);
+      }
+      selectedDiagramRef.current = null;
+      apiReadyRef.current = false;
       await loadDiagrams();
       showToast("Deleted", "success");
       setDeleteTarget(null);
     } catch { showToast("Failed to delete"); }
   };
 
-  const doSelectDiagram = async (name: string) => {
+  const doSelectDiagram = async (name: string, apiInstance?: any) => {
+    const activeAPI = apiInstance || excalidrawAPI;
     // Reset the API-ready guard so the new diagram's content is loaded
     apiReadyRef.current = false;
     selectedDiagramRef.current = name;
@@ -491,13 +521,44 @@ const DiagramsPage: React.FC = () => {
     // Load user-saved library items for this diagram
     setUserLibraryItems(loadUserLibrary(name));
 
-    if (excalidrawAPI) excalidrawAPI.updateScene({ elements: [] });
+    if (activeAPI) activeAPI.updateScene({ elements: [] });
     try {
       const content = await api.readDiagram(name);
-      if (content && excalidrawAPI) {
+      let loadedModesData: Record<DiagramMode, { elements: any[]; appState?: any }> = {
+        Architecture: { elements: [] },
+        ERD: { elements: [] },
+        UseCase: { elements: [] }
+      };
+
+      if (content) {
         const data = typeof content === "string" ? JSON.parse(content) : content;
-        excalidrawAPI.updateScene({ elements: data.elements || [], appState: data.appState });
+        if (data.modes) {
+          loadedModesData = data.modes;
+        } else if (data.elements) {
+          loadedModesData.Architecture = {
+            elements: data.elements || [],
+            appState: data.appState || {}
+          };
+        }
       }
+
+      setDiagramModesData(loadedModesData);
+
+      if (activeAPI) {
+        const activeScene = loadedModesData[currentMode] || { elements: [] };
+        activeAPI.updateScene({
+          elements: activeScene.elements,
+          appState: activeScene.appState
+        });
+      }
+
+      const promptMessage = currentMode === "ERD"
+        ? "What are the steps to create an ERD diagram based on the project context?"
+        : currentMode === "Architecture"
+        ? "What are the steps to create an Architecture diagram based on the project context?"
+        : "What are the steps to create a Use Case diagram based on the project context?";
+      setAutoPrompt({ text: promptMessage, timestamp: Date.now() });
+      setShowAIPanel(true);
     } catch (e) {
       console.error("Error loading diagram", e);
       showToast("Failed to load diagram data");
@@ -509,12 +570,71 @@ const DiagramsPage: React.FC = () => {
     doSelectDiagram(name);
   };
 
+  // ── Mode Switcher ────────────────────────────────────
+  const handleModeChange = (newMode: DiagramMode) => {
+    if (newMode === currentMode) return;
+    if (!excalidrawAPI) {
+      setCurrentMode(newMode);
+      return;
+    }
+
+    const currentEls = excalidrawAPI.getSceneElements();
+    const currentAppState = excalidrawAPI.getAppState();
+
+    setDiagramModesData(prev => {
+      const updated = {
+        ...prev,
+        [currentMode]: {
+          elements: currentEls,
+          appState: currentAppState
+        }
+      };
+
+      const targetScene = updated[newMode] || { elements: [] };
+      excalidrawAPI.updateScene({
+        elements: targetScene.elements || [],
+        appState: targetScene.appState || {}
+      });
+
+      return updated;
+    });
+
+    setCurrentMode(newMode);
+    setIsDirty(true);
+
+    const promptMessage = newMode === "ERD"
+      ? "What are the steps to create an ERD diagram based on the project context?"
+      : newMode === "Architecture"
+      ? "What are the steps to create an Architecture diagram based on the project context?"
+      : "What are the steps to create a Use Case diagram based on the project context?";
+
+    setAutoPrompt({ text: promptMessage, timestamp: Date.now() });
+    setShowAIPanel(true);
+  };
+
   // ── Save ─────────────────────────────────────────────
   const handleSave = async (isAutoSave: boolean) => {
     if (!excalidrawAPI || !selectedDiagram) return;
     try {
-      const els  = excalidrawAPI.getSceneElements();
-      const json = serializeAsJSON(els, excalidrawAPI.getAppState(), excalidrawAPI.getFiles(), "local");
+      const els = excalidrawAPI.getSceneElements();
+      const appState = excalidrawAPI.getAppState();
+
+      const updatedModes = {
+        ...diagramModesData,
+        [currentMode]: {
+          elements: els,
+          appState: appState
+        }
+      };
+      setDiagramModesData(updatedModes);
+
+      const json = JSON.stringify({
+        type: "excalidraw",
+        version: 2,
+        source: "akasha",
+        modes: updatedModes
+      });
+
       await api.saveDiagram(selectedDiagram, json);
       setIsDirty(false);
       if (!isAutoSave) showToast("Saved ✓", "success");
@@ -525,8 +645,25 @@ const DiagramsPage: React.FC = () => {
     if (!selectedDiagram || editingDiagramName === selectedDiagram) return;
     try {
       const newName = editingDiagramName.endsWith(".excalidraw") ? editingDiagramName : editingDiagramName + ".excalidraw";
-      const els  = excalidrawAPI!.getSceneElements();
-      const json = serializeAsJSON(els, excalidrawAPI!.getAppState(), excalidrawAPI!.getFiles(), "local");
+      const els = excalidrawAPI!.getSceneElements();
+      const appState = excalidrawAPI!.getAppState();
+
+      const updatedModes = {
+        ...diagramModesData,
+        [currentMode]: {
+          elements: els,
+          appState: appState
+        }
+      };
+      setDiagramModesData(updatedModes);
+
+      const json = JSON.stringify({
+        type: "excalidraw",
+        version: 2,
+        source: "akasha",
+        modes: updatedModes
+      });
+
       await api.saveDiagram(newName, json);
       await api.deleteDiagram(selectedDiagram);
       setSelectedDiagram(newName);
@@ -607,11 +744,12 @@ const DiagramsPage: React.FC = () => {
     if (selIds.length === 1) {
       const el = excalidrawAPI.getSceneElements().find((e: any) => e.id === selIds[0]);
       if (el && (el.type === "rectangle" || el.type === "ellipse" || el.type === "diamond")) {
-        setSelectedElementId((prev) => (prev !== selIds[0] ? selIds[0] : prev));
+        const id = selIds[0]!;
+        setSelectedElementId((prev) => (prev !== id ? id : prev));
         return;
       }
     }
-    setSelectedElementId((prev) => (prev !== null ? null : prev));
+    setSelectedElementId(null);
   }, [excalidrawAPI]);
 
   // ── Generate Code ─────────────────────────────────────
@@ -740,7 +878,7 @@ const DiagramsPage: React.FC = () => {
               {(["Architecture", "ERD", "UseCase"] as DiagramMode[]).map((m) => (
                 <button
                   key={m}
-                  onClick={() => setCurrentMode(m)}
+                  onClick={() => handleModeChange(m)}
                   style={{
                     fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8,
                     border: `1.5px solid ${currentMode === m ? "var(--ide-text)" : "var(--ide-border)"}`,
@@ -786,25 +924,56 @@ const DiagramsPage: React.FC = () => {
                   title={`${userLibraryItems.length} custom library items saved for this diagram`}
                 >
                   LIB {userLibraryItems.length} items
-                  <button
-                    onClick={() => {
-                      if (selectedDiagram) {
-                        localStorage.removeItem(getLibraryKey(selectedDiagram));
-                        setUserLibraryItems([]);
-                        showToast("Library cleared", "success");
-                      }
-                    }}
-                    style={{
-                      marginLeft: 2, padding: "0 3px", borderRadius: 4,
-                      background: "transparent", border: "none", color: "#f87171",
-                      cursor: "pointer", fontSize: 10, lineHeight: 1,
-                    }}
-                    title="Clear custom library"
-                  >✕</button>
-                </span>
-              )}
+                <button
+                  onClick={() => {
+                    if (selectedDiagram) {
+                      localStorage.removeItem(getLibraryKey(selectedDiagram));
+                      setUserLibraryItems([]);
+                      showToast("Library cleared", "success");
+                    }
+                  }}
+                  style={{
+                    marginLeft: 2, padding: "0 3px", borderRadius: 4,
+                    background: "transparent", border: "none", color: "#f87171",
+                    cursor: "pointer", fontSize: 10, lineHeight: 1,
+                  }}
+                  title="Clear custom library"
+                >✕</button>
+              </span>
+            )}
 
-            </div>
+            <button
+              onClick={() => setShowMetadataPanel(!showMetadataPanel)}
+              style={{
+                fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 8,
+                background: showMetadataPanel ? "white" : "rgba(255,255,255,0.05)",
+                border: "1.5px solid rgba(255,255,255,0.1)",
+                color: showMetadataPanel ? "black" : "white", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.2s",
+              }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              {showMetadataPanel ? "Close Metadata" : "Metadata"}
+            </button>
+
+            <button
+              onClick={() => setShowAIPanel(!showAIPanel)}
+              style={{
+                fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 8,
+                background: showAIPanel ? "white" : "rgba(255,255,255,0.05)",
+                border: "1.5px solid rgba(255,255,255,0.1)",
+                color: showAIPanel ? "black" : "white", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+                transition: "all 0.2s",
+              }}
+            >
+              <span style={{ fontSize: 14 }}>🤖</span>
+              {showAIPanel ? "Close AI" : "AI Assistant"}
+            </button>
+          </div>
           </div>
         )}
 
@@ -847,7 +1016,7 @@ const DiagramsPage: React.FC = () => {
                         // we must NOT reload or it clears the user's drawings.
                         if (!apiReadyRef.current && selectedDiagramRef.current) {
                           apiReadyRef.current = true;
-                          setTimeout(() => doSelectDiagram(selectedDiagramRef.current!), 100);
+                          setTimeout(() => doSelectDiagram(selectedDiagramRef.current!, apiRef), 100);
                         }
                       }}
                       onChange={onChange}
@@ -881,7 +1050,27 @@ const DiagramsPage: React.FC = () => {
             </div>
 
             {/* Metadata Sidebar */}
-            <MetadataSidebar elementId={selectedElementId} excalidrawAPI={excalidrawAPI} />
+            {showMetadataPanel && (
+              <MetadataSidebar elementId={selectedElementId} excalidrawAPI={excalidrawAPI} onClose={() => setShowMetadataPanel(false)} />
+            )}
+
+            {/* AI Assistant Panel */}
+            {showAIPanel && (
+              <DiagramAIPanel
+                projectId={project?.id || null}
+                currentDiagramName={selectedDiagram}
+                currentDiagramContent={(() => {
+                  if (!excalidrawAPI) return null;
+                  try {
+                    const els = excalidrawAPI.getSceneElements();
+                    return serializeAsJSON(els, excalidrawAPI.getAppState(), excalidrawAPI.getFiles(), "local");
+                  } catch { return null; }
+                })()}
+                onClose={() => setShowAIPanel(false)}
+                autoPrompt={autoPrompt}
+                currentMode={currentMode}
+              />
+            )}
           </div>
         )}
       </div>

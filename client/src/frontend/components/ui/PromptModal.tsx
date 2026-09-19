@@ -90,17 +90,16 @@ const PromptModal: React.FC<PromptModalProps> = ({
 
     const updateValue = (name: string, value: string) => {
         setValues((prev) => ({ ...prev, [name]: value }));
-        
-        // Real-time validation
-        if (touched[name]) {
-            const field = fields.find(f => f.name === name);
-            if (field) {
-                const error = validateField(field, value);
-                setErrors((prev) => ({
-                    ...prev,
-                    [name]: error || undefined
-                }));
-            }
+
+        const field = fields.find(f => f.name === name);
+        if (field) {
+            const error = validateField(field, value);
+            setErrors((prev) => {
+                if (error) return { ...prev, [name]: error };
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
         }
     };
 
@@ -109,27 +108,32 @@ const PromptModal: React.FC<PromptModalProps> = ({
         const field = fields.find(f => f.name === fieldName);
         if (field) {
             const error = validateField(field, values[fieldName] || "");
-            setErrors((prev) => ({
-                ...prev,
-                [fieldName]: error || undefined
-            }));
+            setErrors((prev) => {
+                if (error) return { ...prev, [fieldName]: error };
+                const next = { ...prev };
+                delete next[fieldName];
+                return next;
+            });
         }
     };
 
     // Validate all fields
     const validateAllFields = (): boolean => {
         const newErrors: FieldError = {};
+        const newTouched: Record<string, boolean> = {};
         for (const field of fields) {
             const error = validateField(field, values[field.name] || "");
             if (error) {
                 newErrors[field.name] = error;
             }
+            newTouched[field.name] = true;
         }
         setErrors(newErrors);
+        setTouched(newTouched);
         return Object.keys(newErrors).length === 0;
     };
 
-    const errorCount = useMemo(() => Object.keys(errors).length, [errors]);
+    const errorCount = useMemo(() => Object.keys(errors).filter(k => errors[k]).length, [errors]);
 
     const canSubmit = errorCount === 0 && fields.every(
         (field) => !field.required || (values[field.name] || "").trim().length > 0

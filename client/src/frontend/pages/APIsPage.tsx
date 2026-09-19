@@ -1,15 +1,57 @@
-// APIs Page — Professional Monochrome API Client (v2)
+// APIs Page — Professional Monochrome API Client (v3) with GitHub auto-import
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import useApi from "../hooks/useApi";
 import { useProjectStore } from "../hooks/useProjectStore";
 import { addApi } from "../stores/projectStore";
 import Modal from "../components/ui/Modal";
 import type { ProxyResponse, ApiRequestEntry } from "../types/api";
+const API_PORT = (import.meta as any).env?.VITE_API_PORT || "3001";
+
+/* ━━━ GitHub Import ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+interface GitHubFileEntry { name: string; path: string; type: "file" | "dir"; download_url?: string | null; }
+function parseOpenApiPaths(doc: any): { method: string; path: string; name: string }[] {
+    const results: { method: string; path: string; name: string }[] = [];
+    const paths = doc.paths || {};
+    for (const [path, methods] of Object.entries(paths)) {
+        if (!methods || typeof methods !== "object") continue;
+        for (const [method, detail] of Object.entries(methods as Record<string, any>)) {
+            if (!["get","post","put","patch","delete","head","options"].includes(method)) continue;
+            results.push({ method: method.toUpperCase(), path, name: detail?.summary || detail?.operationId || `${method.toUpperCase()} ${path}` });
+        }
+    }
+    return results;
+}
+function parsePostmanCollection(doc: any): { method: string; path: string; name: string }[] {
+    const results: { method: string; path: string; name: string }[] = [];
+    const items = doc.item || [];
+    const walk = (arr: any[]) => {
+        for (const item of arr) {
+            if (item.item) { walk(item.item); continue; }
+            if (!item.request) continue;
+            const method = item.request.method || "GET";
+            const rawUrl = item.request.url?.raw || item.request.url?.path?.join("/") || "";
+            const path = rawUrl.replace(/^https?:\/\/[^/]+/, "") || "/" + rawUrl;
+            const name = item.name || `${method} ${path}`;
+            results.push({ method: method.toUpperCase(), path, name });
+        }
+    };
+    walk(items);
+    return results;
+}
+function parseApiFile(content: string): { method: string; path: string; name: string }[] | null {
+    try {
+        const doc = JSON.parse(content);
+        if (doc.openapi || doc.swagger) return parseOpenApiPaths(doc);
+        if (doc.info?.name && doc.item) return parsePostmanCollection(doc);
+        return null;
+    } catch { return null; }
+}
+const API_FILE_EXTS = [".json", ".yaml", ".yml"];
 
 /* ━━━ Environments ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 interface ApiEnvironment { name: string; baseUrl: string; token: string; }
 const DEFAULT_ENVS: ApiEnvironment[] = [
-    { name: "Local", baseUrl: "http://localhost:3001", token: "" },
+    { name: "Local", baseUrl: `http://localhost:${API_PORT}`, token: "" },
     { name: "Dev", baseUrl: "http://dev-api.example.com", token: "" },
     { name: "Staging", baseUrl: "https://staging-api.example.com", token: "" },
     { name: "Production", baseUrl: "https://api.example.com", token: "" },
@@ -72,17 +114,19 @@ function parseCurl(curlStr: string) {
     const result = { method: "GET", url: "", headers: {} as Record<string, string>, body: "" };
     const cmd = curlStr.replace(/\\\n/g, " ").replace(/\\\r\n/g, " ").trim();
     const urlMatch = cmd.match(/(?:curl\s+)?(?:['"]?(https?:\/\/[^\s'"]+)['"]?)/i);
-    if (urlMatch) result.url = urlMatch[1];
+    if (urlMatch && urlMatch[1]) result.url = urlMatch[1];
     const methodMatch = cmd.match(/-X\s+(\w+)/i);
-    if (methodMatch) result.method = methodMatch[1].toUpperCase();
+    if (methodMatch && methodMatch[1]) result.method = methodMatch[1].toUpperCase();
     const headerRegex = /-H\s+['"]([^'"]+)['"]/gi;
     let hMatch;
     while ((hMatch = headerRegex.exec(cmd)) !== null) {
-        const [key, ...valParts] = hMatch[1].split(":");
-        if (key && valParts.length > 0) result.headers[key.trim()] = valParts.join(":").trim();
+        if (hMatch[1]) {
+            const [key, ...valParts] = hMatch[1].split(":");
+            if (key && valParts.length > 0) result.headers[key.trim()] = valParts.join(":").trim();
+        }
     }
     const bodyMatch = cmd.match(/(?:--data-raw|--data|-d)\s+['"]([^'"]*)['"]/i);
-    if (bodyMatch) {
+    if (bodyMatch && bodyMatch[1]) {
         result.body = bodyMatch[1];
         if (result.method === "GET") result.method = "POST";
     }
@@ -139,7 +183,7 @@ const labelStyle: React.CSSProperties = {
 // ─── KV Editor ───
 interface KVPair { key: string; value: string; enabled: boolean }
 const KVEditor: React.FC<{ pairs: KVPair[]; onChange: (pairs: KVPair[]) => void; keyPlaceholder?: string; valuePlaceholder?: string; }> = ({ pairs, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value" }) => {
-    const update = (i: number, field: keyof KVPair, value: any) => { const u = [...pairs]; u[i] = { ...u[i], [field]: value }; onChange(u); };
+    const update = (i: number, field: keyof KVPair, value: any) => { const u = [...pairs]; const current = u[i]; if (current) { u[i] = { ...current, [field]: value }; onChange(u); } };
     const remove = (i: number) => onChange(pairs.filter((_, idx) => idx !== i));
     const add = () => onChange([...pairs, { key: "", value: "", enabled: true }]);
 
@@ -246,10 +290,41 @@ const APIsPage: React.FC = () => {
     const [requestCount, setRequestCount] = useState(0);
     const [avgLatency, setAvgLatency] = useState(0);
 
+    // ─── GitHub Import State ───
+    const [githubImportOpen, setGithubImportOpen] = useState(false);
+    const [ghRepoInput, setGhRepoInput] = useState("");
+    const [ghFileTree, setGhFileTree] = useState<GitHubFileEntry[] | null>(null);
+    const [ghLoading, setGhLoading] = useState(false);
+    const [ghPreview, setGhPreview] = useState<{ file: string; endpoints: { method: string; path: string; name: string }[] }[]>([]);
+    const [ghBreadcrumbs, setGhBreadcrumbs] = useState<string[]>([]);
+    const ghAutoBrowsed = useRef(false);
+
+    // Auto-detect repo from project settings when modal opens
+    useEffect(() => {
+        if (!githubImportOpen) { ghAutoBrowsed.current = false; return; }
+        if (ghAutoBrowsed.current) return;
+        const settings = project?.settings;
+        const repo = settings?.github_repos?.[0] || settings?.github_repo;
+        if (repo?.full_name) {
+            setGhRepoInput(repo.full_name);
+            ghAutoBrowsed.current = true;
+            setTimeout(() => {
+                const parsed = parseGhRepo(repo.full_name);
+                if (!parsed) return;
+                setGhLoading(true);
+                api.githubRepoContents(parsed.owner, parsed.repo).then(data => {
+                    const entries = Array.isArray(data) ? data : [];
+                    setGhFileTree(entries);
+                    if (entries.length > 0) autoScanGh(parsed.owner, parsed.repo, entries);
+                }).catch(() => {}).finally(() => setGhLoading(false));
+            }, 100);
+        }
+    }, [githubImportOpen, project?.settings]);
+
     // Persist environments
     useEffect(() => { try { localStorage.setItem('akasha_api_envs', JSON.stringify(environments)); } catch {} }, [environments]);
 
-    const activeEnv = environments[activeEnvIdx] || environments[0];
+    const activeEnv = environments[activeEnvIdx] || environments[0] || { name: "Local", baseUrl: `http://localhost:${API_PORT}`, token: "" };
 
     const collections = useMemo(() => (project?.apis || []).filter((a: any) => !a.archived), [project]);
     useEffect(() => { api.listApiHistory().then(setHistory).catch(console.error); }, []);
@@ -276,7 +351,7 @@ const APIsPage: React.FC = () => {
     // Switch environment
     const switchEnv = (idx: number) => {
         setActiveEnvIdx(idx);
-        const env = environments[idx];
+        const env = environments[idx] || { name: "Local", baseUrl: `http://localhost:${API_PORT}`, token: "" };
         if (env.token) setAuthToken(env.token);
         // Replace base URL in current URL if applicable
         if (url) {
@@ -364,7 +439,7 @@ const APIsPage: React.FC = () => {
     }, [sendRequest]);
 
     const loadFromEndpoint = (ep: any) => {
-        setMethod(ep.method || "GET"); setUrl(ep.path.startsWith("http") ? ep.path : `http://localhost:3001${ep.path}`); setResponse(null);
+        setMethod(ep.method || "GET"); setUrl(ep.path.startsWith("http") ? ep.path : `http://localhost:${API_PORT}${ep.path}`); setResponse(null);
         if (ep.request_body?.fields?.length > 0) {
             const skeleton: Record<string, string> = {};
             ep.request_body.fields.forEach((f: any) => { skeleton[f.name] = f.field_type === "number" ? "0" : f.field_type === "boolean" ? "false" : ""; });
@@ -390,6 +465,117 @@ const APIsPage: React.FC = () => {
         const hPairs = Object.entries(parsed.headers).map(([key, value]) => ({ key, value, enabled: true }));
         if (hPairs.length > 0) setHeaders(hPairs);
         setImportCurlOpen(false); setImportCurlText(""); setToast({ message: "cURL imported successfully", type: "success" });
+    };
+
+    // ─── GitHub Browse & Import ───
+    const parseGhRepo = (input: string): { owner: string; repo: string } | null => {
+        const clean = input.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").trim();
+        const parts = clean.split("/").filter(Boolean);
+        if (parts.length >= 2) return { owner: parts[0]!, repo: parts[1]! };
+        return null;
+    };
+    const browseGhRepo = async () => {
+        const parsed = parseGhRepo(ghRepoInput);
+        if (!parsed) { setToast({ message: "Invalid repo format. Use owner/repo", type: "error" }); return; }
+        setGhLoading(true); setGhFileTree(null); setGhBreadcrumbs([]); setGhPreview([]);
+        try {
+            const data = await api.githubRepoContents(parsed.owner, parsed.repo);
+            const entries = Array.isArray(data) ? data : [];
+            setGhFileTree(entries);
+            if (entries.length > 0) {
+                const allResults = await collectGhApis(parsed.owner, parsed.repo, entries);
+                setGhPreview(allResults);
+                if (allResults.length === 0) setToast({ message: "No parseable API files found", type: "error" });
+            }
+        } catch (err: any) { setToast({ message: `Failed to fetch repo: ${err.message}`, type: "error" }); }
+        finally { setGhLoading(false); }
+    };
+    const browseGhDir = async (path: string) => {
+        const parsed = parseGhRepo(ghRepoInput);
+        if (!parsed) return;
+        setGhLoading(true);
+        try {
+            const data = await api.githubRepoContents(parsed.owner, parsed.repo, path);
+            setGhFileTree(Array.isArray(data) ? data : []);
+            setGhBreadcrumbs(path ? path.split("/") : []);
+            setGhPreview([]);
+        } catch (err: any) { setToast({ message: `Failed to fetch: ${err.message}`, type: "error" }); }
+        finally { setGhLoading(false); }
+    };
+    const fetchGhFileContent = async (entry: GitHubFileEntry, owner: string, repo: string): Promise<string | null> => {
+        try {
+            const data = await api.githubRepoContents(owner, repo, entry.path);
+            if (data.content) {
+                const decoded = atob(data.content.replace(/\n/g, ""));
+                return decoded;
+            }
+            if (data.download_url) {
+                const res = await fetch(data.download_url);
+                return await res.text();
+            }
+            return null;
+        } catch { return null; }
+    };
+    // Recursively walk all directories and collect API endpoints (no UI side effects)
+    const collectGhApis = async (owner: string, repo: string, entries: GitHubFileEntry[]): Promise<{ file: string; endpoints: { method: string; path: string; name: string }[] }[]> => {
+        const results: { file: string; endpoints: { method: string; path: string; name: string }[] }[] = [];
+        const dirs = entries.filter(e => e.type === "dir");
+        const files = entries.filter(e => e.type === "file" && API_FILE_EXTS.some(ext => e.name.endsWith(ext)));
+        for (const file of files) {
+            const content = await fetchGhFileContent(file, owner, repo);
+            if (content) {
+                const parsed = parseApiFile(content);
+                if (parsed && parsed.length > 0) results.push({ file: file.name, endpoints: parsed });
+            }
+        }
+        const chunkSize = 5;
+        for (let i = 0; i < dirs.length; i += chunkSize) {
+            const chunk = dirs.slice(i, i + chunkSize);
+            const subResults = await Promise.all(chunk.map(async (dir) => {
+                try {
+                    const subData = await api.githubRepoContents(owner, repo, dir.path);
+                    if (Array.isArray(subData)) return await collectGhApis(owner, repo, subData);
+                    return [];
+                } catch { return []; }
+            }));
+            for (const sr of subResults.flat()) results.push(sr);
+        }
+        return results;
+    };
+    const scanGhFromRoot = async () => {
+        const parsed = parseGhRepo(ghRepoInput);
+        if (!parsed) return;
+        setGhLoading(true); setGhPreview([]);
+        try {
+            const data = await api.githubRepoContents(parsed.owner, parsed.repo);
+            if (Array.isArray(data)) {
+                setGhFileTree(data);
+                const allResults = await collectGhApis(parsed.owner, parsed.repo, data);
+                setGhPreview(allResults);
+                if (allResults.length === 0) setToast({ message: "No parseable API files found in the entire repo", type: "error" });
+            }
+        } catch (err: any) { setToast({ message: `Failed: ${err.message}`, type: "error" }); }
+        finally { setGhLoading(false); }
+    };
+    // Auto-scan wrapper for the initial auto-browse
+    const autoScanGh = async (owner: string, repo: string, entries: GitHubFileEntry[]) => {
+        setGhLoading(true);
+        try {
+            const allResults = await collectGhApis(owner, repo, entries);
+            setGhPreview(allResults);
+        } finally { setGhLoading(false); }
+    };
+    const importGhEndpoints = async () => {
+        if (ghPreview.length === 0) return;
+        let imported = 0;
+        for (const group of ghPreview) {
+            for (const ep of group.endpoints) {
+                try { await addApi(ep.method, ep.path, ep.name); imported++; }
+                catch { /* skip duplicates */ }
+            }
+        }
+        setGhPreview([]); setGithubImportOpen(false);
+        setToast({ message: `Imported ${imported} endpoint(s) from GitHub`, type: "success" });
     };
 
     const handleSaveToCollection = async () => {
@@ -484,6 +670,7 @@ const APIsPage: React.FC = () => {
                     <button onClick={() => setImportCurlOpen(true)} style={{ flex: 1, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>IMPORT CURL</button>
                     <button onClick={() => setCodeGenOpen(true)} style={{ flex: 1, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>GENERATE CODE</button>
                     <button onClick={() => setPresetOpen(true)} style={{ flex: 1, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>LOAD PRESET</button>
+                    <button onClick={() => setGithubImportOpen(true)} style={{ flex: "1 0 auto", background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>IMPORT GITHUB</button>
                 </div>
 
                 {/* Collection Search */}
@@ -782,17 +969,86 @@ const APIsPage: React.FC = () => {
                 </div>
                 </ApiModal>
 
+            {/* GitHub Import */}
+                <ApiModal isOpen={githubImportOpen} onClose={() => { setGithubImportOpen(false); setGhFileTree(null); setGhPreview([]); }} title="Import from GitHub" width="620px">
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    <input style={{ ...inputStyle, flex: 1 }} value={ghRepoInput} onChange={e => setGhRepoInput(e.target.value)} placeholder="owner/repo (e.g. expressjs/express)" onKeyDown={e => { if (e.key === "Enter") browseGhRepo(); }} />
+                    <button onClick={browseGhRepo} disabled={ghLoading} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 20px", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>{ghLoading ? "Loading..." : "Browse"}</button>
+                </div>
+
+                {ghFileTree && (
+                    <>
+                        {/* Breadcrumbs */}
+                        {ghBreadcrumbs.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginBottom: 8, fontSize: 11, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.5)", flexWrap: "wrap" }}>
+                                <span onClick={() => browseGhDir("")} style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>root</span>
+                                {ghBreadcrumbs.map((crumb, i) => (
+                                    <React.Fragment key={i}>
+                                        <span>/</span>
+                                        <span onClick={() => browseGhDir(ghBreadcrumbs.slice(0, i + 1).join("/"))} style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>{crumb}</span>
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        )}
+                        {/* File tree */}
+                        <div style={{ maxHeight: 240, overflowY: "auto", border: `1px solid ${shellBorder}`, borderRadius: 8, padding: 8, marginBottom: 12, background: "rgba(0,0,0,0.2)" }}>
+                            {ghFileTree.map((entry, i) => {
+                                const isApiFile = entry.type === "file" && API_FILE_EXTS.some(ex => entry.name.endsWith(ex));
+                                return (
+                                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 4, cursor: entry.type === "dir" ? "pointer" : "default", background: isApiFile ? "rgba(255,255,255,0.04)" : "transparent" }} onClick={() => { if (entry.type === "dir") browseGhDir(entry.path); }}>
+                                        <span style={{ fontSize: 11, color: entry.type === "dir" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.4)", fontFamily: "'Space Mono', monospace" }}>{entry.type === "dir" ? "📁" : isApiFile ? "📄" : "  "}</span>
+                                        <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: entry.type === "dir" ? "white" : "var(--ide-text-secondary)" }}>{entry.name}</span>
+                                        {isApiFile && <span style={{ marginLeft: "auto", fontSize: 9, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.05)", padding: "1px 6px", borderRadius: 4, fontFamily: "'Space Mono', monospace" }}>API</span>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
+
+                {/* Loading / Scanning indicator */}
+                {ghLoading && (
+                    <div style={{ fontSize: 11, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "8px 0", marginBottom: 8 }}>
+                        Scanning repo for API definitions...
+                    </div>
+                )}
+
+                {/* Rescan button (always visible when modal is open) */}
+                <button onClick={scanGhFromRoot} disabled={ghLoading} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 16px", fontSize: 12, fontFamily: "'Space Mono', monospace", marginBottom: 12, width: "100%" }}>{ghLoading ? "Scanning..." : "Rescan Entire Repo"}</button>
+
+                {/* Preview */}
+                {ghPreview.length > 0 && (
+                    <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 12, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: 12, background: "rgba(0,0,0,0.2)" }}>
+                        <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Preview ({ghPreview.reduce((s, g) => s + g.endpoints.length, 0)} endpoints)</div>
+                        {ghPreview.map((group, gi) => (
+                            <div key={gi} style={{ marginBottom: 8 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: "white", fontFamily: "'Space Mono', monospace", marginBottom: 4 }}>{group.file}</div>
+                                {group.endpoints.slice(0, 10).map((ep, ei) => (
+                                    <div key={ei} style={{ display: "flex", gap: 6, alignItems: "center", padding: "2px 0" }}>
+                                        <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: METHOD_COLORS[ep.method] + "15", color: METHOD_COLORS[ep.method], border: `1px solid ${METHOD_COLORS[ep.method]}40` }}>{ep.method}</span>
+                                        <span style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{ep.path}</span>
+                                        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{ep.name}</span>
+                                    </div>
+                                ))}
+                                {group.endpoints.length > 10 && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'Space Mono', monospace" }}>...and {group.endpoints.length - 10} more</div>}
+                            </div>
+                        ))}
+                        <button onClick={importGhEndpoints} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "white", cursor: "pointer", padding: "10px 0", fontSize: 13, fontWeight: 600, width: "100%", marginTop: 8 }}>Import All Endpoints</button>
+                    </div>
+                )}
+                </ApiModal>
+
             {/* Environment Editor */}
                 <ApiModal isOpen={envEditorOpen} onClose={() => setEnvEditorOpen(false)} title="Manage Environments" width="550px">
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {environments.map((env, i) => (
                         <div key={i} style={{ padding: 12, background: "rgba(255,255,255,0.02)", border: `1px solid ${i === activeEnvIdx ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
                             <div style={{ display: "flex", gap: 8 }}>
-                                <input style={{ ...inputStyle, flex: 1, padding: "5px 10px", fontSize: 12 }} value={env.name} onChange={e => { const u = [...environments]; u[i] = { ...u[i], name: e.target.value }; setEnvironments(u); }} placeholder="Name" />
+                                <input style={{ ...inputStyle, flex: 1, padding: "5px 10px", fontSize: 12 }} value={env.name} onChange={e => { const u = [...environments]; const current = u[i]; if (current) { u[i] = { ...current, name: e.target.value }; setEnvironments(u); } }} placeholder="Name" />
                                 <button onClick={() => { if (environments.length > 1) setEnvironments(environments.filter((_, j) => j !== i)); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "rgba(255,255,255,0.6)", fontSize: 9, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>REMOVE</button>
                             </div>
-                            <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.baseUrl} onChange={e => { const u = [...environments]; u[i] = { ...u[i], baseUrl: e.target.value }; setEnvironments(u); }} placeholder="Base URL" />
-                            <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.token} onChange={e => { const u = [...environments]; u[i] = { ...u[i], token: e.target.value }; setEnvironments(u); }} placeholder="Bearer Token (optional)" type="password" />
+                            <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.baseUrl} onChange={e => { const u = [...environments]; const current = u[i]; if (current) { u[i] = { ...current, baseUrl: e.target.value }; setEnvironments(u); } }} placeholder="Base URL" />
+                            <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.token} onChange={e => { const u = [...environments]; const current = u[i]; if (current) { u[i] = { ...current, token: e.target.value }; setEnvironments(u); } }} placeholder="Bearer Token (optional)" type="password" />
                         </div>
                     ))}
                     <button onClick={() => setEnvironments([...environments, { name: "New", baseUrl: "http://localhost:3000", token: "" }])} style={{ alignSelf: "flex-start", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "white", fontSize: 11, padding: "6px 14px", cursor: "pointer" }}>+ Add Environment</button>

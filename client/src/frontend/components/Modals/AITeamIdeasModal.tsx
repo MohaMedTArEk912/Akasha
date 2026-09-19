@@ -7,7 +7,7 @@ interface AITeamIdeasModalProps {
     onClose: () => void;
 }
 
-const API_BASE = "http://localhost:3001/api/ai";
+const API_BASE = "/api/akasha/ai";
 
 const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) => {
     const toast = useToast();
@@ -20,6 +20,15 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
     const [status, setStatus] = useState<string | null>(null);
     const [, setTeam] = useState<string | null>(null);
 
+    const authenticatedFetch = async (url: string, init?: RequestInit) => {
+        const token = localStorage.getItem("akasha_token") || localStorage.getItem("token") || "";
+        const headers: HeadersInit = {
+            ...(init?.headers || {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+        };
+        return fetch(url, { ...init, headers });
+    };
+
     useEffect(() => {
         if (isOpen) {
             let sid = localStorage.getItem("akasha_user_session");
@@ -29,14 +38,14 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
             }
             setSessionId(sid);
 
-            fetch(`${API_BASE}/status?sessionId=${sid}`)
+            authenticatedFetch(`${API_BASE}/status?sessionId=${sid}`)
                 .then(res => res.json())
                 .then(data => {
                     setTeam(data.team);
                     setStatus(data.status);
 
                     if (data.status === 'admin' || data.status === 'member') {
-                        fetch(`${API_BASE}/register`, {
+                        authenticatedFetch(`${API_BASE}/register`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ username: "AkashaUser", sessionId: sid })
@@ -50,7 +59,7 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
     const fetchIdeas = async () => {
         if (!sessionId) return;
         try {
-            const res = await fetch(`${API_BASE}/ideas?sessionId=${sessionId}`);
+            const res = await authenticatedFetch(`${API_BASE}/ideas?sessionId=${sessionId}`);
             const data = await res.json();
             setIdeas(data.reverse());
         } catch (err) { }
@@ -59,7 +68,7 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
     const fetchBest = async () => {
         if (!sessionId) return;
         try {
-            const res = await fetch(`${API_BASE}/top-ideas?sessionId=${sessionId}&limit=1`);
+            const res = await authenticatedFetch(`${API_BASE}/top-ideas?sessionId=${sessionId}&limit=1`);
             const data = await res.json();
             if (data && data.length > 0) {
                 setBestIdea(data[0]);
@@ -73,15 +82,15 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
                 setPipelineResult(null);
             }
         } catch (err) { }
-    }
+    };
 
     const fetchPipelineResult = async (ideaId: string) => {
         try {
-            const res = await fetch(`${API_BASE}/pipeline-result?sessionId=${sessionId}&ideaId=${ideaId}`);
+            const res = await authenticatedFetch(`${API_BASE}/pipeline-result?sessionId=${sessionId}&ideaId=${ideaId}`);
             const data = await res.json();
             setPipelineResult(data);
         } catch (err) { }
-    }
+    };
 
     useEffect(() => {
         if (!isOpen) return;
@@ -98,7 +107,7 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
         if (!input.trim() || !sessionId) return;
         setIsSubmitting(true);
         try {
-            await fetch(`${API_BASE}/submit-idea`, {
+            await authenticatedFetch(`${API_BASE}/submit-idea`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ idea: input.trim(), sessionId })
@@ -115,7 +124,7 @@ const AITeamIdeasModal: React.FC<AITeamIdeasModalProps> = ({ isOpen, onClose }) 
     const handleTriggerPipeline = async () => {
         if (!bestIdea || !sessionId) return;
         try {
-            await fetch(`${API_BASE}/trigger-pipeline`, {
+            await authenticatedFetch(`${API_BASE}/trigger-pipeline`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ ideaId: bestIdea.id, sessionId })

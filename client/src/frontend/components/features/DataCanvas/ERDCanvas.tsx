@@ -1,17 +1,53 @@
 /**
  * ERDCanvas Component - React version
- * 
+ *
  * Entity-Relationship Diagram editor for database schema design.
  * Allows creating data models with fields and relations.
  */
 
 import React, { useState, useRef, useEffect } from "react";
-import { addDataModel, addField, archiveDataModel, deleteField, generateSchemaFromIdea } from "../../../stores/projectStore";
+import {
+    addDataModel,
+    addField,
+    deleteField,
+    archiveDataModel,
+    generateSchemaFromIdea,
+    addRelation,
+    deleteRelation,
+} from "../../../stores/projectStore";
 import { useProjectStore } from "../../../hooks/useProjectStore";
-import { DataModelSchema, FieldSchema } from "../../../hooks/useApi";
+import { DataModelSchema, FieldSchema, RelationSchema } from "../../../hooks/useApi";
 import PromptModal, { PromptField } from "../../ui/PromptModal";
 import ConfirmModal from "../../Modals/ConfirmModal";
 import { useToast } from "../../../context/ToastContext";
+
+// ─── Relation type helpers ──────────────────────────────────────────────────
+
+const RELATION_TYPES = [
+    { label: "One to One  (1 : 1)", value: "OneToOne" },
+    { label: "One to Many (1 : N)", value: "OneToMany" },
+    { label: "Many to Many (N : N)", value: "ManyToMany" },
+];
+
+function relationLabel(type: string): string {
+    switch (type) {
+        case "OneToOne": return "1 : 1";
+        case "OneToMany": return "1 : N";
+        case "ManyToMany": return "N : N";
+        default: return type;
+    }
+}
+
+function relationColor(type: string): string {
+    switch (type) {
+        case "OneToOne": return "#a78bfa";   // purple
+        case "OneToMany": return "#60a5fa";  // blue
+        case "ManyToMany": return "#34d399"; // green
+        default: return "#9ca3af";
+    }
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
 
 const ERDCanvas: React.FC = () => {
     const { project } = useProjectStore();
@@ -23,10 +59,22 @@ const ERDCanvas: React.FC = () => {
     const [showAiMenu, setShowAiMenu] = useState(false);
     const [aiMode, setAiMode] = useState<"scratch" | "fix">("scratch");
     const [deleteModelTarget, setDeleteModelTarget] = useState<{ id: string; name: string } | null>(null);
-    const [deleteFieldTarget, setDeleteFieldTarget] = useState<{ modelId: string; fieldName: string } | null>(null);
+    const [deleteFieldTarget, setDeleteFieldTarget] = useState<{ modelId: string; fieldId: string; fieldName: string } | null>(null);
     const [addFieldModelId, setAddFieldModelId] = useState<string | null>(null);
+
+    // Relation state
+    const [addRelationModelId, setAddRelationModelId] = useState<string | null>(null);
+    const [deleteRelationTarget, setDeleteRelationTarget] = useState<{
+        modelId: string;
+        relationId: string;
+        relationName: string;
+    } | null>(null);
+
     const toast = useToast();
 
+    const models = project?.data_models.filter(m => !m.archived) || [];
+
+    // ── Model fields for prompt modal ──────────────────────────────────────
     const modelFields: PromptField[] = [
         {
             name: "name",
@@ -37,11 +85,8 @@ const ERDCanvas: React.FC = () => {
         },
     ];
 
-    const models = project?.data_models.filter(m => !m.archived) || [];
-
-    const handleAddModel = () => {
-        setPromptOpen(true);
-    };
+    // ── AI Generate ────────────────────────────────────────────────────────
+    const handleAddModel = () => setPromptOpen(true);
 
     const handleGenerateClick = () => {
         if (!project?.description?.trim()) {
@@ -57,9 +102,11 @@ const ERDCanvas: React.FC = () => {
         setGenerating(true);
         try {
             await generateSchemaFromIdea(mode);
-            toast.success(mode === "scratch" 
-                ? "Database schema regenerated from scratch!" 
-                : "Database schema updated and fixed!");
+            toast.success(
+                mode === "scratch"
+                    ? "Database schema regenerated from scratch!"
+                    : "Database schema updated and fixed!"
+            );
         } catch (err: any) {
             const message = err?.response?.data?.error || err?.message || String(err);
             toast.error(`AI Help failed: ${message}`);
@@ -68,41 +115,110 @@ const ERDCanvas: React.FC = () => {
         }
     };
 
+    // ── Delete Model ───────────────────────────────────────────────────────
     const handleDeleteModel = async () => {
         if (!deleteModelTarget) return;
         try {
             await archiveDataModel(deleteModelTarget.id);
             toast.success(`Model "${deleteModelTarget.name}" deleted`);
+            if (selectedModelId === deleteModelTarget.id) setSelectedModelId(null);
         } catch (err) {
             toast.error(`Failed to delete model: ${err}`);
         }
         setDeleteModelTarget(null);
     };
 
+    // ── Delete Field ───────────────────────────────────────────────────────
+    // FIX: use fieldId (not fieldName) — the API expects the UUID field ID
     const handleDeleteField = async () => {
         if (!deleteFieldTarget) return;
         try {
-            await deleteField(deleteFieldTarget.modelId, deleteFieldTarget.fieldName);
+            await deleteField(deleteFieldTarget.modelId, deleteFieldTarget.fieldId);
+            toast.success(`Field "${deleteFieldTarget.fieldName}" deleted`);
         } catch (err) {
             toast.error(`Failed to delete field: ${err}`);
         }
         setDeleteFieldTarget(null);
     };
 
-    const handleAddField = async (values: Record<string, string>) => {
+    // ── Add Field ──────────────────────────────────────────────────────────
+    const handleAddField = async (formValues: Record<string, string>) => {
         if (!addFieldModelId) return;
+        const { name, type, required } = formValues as { name?: string; type?: string; required?: string };
+        const trimmedName = (name || "").trim();
+
+        if (!trimmedName) {
+            toast.error("Field name is required");
+            return;
+        }
+
         try {
-            await addField(
-                addFieldModelId,
-                values.name.trim(),
-                values.type as any,
-                values.required === "true"
-            );
-            toast.success(`Field "${values.name.trim()}" added`);
+            await addField(addFieldModelId, trimmedName, type || "string", required === "true");
+            toast.success(`Field "${trimmedName}" added`);
+            setAddFieldModelId(null);
         } catch (err) {
             toast.error(`Failed to add field: ${err}`);
         }
     };
+
+    // ── Add Relation ───────────────────────────────────────────────────────
+    const handleAddRelation = async (formValues: Record<string, string>) => {
+        if (!addRelationModelId) return;
+        const { name, targetModelId, relationType } = formValues as { name?: string; targetModelId?: string; relationType?: string };
+        const trimmedName = (name || "").trim();
+
+        if (!trimmedName || !targetModelId || !relationType) {
+            toast.error("All relation fields are required");
+            return;
+        }
+
+        try {
+            await addRelation(addRelationModelId, trimmedName, targetModelId, relationType);
+            toast.success(`Relation "${trimmedName}" added`);
+            setAddRelationModelId(null);
+        } catch (err) {
+            toast.error(`Failed to add relation: ${err}`);
+        }
+    };
+
+    // ── Delete Relation ────────────────────────────────────────────────────
+    const handleDeleteRelation = async () => {
+        if (!deleteRelationTarget) return;
+        try {
+            await deleteRelation(deleteRelationTarget.modelId, deleteRelationTarget.relationId);
+            toast.success(`Relation "${deleteRelationTarget.relationName}" deleted`);
+        } catch (err) {
+            toast.error(`Failed to delete relation: ${err}`);
+        }
+        setDeleteRelationTarget(null);
+    };
+
+    // ─── Relation prompt fields (dynamic based on available models) ────────
+    const relationFields: PromptField[] = [
+        {
+            name: "name",
+            label: "Relation name",
+            placeholder: "e.g. posts, author, tags",
+            helperText: "camelCase property name for this relation",
+            required: true,
+        },
+        {
+            name: "targetModelId",
+            label: "Target model",
+            type: "select",
+            options: models
+                .filter(m => m.id !== addRelationModelId)
+                .map(m => ({ label: m.name, value: m.id })),
+            required: true,
+        },
+        {
+            name: "relationType",
+            label: "Relation type",
+            type: "select",
+            options: RELATION_TYPES,
+            required: true,
+        },
+    ];
 
     return (
         <div className="flex-1 min-h-0 w-full flex flex-col bg-transparent">
@@ -142,7 +258,7 @@ const ERDCanvas: React.FC = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
                                 AI Help
-                                <svg className={`w-3 h-3 ml-0.5 transition-transform ${showAiMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className={`w-3 h-3 ml-0.5 transition-transform ${showAiMenu ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </>
@@ -153,11 +269,11 @@ const ERDCanvas: React.FC = () => {
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setShowAiMenu(false)} />
                             <div className="absolute top-full left-0 mt-2 w-64 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
-                                <button 
+                                <button
                                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-500/10 flex items-center gap-2 group transition-colors"
                                     onClick={() => {
                                         setAiMode("scratch");
-                                        handleGenerateClick(); // Opens modal
+                                        handleGenerateClick();
                                         setShowAiMenu(false);
                                     }}
                                 >
@@ -171,11 +287,11 @@ const ERDCanvas: React.FC = () => {
                                         <div className="text-[10px] text-[var(--ide-text-muted)]">Delete all models and start over</div>
                                     </div>
                                 </button>
-                                <button 
+                                <button
                                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center gap-2 group transition-colors border-t border-white/5"
                                     onClick={() => {
                                         setAiMode("fix");
-                                        handleGenerateClick(); // Opens modal for fix too
+                                        handleGenerateClick();
                                         setShowAiMenu(false);
                                     }}
                                 >
@@ -206,37 +322,45 @@ const ERDCanvas: React.FC = () => {
                     </svg>
                 </button>
                 <div className="flex-1" />
-                <span className="text-xs text-[var(--ide-text-muted)]">
-                    {models.length} models
-                </span>
+                <span className="text-xs text-[var(--ide-text-muted)]">{models.length} models</span>
             </div>
 
-            {/* Modals */}
+            {/* ── Modals ───────────────────────────────────────────────────────── */}
+
+            {/* Create Model */}
             <PromptModal
                 isOpen={promptOpen}
                 title="New Data Model"
                 fields={modelFields}
                 confirmText="Create"
                 onClose={() => setPromptOpen(false)}
-                onSubmit={async (values) => {
+                onSubmit={async (formValues) => {
+                    const { name } = formValues as { name?: string };
+                    const trimmedName = (name || "").trim();
+                    if (!trimmedName) {
+                        toast.error("Model name is required");
+                        return;
+                    }
                     try {
-                        await addDataModel(values.name.trim());
-                        toast.success(`Model "${values.name.trim()}" created`);
+                        await addDataModel(trimmedName);
+                        toast.success(`Model "${trimmedName}" created`);
+                        setPromptOpen(false);
                     } catch (err) {
                         toast.error(`Failed to create model: ${err}`);
                     }
                 }}
             />
 
+            {/* Add Field */}
             <PromptModal
                 isOpen={!!addFieldModelId}
                 title="Add Field"
                 fields={[
                     { name: "name", label: "Field name", placeholder: "e.g. email, status", required: true },
-                    { 
-                        name: "type", 
-                        label: "Field type", 
-                        type: "select", 
+                    {
+                        name: "type",
+                        label: "Field type",
+                        type: "select",
                         options: [
                             { label: "String", value: "string" },
                             { label: "Int", value: "int" },
@@ -246,7 +370,7 @@ const ERDCanvas: React.FC = () => {
                             { label: "UUID", value: "uuid" },
                             { label: "Text", value: "text" },
                         ],
-                        required: true 
+                        required: true,
                     },
                     {
                         name: "required",
@@ -254,22 +378,34 @@ const ERDCanvas: React.FC = () => {
                         type: "select",
                         options: [
                             { label: "Yes", value: "true" },
-                            { label: "No", value: "false" }
+                            { label: "No", value: "false" },
                         ],
-                        required: true
-                    }
+                        required: true,
+                    },
                 ]}
-                confirmText="Add"
+                confirmText="Add Field"
                 onClose={() => setAddFieldModelId(null)}
                 onSubmit={handleAddField}
             />
 
+            {/* Add Relation */}
+            <PromptModal
+                isOpen={!!addRelationModelId}
+                title="Add Relation"
+                fields={relationFields}
+                confirmText="Add Relation"
+                onClose={() => setAddRelationModelId(null)}
+                onSubmit={handleAddRelation}
+            />
+
+            {/* Confirm: AI Regenerate */}
             <ConfirmModal
                 isOpen={generateConfirmOpen}
                 title={aiMode === "scratch" ? "Regenerate Schema" : "Improve Schema"}
-                message={aiMode === "scratch" 
-                    ? "This will DELETE ALL current models and recreate the entire database schema from your project idea. This cannot be undone. Proceed?"
-                    : "This will analyze your current models and add any missing fields or tables needed to support your project idea. Proceed?"
+                message={
+                    aiMode === "scratch"
+                        ? "This will DELETE ALL current models and recreate the entire database schema from your project idea. This cannot be undone. Proceed?"
+                        : "This will analyze your current models and add any missing fields or tables needed to support your project idea. Proceed?"
                 }
                 confirmText={aiMode === "scratch" ? "Delete & Regenerate" : "Check & Fix"}
                 cancelText="Cancel"
@@ -278,6 +414,7 @@ const ERDCanvas: React.FC = () => {
                 onCancel={() => setGenerateConfirmOpen(false)}
             />
 
+            {/* Confirm: Delete Model */}
             <ConfirmModal
                 isOpen={!!deleteModelTarget}
                 title="Delete Model"
@@ -289,6 +426,7 @@ const ERDCanvas: React.FC = () => {
                 onCancel={() => setDeleteModelTarget(null)}
             />
 
+            {/* Confirm: Delete Field */}
             <ConfirmModal
                 isOpen={!!deleteFieldTarget}
                 title="Delete Field"
@@ -300,24 +438,29 @@ const ERDCanvas: React.FC = () => {
                 onCancel={() => setDeleteFieldTarget(null)}
             />
 
-            {/* ERD Canvas Area */}
+            {/* Confirm: Delete Relation */}
+            <ConfirmModal
+                isOpen={!!deleteRelationTarget}
+                title="Delete Relation"
+                message={`Are you sure you want to delete the relation "${deleteRelationTarget?.relationName}"?`}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={handleDeleteRelation}
+                onCancel={() => setDeleteRelationTarget(null)}
+            />
+
+            {/* ── ERD Canvas Area ──────────────────────────────────────────────── */}
             <div className="flex-1 overflow-auto p-6 md:p-10 relative">
                 {models.length > 0 ? (
                     <div
                         className="relative min-h-[600px] min-w-[800px]"
                         style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
                     >
-                        {/* Render relation lines first (behind models) */}
+                        {/* Relation lines (placeholder SVG layer) */}
                         <svg className="absolute inset-0 w-full h-full pointer-events-none">
                             <defs>
-                                <marker
-                                    id="arrowhead"
-                                    markerWidth="10"
-                                    markerHeight="7"
-                                    refX="9"
-                                    refY="3.5"
-                                    orient="auto"
-                                >
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                                     <polygon points="0 0, 10 3.5, 0 7" fill="white" fillOpacity="0.4" />
                                 </marker>
                             </defs>
@@ -325,28 +468,34 @@ const ERDCanvas: React.FC = () => {
 
                         {/* Model Cards */}
                         <div className="flex flex-wrap gap-6">
-                            {models.map((model, index) => (
+                            {models.map((model) => (
                                 <ModelCard
                                     key={model.id}
                                     model={model}
+                                    allModels={models}
                                     selected={selectedModelId === model.id}
                                     onSelect={() => setSelectedModelId(model.id)}
                                     onRequestDelete={() => setDeleteModelTarget({ id: model.id, name: model.name })}
-                                    onRequestDeleteField={(fieldName) => setDeleteFieldTarget({ modelId: model.id, fieldName })}
+                                    onRequestDeleteField={(fieldId, fieldName) =>
+                                        setDeleteFieldTarget({ modelId: model.id, fieldId, fieldName })
+                                    }
                                     onRequestAddField={() => setAddFieldModelId(model.id)}
-                                    position={{ x: (index % 3) * 300 + 50, y: Math.floor(index / 3) * 280 + 50 }}
+                                    onRequestAddRelation={() => setAddRelationModelId(model.id)}
+                                    onRequestDeleteRelation={(relationId, relationName) =>
+                                        setDeleteRelationTarget({ modelId: model.id, relationId, relationName })
+                                    }
                                 />
                             ))}
                         </div>
                     </div>
                 ) : (
-                    <EmptyERDState 
-                        onAdd={handleAddModel} 
+                    <EmptyERDState
+                        onAdd={handleAddModel}
                         onGenerate={(mode) => {
                             if (mode) setAiMode(mode);
                             handleGenerateClick();
-                        }} 
-                        generating={generating} 
+                        }}
+                        generating={generating}
                     />
                 )}
             </div>
@@ -354,27 +503,39 @@ const ERDCanvas: React.FC = () => {
     );
 };
 
-// Model Card Component
+// ─── Model Card ────────────────────────────────────────────────────────────
+
 interface ModelCardProps {
     model: DataModelSchema;
+    allModels: DataModelSchema[];
     selected: boolean;
     onSelect: () => void;
     onRequestDelete: () => void;
-    onRequestDeleteField: (fieldName: string) => void;
+    onRequestDeleteField: (fieldId: string, fieldName: string) => void;
     onRequestAddField: () => void;
-    position: { x: number; y: number };
+    onRequestAddRelation: () => void;
+    onRequestDeleteRelation: (relationId: string, relationName: string) => void;
 }
 
-const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect, onRequestDelete, onRequestDeleteField, onRequestAddField }) => {
+const ModelCard: React.FC<ModelCardProps> = ({
+    model,
+    allModels,
+    selected,
+    onSelect,
+    onRequestDelete,
+    onRequestDeleteField,
+    onRequestAddField,
+    onRequestAddRelation,
+    onRequestDeleteRelation,
+}) => {
     return (
         <div
-            className={`w-64 rounded-xl border overflow-hidden bg-black/40 backdrop-blur-xl transition-all cursor-move shadow-2xl ${selected
-                ? "border-white/40 shadow-white/5"
-                : "border-white/10 hover:border-white/30"
-                }`}
+            className={`w-72 rounded-xl border overflow-hidden bg-black/40 backdrop-blur-xl transition-all cursor-pointer shadow-2xl ${
+                selected ? "border-white/40 shadow-white/5" : "border-white/10 hover:border-white/30"
+            }`}
             onClick={onSelect}
         >
-            {/* Model Header */}
+            {/* Header */}
             <div className="bg-white/5 px-4 py-3 pb-2.5 border-b border-white/5 flex items-center gap-2">
                 <svg className="w-5 h-5 text-[var(--ide-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
@@ -383,10 +544,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect, onRequ
                 <button
                     className="p-1 text-white/60 hover:text-red-300 transition-colors rounded"
                     title="Delete model"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onRequestDelete();
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -399,98 +557,112 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, selected, onSelect, onRequ
                 {model.fields.length > 0 ? (
                     model.fields.map((field) => (
                         <FieldRow
-                            key={`${model.id}-${field.name}`}
+                            key={field.id}
                             field={field}
-                            modelId={model.id}
-                            onRequestDelete={() => onRequestDeleteField(field.name)}
+                            onRequestDelete={() => onRequestDeleteField(field.id, field.name)}
                         />
                     ))
                 ) : (
-                    <div className="px-4 py-3 text-xs text-[var(--ide-text-muted)] italic">
-                        No fields defined
-                    </div>
+                    <div className="px-4 py-3 text-xs text-[var(--ide-text-muted)] italic">No fields defined</div>
                 )}
             </div>
 
+            {/* Relations section */}
+            {model.relations && model.relations.length > 0 && (
+                <div className="border-t border-white/[0.06]">
+                    <div className="px-4 py-1.5 text-[10px] font-bold text-white/30 uppercase tracking-widest">
+                        Relations
+                    </div>
+                    <div className="divide-y divide-white/5">
+                        {model.relations.map((rel) => (
+                            <RelationRow
+                                key={rel.id}
+                                relation={rel}
+                                allModels={allModels}
+                                onRequestDelete={() => onRequestDeleteRelation(rel.id, rel.name)}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Footer */}
-            <div className="px-4 py-2 bg-black/20 flex items-center justify-between text-xs text-[var(--ide-text-muted)] border-t border-white/5">
-                <span className="flex items-center gap-1">
+            <div className="px-4 py-2 bg-black/20 flex items-center justify-between border-t border-white/5">
+                <span className="flex items-center gap-1 flex-wrap">
                     {model.timestamps && (
-                        <span className="px-1.5 py-0.5 rounded bg-white/5 text-white/40">timestamps</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40">timestamps</span>
                     )}
                     {model.soft_delete && (
-                        <span className="px-1.5 py-0.5 rounded bg-white/5 text-white/40">soft delete</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40">soft delete</span>
                     )}
                 </span>
-                <button
-                    className="hover:text-white transition-colors"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onRequestAddField();
-                    }}
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                </button>
+                <div className="flex items-center gap-1">
+                    {/* Add Relation button */}
+                    <button
+                        className="p-1 text-white/40 hover:text-[#a78bfa] transition-colors rounded"
+                        title="Add relation"
+                        onClick={(e) => { e.stopPropagation(); onRequestAddRelation(); }}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                    </button>
+                    {/* Add Field button */}
+                    <button
+                        className="p-1 text-white/40 hover:text-white transition-colors rounded"
+                        title="Add field"
+                        onClick={(e) => { e.stopPropagation(); onRequestAddField(); }}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     );
 };
 
-// Field Row Component
+// ─── Field Row ─────────────────────────────────────────────────────────────
+
 interface FieldRowProps {
     field: FieldSchema;
-    modelId: string;
     onRequestDelete: () => void;
 }
 
+const FIELD_TYPE_COLORS: Record<string, string> = {
+    string: "text-emerald-400/70",
+    text: "text-emerald-400/70",
+    int: "text-blue-400/70",
+    float: "text-cyan-400/70",
+    boolean: "text-amber-400/70",
+    datetime: "text-purple-400/70",
+    uuid: "text-pink-400/70",
+};
+
 const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
-    const getTypeColor = (): string => {
-        switch (field.field_type) {
-            default:
-                return "text-white/45";
-        }
-    };
+    const typeColor = FIELD_TYPE_COLORS[field.field_type?.toLowerCase()] ?? "text-white/45";
 
     return (
         <div className="px-4 py-2 flex items-center gap-2 hover:bg-white/[0.03] transition-colors group">
-            {/* Key Icon */}
             {field.primary_key && (
-                <svg className="w-3 h-3 text-white/60" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 text-amber-400/70 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12.65 10A5.99 5.99 0 006 5c-3.31 0-6 2.69-6 6s2.68 6 6 6a5.99 5.99 0 006.65-5H18v4h4v-4h2v-2H12.65zM6 15c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" />
                 </svg>
             )}
-
-            {/* Field Name */}
-            <span className="text-sm text-[var(--ide-text)] flex-1">
+            <span className="text-sm text-[var(--ide-text)] flex-1 truncate">
                 {field.name}
-                {!field.required && (
-                    <span className="text-[var(--ide-text-muted)]">?</span>
-                )}
+                {!field.required && <span className="text-[var(--ide-text-muted)]">?</span>}
             </span>
-
-            {/* Field Type */}
-            <span className={`text-xs font-mono ${getTypeColor()}`}>
-                {field.field_type}
-            </span>
-
-            {/* Unique Badge */}
+            <span className={`text-xs font-mono flex-shrink-0 ${typeColor}`}>{field.field_type}</span>
             {field.unique && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-white/5 text-white/40">
-                    unique
-                </span>
+                <span className="text-[10px] px-1 py-0.5 rounded bg-white/5 text-white/40 flex-shrink-0">unique</span>
             )}
-
-            {/* Delete field */}
             {!field.primary_key && (
                 <button
-                    className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all"
+                    className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all flex-shrink-0"
                     title="Delete field"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onRequestDelete();
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
                 >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -501,7 +673,50 @@ const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
     );
 };
 
-// Empty State
+// ─── Relation Row ──────────────────────────────────────────────────────────
+
+interface RelationRowProps {
+    relation: RelationSchema;
+    allModels: DataModelSchema[];
+    onRequestDelete: () => void;
+}
+
+const RelationRow: React.FC<RelationRowProps> = ({ relation, allModels, onRequestDelete }) => {
+    const targetModel = allModels.find(m => m.id === relation.target_model_id);
+    const color = relationColor(relation.relation_type);
+    const label = relationLabel(relation.relation_type);
+
+    return (
+        <div className="px-4 py-2 flex items-center gap-2 hover:bg-white/[0.03] transition-colors group">
+            {/* Relation type badge */}
+            <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+                style={{ color, background: `${color}18`, border: `1px solid ${color}30` }}
+            >
+                {label}
+            </span>
+            {/* Relation name */}
+            <span className="text-sm text-[var(--ide-text)] flex-1 truncate">{relation.name}</span>
+            {/* Target model */}
+            <span className="text-xs text-white/40 flex-shrink-0 truncate max-w-[80px]">
+                → {targetModel?.name ?? "Unknown"}
+            </span>
+            {/* Delete */}
+            <button
+                className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all flex-shrink-0"
+                title="Delete relation"
+                onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
+            >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    );
+};
+
+// ─── Empty State ───────────────────────────────────────────────────────────
+
 interface EmptyERDStateProps {
     onAdd: () => void;
     onGenerate: (mode?: "scratch" | "fix") => void;
@@ -530,11 +745,9 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                     </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-[var(--ide-text)] mb-2">
-                    Database Designer
-                </h3>
+                <h3 className="text-lg font-semibold text-[var(--ide-text)] mb-2">Database Designer</h3>
                 <p className="text-sm text-[var(--ide-text-muted)] mb-6">
-                    Design your database schema visually. Create models, define fields, and set up relations.
+                    Design your database schema visually. Create models, add fields, and set up 1:1, 1:N, and N:N relations.
                 </p>
                 <div className="flex flex-col gap-3 items-center">
                     <div className="relative" ref={aiHelpRef}>
@@ -575,7 +788,9 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                                         className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-white/5 rounded-lg transition-all text-left group"
                                     >
                                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:scale-110 transition-all">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
                                         </div>
                                         <div>
                                             <div className="font-bold text-sm">Regenerate from Scratch</div>
@@ -587,7 +802,9 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                                         className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-white/5 rounded-lg transition-all text-left group mt-1"
                                     >
                                         <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:scale-110 transition-all">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
                                         </div>
                                         <div>
                                             <div className="font-bold text-sm">Check and Fix Schema</div>
@@ -603,8 +820,8 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                         <span className="text-[11px] text-[var(--ide-text-muted)] uppercase tracking-widest font-semibold">or</span>
                         <div className="h-px bg-white/5 flex-1" />
                     </div>
-                    <button 
-                        className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-sm shadow-xl mt-1 w-full" 
+                    <button
+                        className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-sm shadow-xl mt-1 w-full"
                         onClick={onAdd}
                     >
                         Create First Model

@@ -15,7 +15,7 @@ interface IdeaWorkshopProps {
     onCancel: () => void;
 }
 
-type Phase = 'input' | 'analyzing' | 'discussion' | 'refining' | 'complete';
+type Phase = 'input' | 'analyzing' | 'discussion' | 'refining' | 'complete' | 'failure';
 type FeaturePriority = 'critical' | 'high' | 'medium' | 'low';
 type FeatureStatus = 'pending' | 'approved' | 'rejected';
 
@@ -471,75 +471,6 @@ function docToMarkdown(doc: RefinedIdeaDoc): string {
     return lines.join('\n\n');
 }
 
-function buildPreviewSections(doc: RefinedIdeaDoc | null, understanding: IdeaUnderstanding | null) {
-    return [
-        {
-            id: 'understanding',
-            title: 'Understanding',
-            items: [
-                understanding?.core_problem || '',
-                understanding?.intended_solution || '',
-                ...(understanding?.target_users || []).slice(0, 2).map((item) => `User: ${item}`),
-            ].filter(Boolean),
-        },
-        {
-            id: 'problem',
-            title: 'Problem',
-            items: doc?.problem_statement || [],
-        },
-        {
-            id: 'value',
-            title: 'Value',
-            items: doc?.core_value_proposition || [],
-        },
-        {
-            id: 'features',
-            title: 'Features',
-            items: (doc?.key_features || []).map((feature) => `${feature.feature} (${feature.rating}/5)`),
-        },
-        {
-            id: 'flows',
-            title: 'Flows',
-            items: doc?.user_flows || [],
-        },
-        {
-            id: 'architecture',
-            title: 'Architecture',
-            items: doc?.technical_architecture || [],
-        },
-        {
-            id: 'apis',
-            title: 'Data & APIs',
-            items: doc?.data_api_requirements || [],
-        },
-        {
-            id: 'milestones',
-            title: 'Milestones',
-            items: (doc?.milestones || []).map((item) => `${item.milestone}: ${item.scope || item.eta || 'Planned'}`),
-        },
-        {
-            id: 'metrics',
-            title: 'Success Metrics',
-            items: doc?.success_metrics || [],
-        },
-        {
-            id: 'risks',
-            title: 'Risks',
-            items: (doc?.risks || []).map((item) => `${item.risk} -> ${item.mitigation || item.impact || 'Mitigate'}`),
-        },
-        {
-            id: 'checklist',
-            title: 'Checklist',
-            items: doc?.implementation_checklist || [],
-        },
-        {
-            id: 'questions',
-            title: 'Open Questions',
-            items: doc?.open_questions || understanding?.assumptions || [],
-        },
-    ];
-}
-
 export default function IdeaWorkshop({
     projectName,
     projectId,
@@ -552,7 +483,7 @@ export default function IdeaWorkshop({
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const [phase, setPhase] = useState<Phase>('input');
-    const [idea, setIdea] = useState(initialIdea);
+    const [idea, setIdea] = useState(initialIdea ?? '');
     const [analysis, setAnalysis] = useState<IdeaAnalysisResult | null>(null);
     const [history, setHistory] = useState<{ role: 'user' | 'assistant'; content: string; structured?: StructuredAiResponse }[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -563,17 +494,23 @@ export default function IdeaWorkshop({
     const [copied, setCopied] = useState(false);
     const [jsonCopied, setJsonCopied] = useState(false);
     const [featureDecisions, setFeatureDecisions] = useState<FeatureDecision[]>([]);
+    const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
     const [newFeature, setNewFeature] = useState('');
     const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
-    const [previewRevealCount, setPreviewRevealCount] = useState(0);
     const [isPersistingFinalPlan, setIsPersistingFinalPlan] = useState(false);
+    const [lastError, setLastError] = useState<string | null>(null);
+    const [lastPhaseBeforeFailure, setLastPhaseBeforeFailure] = useState<Phase>('input');
 
     // Guided Refinement States
-    const [activeWizardStep, setActiveWizardStep] = useState<number>(1);
-    const [questionAnswers, setQuestionAnswers] = useState<Record<number, string>>({});
+    const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<number, string>>>({});
 
     const draftStorageKey = useMemo(
         () => `akasha:idea-workshop:draft:${projectId || projectName}`,
+        [projectId, projectName]
+    );
+
+    const workshopStorageKey = useMemo(
+        () => `akasha:idea-workshop:state:${projectId || projectName}`,
         [projectId, projectName]
     );
 
@@ -604,26 +541,12 @@ export default function IdeaWorkshop({
         [featureDecisions]
     );
     const currentFeature = currentFeatureIndex >= 0 ? featureDecisions[currentFeatureIndex] : null;
-    const wizardSteps = useMemo(() => {
-        if (!currentFeature) return [];
-        const questions = currentFeature.clarifying_questions || [];
-        return [
-            { id: 'details', label: 'Details', questionIndex: -1, question: '' },
-            { id: 'priority', label: 'Priority', questionIndex: -1, question: '' },
-            ...questions.map((q, idx) => ({
-                id: `question-${idx}`,
-                label: `Q${idx + 1}`,
-                questionIndex: idx,
-                question: q
-            })),
-            { id: 'actions', label: 'Decide', questionIndex: -1, question: '' }
-        ];
-    }, [currentFeature]);
-    const previewSections = useMemo(
-        () => buildPreviewSections(workingDoc, analysis?.understanding || null),
-        [analysis?.understanding, workingDoc]
-    );
-
+    const activeFeature = useMemo(() => {
+        if (selectedFeatureId) {
+            return featureDecisions.find((f) => f.id === selectedFeatureId) || currentFeature;
+        }
+        return currentFeature;
+    }, [featureDecisions, selectedFeatureId, currentFeature]);
     const activeStep = useMemo(() => {
         if (phase === 'input') return 1;
         if (phase === 'analyzing') return 2;
@@ -655,7 +578,7 @@ export default function IdeaWorkshop({
     }, [history, isChatting]);
 
     useEffect(() => {
-        if (initialIdea.trim()) return;
+        if ((initialIdea ?? '').trim()) return;
         const saved = localStorage.getItem(draftStorageKey);
         if (saved && saved.trim()) {
             setIdea(saved);
@@ -670,25 +593,53 @@ export default function IdeaWorkshop({
         localStorage.setItem(draftStorageKey, idea);
     }, [draftStorageKey, idea]);
 
+    const loadedSavedState = useRef(false);
     useEffect(() => {
-        if (phase !== 'discussion' || previewSections.length === 0) return;
-        setPreviewRevealCount(0);
-        const timers = previewSections.map((_, index) =>
-            window.setTimeout(() => {
-                setPreviewRevealCount((current) => Math.max(current, index + 1));
-            }, 140 + index * 120)
-        );
+        if (loadedSavedState.current) return;
+        if (initialIdea?.trim()) return;
+        try {
+            const saved = localStorage.getItem(workshopStorageKey);
+            if (!saved) return;
+            const parsed = JSON.parse(saved);
+            if (!parsed || typeof parsed !== 'object') return;
+            const savedAnalysis = parsed.analysis;
+            const savedFeatures = parsed.featureDecisions;
+            const savedWorkingDoc = parsed.workingDoc;
+            const savedHistory = parsed.history;
+            if (savedAnalysis && Array.isArray(savedFeatures)) {
+                loadedSavedState.current = true;
+                setAnalysis(savedAnalysis);
+                setFeatureDecisions(savedFeatures);
+                if (savedWorkingDoc) setWorkingDoc(savedWorkingDoc);
+                if (Array.isArray(savedHistory)) setHistory(savedHistory);
+                setPhase('discussion');
+            }
+        } catch {
+            // Ignore corrupt saved state
+        }
+    }, [workshopStorageKey, initialIdea]);
 
+    // Debounced save of full workshop state (only in discussion/complete phase)
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (phase !== 'discussion' && phase !== 'complete') return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(() => {
+            try {
+                localStorage.setItem(workshopStorageKey, JSON.stringify({
+                    analysis,
+                    featureDecisions,
+                    workingDoc,
+                    history,
+                }));
+            } catch {
+                // localStorage full or unavailable - ignore
+            }
+        }, 1500);
         return () => {
-            timers.forEach((timer) => window.clearTimeout(timer));
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
-    }, [phase, analysis?.summary]);
-
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]';
-        if (score >= 60) return 'text-white/70';
-        return 'text-white/40';
-    };
+    }, [phase, analysis, featureDecisions, workingDoc, history, workshopStorageKey]);
 
     const appendTemplateContent = (content: string) => {
         setIdea((prev) => {
@@ -726,8 +677,9 @@ export default function IdeaWorkshop({
         appendTemplateContent(sampleJson);
     };
 
-    const runAnalyze = async () => {
-        if (!idea.trim()) {
+    const runAnalyze = async (overrideText?: string) => {
+        const ideaText = typeof overrideText === 'string' ? overrideText : idea;
+        if (!ideaText.trim()) {
             toast.showToast('Please describe your idea first.', 'warning');
             return;
         }
@@ -739,7 +691,7 @@ export default function IdeaWorkshop({
         setRefinedDoc(null);
         setRefinedIdea('');
         try {
-            const result = normalizeAnalysisResult(await httpApi.analyzeIdea(idea));
+            const result = normalizeAnalysisResult(await httpApi.analyzeIdea(ideaText));
             if (!result) {
                 throw new Error('Invalid analysis payload');
             }
@@ -755,10 +707,13 @@ export default function IdeaWorkshop({
             ]);
             setPhase('discussion');
         } catch (err: any) {
-            toast.showToast('Failed to analyze idea', 'error');
-            setPhase('input');
+            setLastError(err?.message || 'Something went wrong while analyzing your idea.');
+            setLastPhaseBeforeFailure('input');
+            setPhase('failure');
         }
     };
+
+
 
     const sendDiscussionMessage = async (userMsg: string) => {
         if (!userMsg.trim() || isChatting) return;
@@ -775,9 +730,13 @@ export default function IdeaWorkshop({
                 '\n\nFeature Decisions:\n' +
                 JSON.stringify(
                     featureDecisions.map((feature) => ({
-                        feature: feature.title,
+                        id: feature.id,
+                        title: feature.title,
+                        description: feature.description,
+                        priority: feature.priority,
                         include: feature.include,
                         rating: feature.rating,
+                        status: feature.status,
                         comment: feature.comment,
                     })),
                     null,
@@ -791,11 +750,13 @@ export default function IdeaWorkshop({
                 const storedKey = localStorage.getItem('akasha_api_key')?.trim();
                 const storedModel = localStorage.getItem('akasha_model')?.trim();
                 const storedBase = localStorage.getItem('akasha_api_base_url')?.trim();
+                const token = (localStorage.getItem("akasha_token") || localStorage.getItem("token"))?.trim();
                 if (storedKey) workshopHeaders['x-ai-api-key'] = storedKey;
                 if (storedModel) workshopHeaders['x-ai-model'] = storedModel;
                 if (storedBase) workshopHeaders['x-ai-api-base-url'] = storedBase;
+                if (token) workshopHeaders['Authorization'] = `Bearer ${token}`;
             }
-            const res = await fetch('http://localhost:3001/api/ai/simple-chat', {
+            const res = await fetch('/api/akasha/ai/workshop-chat', {
                 method: 'POST',
                 headers: workshopHeaders,
                 body: JSON.stringify({ message: contextMsg }),
@@ -805,6 +766,79 @@ export default function IdeaWorkshop({
             if (res.ok) {
                 const structured = normalizeAiResponse(data);
                 setHistory((prev) => [...prev, { role: 'assistant', content: structured.answer_markdown, structured }]);
+
+                // Apply structured changes from the AI response
+                const changes = structured.feature_changes;
+                if (changes && changes.length > 0) {
+                    setFeatureDecisions((prev) => {
+                        let updated = [...prev];
+                        for (const change of changes) {
+                            if (change._action === 'add') {
+                                const newId = toFeatureDecisionId(change.title || 'New Feature', updated.length + 1);
+                                updated.push({
+                                    id: change.id || newId,
+                                    title: change.title || 'New Feature',
+                                    description: change.description || '',
+                                    rationale: change.rationale || '',
+                                    priority: (['critical', 'high', 'medium', 'low'].includes(String(change.priority)) ? String(change.priority) : 'medium') as FeaturePriority,
+                                    include: change.include !== false,
+                                    rating: (Number.isFinite(Number(change.rating)) ? Math.max(1, Math.min(5, Math.round(Number(change.rating)))) : 3) as 1 | 2 | 3 | 4 | 5,
+                                    status: (['pending', 'approved', 'rejected'].includes(String(change.status)) ? String(change.status) : 'pending') as FeatureStatus,
+                                    comment: change.comment || '',
+                                    integratedSummary: change.integratedSummary || '',
+                                    detailsRequested: false,
+                                    clarifying_questions: Array.isArray(change.clarifying_questions) ? change.clarifying_questions.filter((q: any) => typeof q === 'string') : [],
+                                });
+                            } else if (change._action === 'update' && change.id) {
+                                updated = updated.map((f) =>
+                                    f.id === change.id
+                                        ? {
+                                            ...f,
+                                            title: change.title ?? f.title,
+                                            description: change.description ?? f.description,
+                                            rationale: change.rationale ?? f.rationale,
+                                            priority: change.priority && ['critical', 'high', 'medium', 'low'].includes(String(change.priority)) ? String(change.priority) as FeaturePriority : f.priority,
+                                            include: change.include ?? f.include,
+                                            rating: Number.isFinite(Number(change.rating)) ? Math.max(1, Math.min(5, Math.round(Number(change.rating)))) as 1 | 2 | 3 | 4 | 5 : f.rating,
+                                            status: change.status && ['pending', 'approved', 'rejected'].includes(String(change.status)) ? String(change.status) as FeatureStatus : f.status,
+                                            comment: change.comment ?? f.comment,
+                                            integratedSummary: change.integratedSummary ?? f.integratedSummary,
+                                        }
+                                        : f
+                                );
+                            } else if (change._action === 'delete' && change.id) {
+                                updated = updated.filter((f) => f.id !== change.id);
+                            }
+                        }
+                        return updated;
+                    });
+                }
+
+                const docChanges = structured.doc_changes;
+                if (docChanges) {
+                    setWorkingDoc((prev) => {
+                        if (!prev) return prev;
+                        const next = { ...prev };
+                        for (const key of Object.keys(docChanges) as (keyof typeof docChanges)[]) {
+                            const val = docChanges[key];
+                            if (val !== undefined && val !== null) {
+                                (next as any)[key] = val;
+                            }
+                        }
+                        return next;
+                    });
+
+                    if (docChanges.strengths || docChanges.weaknesses) {
+                        setAnalysis((prev) => {
+                            if (!prev) return prev;
+                            return {
+                                ...prev,
+                                strengths: docChanges.strengths ?? prev.strengths,
+                                weaknesses: docChanges.weaknesses ?? prev.weaknesses,
+                            };
+                        });
+                    }
+                }
             } else {
                 toast.showToast(data.error || 'Chat failed', 'error');
             }
@@ -831,8 +865,9 @@ export default function IdeaWorkshop({
         setFeatureDecisions((prev) => prev.map((feature) => (feature.id === featureId ? updater(feature) : feature)));
     };
 
-    const reviewCurrentFeature = async (action: 'revise' | 'approve' | 'reject') => {
-        if (!currentFeature || isChatting) return;
+    const reviewCurrentFeature = async (action: 'revise' | 'approve' | 'reject', targetFeature?: FeatureDecision) => {
+        const feature = targetFeature || activeFeature;
+        if (!feature || isChatting) return;
 
         if (action === 'approve' || action === 'reject') {
             // OPTIZTOKEN: Handle approve/reject client-side instantly
@@ -840,31 +875,31 @@ export default function IdeaWorkshop({
             
             // 1. Update the feature queue
             setFeatureDecisions((prev) =>
-                prev.map((feature) =>
-                    feature.id === currentFeature.id
+                prev.map((f) =>
+                    f.id === feature.id
                         ? {
-                            ...feature,
+                            ...f,
                             status: nextStatus,
                             include: action === 'approve',
                         }
-                        : feature
+                        : f
                 )
             );
 
             // 2. Synchronize directly with workingDoc concept draft
             if (workingDoc) {
                 const updatedFeatures = workingDoc.key_features.map((f) =>
-                    f.feature === currentFeature.title
-                        ? { ...f, include: action === 'approve', rating: currentFeature.rating, rationale: currentFeature.description || currentFeature.rationale || '' }
+                    f.feature === feature.title
+                        ? { ...f, include: action === 'approve', rating: feature.rating, rationale: feature.description || feature.rationale || '' }
                         : f
                 );
-                const exists = workingDoc.key_features.some((f) => f.feature === currentFeature.title);
+                const exists = workingDoc.key_features.some((f) => f.feature === feature.title);
                 if (!exists && action === 'approve') {
                     updatedFeatures.push({
-                        feature: currentFeature.title,
+                        feature: feature.title,
                         include: true,
-                        rating: currentFeature.rating,
-                        rationale: currentFeature.description || currentFeature.rationale || '',
+                        rating: feature.rating,
+                        rationale: feature.description || feature.rationale || '',
                     });
                 }
                 setWorkingDoc({
@@ -873,25 +908,37 @@ export default function IdeaWorkshop({
                 });
             }
 
-            // Reset local wizard states for the next feature
-            setActiveWizardStep(1);
-            setQuestionAnswers({});
+            // Auto-select the next pending feature
+            const nextPending = featureDecisions.find((f) => f.id !== feature.id && f.status === 'pending');
+            if (nextPending) {
+                setSelectedFeatureId(nextPending.id);
+            } else {
+                setSelectedFeatureId(null);
+            }
+
+            // Reset local answers for this feature
+            setQuestionAnswers(prev => {
+                const updated = { ...prev };
+                delete updated[feature.id];
+                return updated;
+            });
             return;
         }
 
         // Action is 'revise'
         // Construct detailed feedback from AI questions and user answers
-        const questionsList = currentFeature.clarifying_questions || [];
+        const questionsList = feature.clarifying_questions || [];
         let qaText = '';
         if (questionsList.length > 0) {
+            const featureAnswers = questionAnswers[feature.id] || {};
             const answeredQAs = questionsList.map((q, idx) => {
-                const answer = questionAnswers[idx] || '';
+                const answer = featureAnswers[idx] || '';
                 return `Q: ${q}\nA: ${answer || 'No answer provided.'}`;
             }).join('\n\n');
             qaText = `User answers to clarifying questions:\n${answeredQAs}`;
         }
 
-        const customFeedback = currentFeature.comment.trim();
+        const customFeedback = feature.comment.trim();
         const combinedFeedback = [qaText, customFeedback ? `Additional feedback: ${customFeedback}` : ''].filter(Boolean).join('\n\n');
 
         if (!combinedFeedback.trim()) {
@@ -899,16 +946,16 @@ export default function IdeaWorkshop({
             return;
         }
 
-        setDetailsLoadingId(currentFeature.id);
+        setDetailsLoadingId(feature.id);
         setIsChatting(true);
         try {
             const response = await httpApi.reviewIdeaFeature({
                 idea,
                 action: 'revise',
                 feature: {
-                    ...currentFeature,
+                    ...feature,
                     user_comment: combinedFeedback,
-                    integrated_summary: currentFeature.integratedSummary,
+                    integrated_summary: feature.integratedSummary,
                 },
                 feedback: combinedFeedback,
             });
@@ -919,21 +966,24 @@ export default function IdeaWorkshop({
 
             if (reviewedFeature) {
                 setFeatureDecisions((prev) =>
-                    prev.map((feature) =>
-                        feature.id === currentFeature.id
+                    prev.map((f) =>
+                        f.id === feature.id
                             ? {
-                                ...feature,
+                                ...f,
                                 ...reviewedFeature,
                                 include: true,
                                 comment: '', // clear comments after revision
                                 integratedSummary: reviewedFeature.integratedSummary,
                             }
-                            : feature
+                            : f
                     )
                 );
-                // Reset questions wizard
-                setActiveWizardStep(1);
-                setQuestionAnswers({});
+                // Reset local answers for this feature
+                setQuestionAnswers(prev => {
+                    const updated = { ...prev };
+                    delete updated[feature.id];
+                    return updated;
+                });
             }
 
             if (typeof response?.integration_note === 'string' && response.integration_note.trim()) {
@@ -1037,8 +1087,9 @@ export default function IdeaWorkshop({
                 await onRefined(finalMarkdown);
             }
         } catch (err: any) {
-            toast.showToast('Failed to refine idea', 'error');
-            setPhase('discussion');
+            setLastError(err?.message || 'Failed to refine the project concept. Please try again.');
+            setLastPhaseBeforeFailure('discussion');
+            setPhase('failure');
         } finally {
             setIsPersistingFinalPlan(false);
         }
@@ -1207,469 +1258,316 @@ export default function IdeaWorkshop({
         </div>
     );
 
-    const renderProgressiveConceptPreview = () => (
-        <>
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <div className="text-xs font-black text-white/70 uppercase tracking-widest">Live Project Concept</div>
-                    <p className="text-[11px] text-white/45 mt-1">
-                        The AI creates the structure first, then fills each section progressively.
-                    </p>
-                </div>
-                <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-widest text-white/40">Sections</div>
-                    <div className="text-sm font-black text-white">{Math.min(previewRevealCount, previewSections.length)}/{previewSections.length}</div>
-                </div>
-            </div>
-
-            {workingDoc?.summary && (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-white/40">Structured Summary</div>
-                    <p className="mt-2 text-sm text-white/80 leading-relaxed">{workingDoc.summary}</p>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {previewSections.map((section, index) => {
-                    const isReady = index < previewRevealCount;
-                    const hasItems = section.items.length > 0;
-
-                    return (
-                        <div key={section.id} className="rounded-2xl border border-white/10 bg-black/20 p-4 min-h-[148px]">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="text-[11px] font-black uppercase tracking-widest text-white/60">{section.title}</div>
-                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${
-                                    isReady
-                                        ? 'bg-white/10 border-white/20 text-white'
-                                        : 'bg-white/5 border-white/10 text-white/30'
-                                }`}>
-                                    {isReady ? 'Ready' : 'Loading'}
-                                </span>
-                            </div>
-
-                            {isReady ? (
-                                <ul className="mt-3 space-y-1.5 text-xs text-white/80">
-                                    {hasItems ? section.items.slice(0, 5).map((item, itemIndex) => (
-                                        <li key={`${section.id}-${itemIndex}`} className="flex items-start gap-2">
-                                            <span className="mt-0.5 text-white/40">•</span>
-                                            <span>{item}</span>
-                                        </li>
-                                    )) : (
-                                        <li className="text-white/35">No content generated for this section yet.</li>
-                                    )}
-                                </ul>
-                            ) : (
-                                <div className="mt-4 space-y-2">
-                                    <div className="h-3 rounded-full bg-white/8 animate-pulse" />
-                                    <div className="h-3 w-5/6 rounded-full bg-white/8 animate-pulse" />
-                                    <div className="h-3 w-2/3 rounded-full bg-white/8 animate-pulse" />
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </>
-    );
-
     const renderFeatureDecisionBoard = () => {
         const reviewedCount = featureDecisions.filter((feature) => feature.status !== 'pending').length;
         const totalCount = featureDecisions.length;
-        
+
         return (
-            <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 space-y-4">
-                <div className="flex items-center justify-between gap-3">
+            <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-4 md:p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/5 pb-4 mb-6 shrink-0">
                     <div>
-                        <div className="text-xs font-black text-white/60 uppercase tracking-widest">Feature Refinement Wizard</div>
-                        <p className="text-[11px] text-white/35 mt-1">Review AI feature suggestions step-by-step. Provide feedback, answer questions, and finalize the scope.</p>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-[10px] text-white/20 uppercase tracking-wider">Reviewed</div>
-                        <div className="text-sm font-black text-white/70">
-                            {reviewedCount}/{totalCount}
+                        <div className="text-xs font-black text-white/60 uppercase tracking-widest">
+                            Requirement Review ({reviewedCount}/{totalCount} Completed)
                         </div>
+                        <p className="text-[11px] text-white/35 mt-1">
+                            Review and finalize each feature. Approve, reject, or rewrite requirements using AI feedback.
+                        </p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                        <div className="text-white/45">Approved</div>
-                        <div className="mt-1 text-lg font-black text-white">{selectedFeatures.length}</div>
-                    </div>
-                    <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                        <div className="text-white/45">Pending Review</div>
-                        <div className="mt-1 text-lg font-black text-white">{totalCount - reviewedCount}</div>
-                    </div>
-                    <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                        <div className="text-white/45">Queue Complete</div>
-                        <div className="mt-1 text-lg font-black text-white">{queueComplete ? 'Yes' : 'No'}</div>
-                    </div>
-                </div>
+                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 overflow-hidden">
+                    {/* Left Sidebar: Feature queue list & operations */}
+                    <div className="flex flex-col gap-4 overflow-hidden border-r border-white/5 lg:pr-6">
+                        <div className="text-[10px] font-black uppercase tracking-widest text-white/45 pl-1 shrink-0">
+                            Features Queue
+                        </div>
 
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        value={newFeature}
-                        onChange={(e) => setNewFeature(e.target.value)}
-                        placeholder="Add a custom feature into the queue..."
-                        className="flex-1 h-10 rounded-xl bg-black/20 border border-white/10 px-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
-                    />
-                    <button
-                        onClick={handleAddFeature}
-                        type="button"
-                        className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all"
-                    >
-                        Add Feature
-                    </button>
-                </div>
-
-                {/* Queue list */}
-                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
-                    {featureDecisions.map((feature, index) => (
-                        <div
-                            key={feature.id}
-                            className={`rounded-xl border p-3 transition-all ${
-                                currentFeature?.id === feature.id
-                                    ? 'border-white/30 bg-white/10 shadow-[0_0_15px_rgba(255,255,255,0.05)]'
-                                    : 'border-white/10 bg-black/20'
-                            }`}
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/35">#{index + 1}</span>
-                                        <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${getPriorityStyle(feature.priority)}`}>
-                                            {feature.priority}
-                                        </span>
-                                        <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wide ${
-                                            feature.status === 'approved'
-                                                ? 'bg-white/15 border-white/30 text-white'
-                                                : feature.status === 'rejected'
-                                                    ? 'bg-white/5 border-white/10 text-white/30'
-                                                    : 'bg-white/10 border-white/20 text-white/70'
-                                        }`}>
-                                            {feature.status}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 text-sm font-semibold text-white">{feature.title}</div>
-                                    <div className="mt-1 text-xs text-white/55 leading-relaxed">
-                                        {feature.integratedSummary || feature.description || feature.rationale || 'Waiting for review.'}
-                                    </div>
+                        {/* Scrollable features list */}
+                        <div className="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+                            {featureDecisions.length === 0 ? (
+                                <div className="text-xs text-white/30 italic p-4 text-center">
+                                    No features in queue.
                                 </div>
-                                <span className={`inline-flex px-2 py-0.5 rounded-md border text-[10px] font-bold ${getRatingStyle(feature.rating)}`}>
-                                    {feature.rating}/5
-                                </span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Refinement guided wizard */}
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-4">
-                    <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-3">
-                        <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Active Editor Panel</div>
-                            {currentFeature ? (
-                                <>
-                                    <h4 className="mt-1 text-base font-black text-white">{currentFeature.title}</h4>
-                                    <p className="mt-1 text-xs text-white/65 leading-relaxed">
-                                        {currentFeature.description || currentFeature.rationale}
-                                    </p>
-                                </>
                             ) : (
-                                <p className="mt-1 text-xs text-white/50">All queued features were reviewed. You can click 'Finalize Concept' below.</p>
+                                featureDecisions.map((feature) => {
+                                    const isActive = activeFeature?.id === feature.id;
+                                    const isApproved = feature.status === 'approved';
+                                    const isRejected = feature.status === 'rejected';
+                                    const isRewriting = detailsLoadingId === feature.id;
+
+                                    let statusBg = 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10';
+                                    if (isActive) {
+                                        statusBg = 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300';
+                                    } else if (isApproved) {
+                                        statusBg = 'bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/20 text-emerald-300/80';
+                                    } else if (isRejected) {
+                                        statusBg = 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/20 text-rose-300/60 line-through opacity-70';
+                                    }
+
+                                    return (
+                                        <button
+                                            key={feature.id}
+                                            type="button"
+                                            onClick={() => setSelectedFeatureId(feature.id)}
+                                            className={`w-full p-3 rounded-xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${statusBg}`}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <span className="text-xs font-bold leading-snug truncate max-w-[170px]">
+                                                    {feature.title}
+                                                </span>
+                                                <div className="flex-shrink-0 flex items-center justify-center">
+                                                    {isRewriting ? (
+                                                        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                                                    ) : isApproved ? (
+                                                        <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-[9px] font-black">✓</span>
+                                                    ) : isRejected ? (
+                                                        <span className="w-4 h-4 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center text-[9px] font-black">✗</span>
+                                                    ) : (
+                                                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${getPriorityStyle(feature.priority)}`}>
+                                                    {feature.priority}
+                                                </span>
+                                                <span className="text-[9px] text-white/30">
+                                                    Rating: {feature.rating}/5
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })
                             )}
                         </div>
-                        {currentFeature && (
-                            <span className={`inline-flex px-2 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${getPriorityStyle(currentFeature.priority)}`}>
-                                {currentFeature.priority}
-                            </span>
-                        )}
+
+                        {/* Add custom feature inline block */}
+                        <div className="space-y-2 pt-3 border-t border-white/5 shrink-0">
+                            <input
+                                type="text"
+                                value={newFeature}
+                                onChange={(e) => setNewFeature(e.target.value)}
+                                placeholder="Add custom feature..."
+                                className="w-full h-9 rounded-xl bg-black/40 border border-white/10 px-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
+                            />
+                            <button
+                                onClick={handleAddFeature}
+                                type="button"
+                                className="w-full h-9 rounded-xl text-[10px] font-bold uppercase bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-1"
+                            >
+                                + Add Custom
+                            </button>
+                        </div>
+
+                        {/* Confirm/Draft PRD block */}
+                        <div className="shrink-0 pt-2">
+                            <button
+                                onClick={handleRefine}
+                                disabled={!canDraftFinalDoc}
+                                className="w-full h-11 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-white text-black hover:bg-white/90 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-[0_0_15px_rgba(255,255,255,0.05)]"
+                            >
+                                Draft Final PRD
+                            </button>
+                        </div>
                     </div>
 
-                    {currentFeature && (() => {
-                        const activeStepObj = wizardSteps[activeWizardStep - 1] || wizardSteps[0];
-                        if (!activeStepObj) return null;
-                        return (
-                            <>
-                                {/* Step Wizard Nav Header */}
-                                <div className="flex flex-wrap gap-1 bg-black/40 border border-white/5 rounded-xl p-1 shrink-0">
-                                    {wizardSteps.map((tab, idx) => {
-                                        const stepNum = idx + 1;
-                                        const isActive = activeWizardStep === stepNum;
-                                        return (
-                                            <button
-                                                key={tab.id}
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(stepNum)}
-                                                className={`px-2 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all flex-1 text-center min-w-[50px] ${
-                                                    isActive
-                                                        ? 'bg-white/10 text-white border border-white/10 shadow-lg'
-                                                        : 'text-white/40 hover:text-white/60'
-                                                }`}
-                                            >
-                                                {tab.id === 'details' ? 'Details' :
-                                                 tab.id === 'priority' ? 'Priority' :
-                                                 tab.id === 'actions' ? 'Decide' :
-                                                 `Q${tab.questionIndex + 1}`}
-                                            </button>
-                                        );
-                                    })}
+                    {/* Right Panel: Selected Feature Form */}
+                    <div className="flex flex-col min-h-0 overflow-y-auto pr-1 custom-scrollbar">
+                        {!activeFeature ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-white/[0.01] border border-white/5 rounded-3xl">
+                                <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
+                                    <span className="text-2xl text-emerald-400">✓</span>
                                 </div>
-
-                                {/* Step Progress Indicator */}
-                                <div className="flex items-center justify-between px-1 mt-2">
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-white/45">
-                                        Step {activeWizardStep} of {wizardSteps.length} — {
-                                            activeStepObj.id === 'details' ? 'Details' :
-                                            activeStepObj.id === 'priority' ? 'Priority & Rating' :
-                                            activeStepObj.id === 'actions' ? 'Decide & Rewrite' :
-                                            'Clarifying Question'
-                                        }
-                                    </div>
-                                    <div className="h-1.5 w-32 rounded-full bg-white/10 overflow-hidden">
-                                        <div
-                                            className="h-full bg-white/60 transition-all duration-300"
-                                            style={{ width: `${(activeWizardStep / wizardSteps.length) * 100}%` }}
+                                <h3 className="text-lg font-black text-white">All Requirements Reviewed!</h3>
+                                <p className="text-xs text-white/40 mt-2 max-w-sm">
+                                    You have made decisions on all {totalCount} features. Click "Draft Final PRD" on the left sidebar to generate the document, or click a feature to review its settings again.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-5 pb-4">
+                                <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-3">
+                                    <div className="w-full">
+                                        <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400 flex items-center gap-2">
+                                            Active Feature
+                                            <span className={`inline-flex px-1.5 py-0.5 rounded border text-[8px] uppercase ${getPriorityStyle(activeFeature.priority)}`}>
+                                                {activeFeature.priority}
+                                            </span>
+                                            {activeFeature.status !== 'pending' && (
+                                                <span className={`inline-flex px-1.5 py-0.5 rounded border text-[8px] uppercase ${activeFeature.status === 'approved' ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'}`}>
+                                                    {activeFeature.status}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={activeFeature.title}
+                                            onChange={(e) => setFeatureDecision(activeFeature.id, (f) => ({ ...f, title: e.target.value }))}
+                                            placeholder="Feature title..."
+                                            className="w-full bg-transparent border-0 text-xl font-black text-white leading-tight mt-1 focus:outline-none focus:ring-0 p-0"
                                         />
                                     </div>
                                 </div>
 
-                                {/* Wizard Steps Content */}
-                                {activeStepObj.id === 'details' && (
-                                    <div className="space-y-3 animate-fade-in p-1">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/45">Feature Title</label>
-                                            <input
-                                                type="text"
-                                                value={currentFeature.title}
-                                                onChange={(e) => setFeatureDecision(currentFeature.id, (f) => ({ ...f, title: e.target.value }))}
-                                                placeholder="E.g. OAuth User Authentication"
-                                                className="w-full h-9 rounded-xl bg-black/25 border border-white/10 px-3 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30"
-                                            />
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">Description</label>
+                                    <textarea
+                                        value={activeFeature.description}
+                                        onChange={(e) => setFeatureDecision(activeFeature.id, (f) => ({ ...f, description: e.target.value }))}
+                                        placeholder="What does this feature do?"
+                                        rows={3}
+                                        className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs text-white/90 focus:outline-none focus:border-white/20 resize-none font-sans"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">Rationale / Why it matters</label>
+                                    <textarea
+                                        value={activeFeature.rationale}
+                                        onChange={(e) => setFeatureDecision(activeFeature.id, (f) => ({ ...f, rationale: e.target.value }))}
+                                        placeholder="Why is this feature important?"
+                                        rows={2}
+                                        className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs text-white/90 focus:outline-none focus:border-white/20 resize-none font-sans"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">Priority Override</label>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {(['critical', 'high', 'medium', 'low'] as FeaturePriority[]).map((level) => (
+                                                <button
+                                                    key={`${activeFeature.id}-priority-${level}`}
+                                                    type="button"
+                                                    onClick={() => setFeatureDecision(activeFeature.id, (f) => ({ ...f, priority: level }))}
+                                                    className={`px-2.5 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wider transition-all ${
+                                                        activeFeature.priority === level
+                                                            ? getPriorityStyle(level)
+                                                            : 'border-white/10 bg-black/40 text-white/40 hover:text-white/60 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    {level}
+                                                </button>
+                                            ))}
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/45">Description</label>
-                                            <textarea
-                                                value={currentFeature.description}
-                                                onChange={(e) => setFeatureDecision(currentFeature.id, (f) => ({ ...f, description: e.target.value }))}
-                                                placeholder="What does this feature do?"
-                                                rows={3}
-                                                className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-2 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none font-sans"
-                                            />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">Implementation Rating (1-5)</label>
+                                        <div className="flex items-center gap-1">
+                                            {[1, 2, 3, 4, 5].map((level) => (
+                                                <button
+                                                    key={`${activeFeature.id}-rating-${level}`}
+                                                    type="button"
+                                                    onClick={() => setFeatureDecision(activeFeature.id, (f) => ({ ...f, rating: level as 1 | 2 | 3 | 4 | 5 }))}
+                                                    className={`h-7 w-7 rounded-lg border text-xs font-black transition-all ${
+                                                        activeFeature.rating === level
+                                                            ? getRatingStyle(level)
+                                                            : 'border-white/10 bg-black/40 text-white/40 hover:text-white/60 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    {level}
+                                                </button>
+                                            ))}
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/45">Rationale / Why it matters</label>
-                                            <textarea
-                                                value={currentFeature.rationale}
-                                                onChange={(e) => setFeatureDecision(currentFeature.id, (f) => ({ ...f, rationale: e.target.value }))}
-                                                placeholder="Why is this feature important for the MVP?"
-                                                rows={2}
-                                                className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-2 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none font-sans"
-                                            />
-                                        </div>
-                                        <div className="flex justify-end pt-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(2)}
-                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/80 transition-all border border-white/5"
-                                            >
-                                                Next: Priority & Rating →
-                                            </button>
+                                    </div>
+                                </div>
+
+                                {activeFeature.clarifying_questions && activeFeature.clarifying_questions.length > 0 && (
+                                    <div className="space-y-3 p-4 rounded-2xl border border-white/5 bg-black/40">
+                                        <div className="text-[10px] font-black uppercase tracking-widest text-indigo-400 pl-1">Clarifying Questions</div>
+                                        <div className="space-y-4">
+                                            {activeFeature.clarifying_questions.map((q, idx) => {
+                                                const answers = questionAnswers[activeFeature.id] || {};
+                                                const val = answers[idx] || '';
+                                                return (
+                                                    <div key={idx} className="space-y-2 border-b border-white/5 last:border-b-0 pb-3 last:pb-0">
+                                                        <label className="text-xs font-bold text-white/85 leading-relaxed block">Q{idx + 1}: {q}</label>
+                                                        <input
+                                                            type="text"
+                                                            value={val}
+                                                            onChange={(e) => setQuestionAnswers(prev => ({
+                                                                ...prev,
+                                                                [activeFeature.id]: {
+                                                                    ...(prev[activeFeature.id] || {}),
+                                                                    [idx]: e.target.value
+                                                                }
+                                                            }))}
+                                                            placeholder="Your answer..."
+                                                            className="w-full h-8 rounded-lg bg-black/60 border border-white/10 px-3 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
+                                                        />
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {['Yes', 'No', 'Not sure', 'Standard approach', 'Needs research', 'Custom design'].map((pill) => (
+                                                                <button
+                                                                    key={pill}
+                                                                    type="button"
+                                                                    onClick={() => setQuestionAnswers(prev => ({
+                                                                        ...prev,
+                                                                        [activeFeature.id]: {
+                                                                            ...(prev[activeFeature.id] || {}),
+                                                                            [idx]: pill
+                                                                        }
+                                                                    }))}
+                                                                    className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[8px] uppercase font-bold text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                                                                >
+                                                                    {pill}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
 
-                                {activeStepObj.id === 'priority' && (
-                                    <div className="space-y-4 animate-fade-in p-1">
-                                        <div className="space-y-2">
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Feature Priority</div>
-                                            <div className="grid grid-cols-4 gap-2">
-                                                {(['critical', 'high', 'medium', 'low'] as FeaturePriority[]).map((level) => (
-                                                    <button
-                                                        key={`${currentFeature.id}-priority-${level}`}
-                                                        type="button"
-                                                        onClick={() => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, priority: level }))}
-                                                        className={`py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                                                            currentFeature.priority === level
-                                                                ? getPriorityStyle(level)
-                                                                : 'border-white/10 bg-white/5 text-white/40 hover:text-white/60'
-                                                        }`}
-                                                    >
-                                                        {level}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-white/40 pl-1">Final Feedback / Revision Notes</label>
+                                    <textarea
+                                        value={activeFeature.comment}
+                                        onChange={(e) => setFeatureDecision(activeFeature.id, (f) => ({ ...f, comment: e.target.value }))}
+                                        placeholder="Type any specific changes you want the AI to make when rewriting, or general thoughts..."
+                                        rows={3}
+                                        className="w-full rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-xs text-white/90 focus:outline-none focus:border-white/20 resize-none font-sans"
+                                    />
+                                </div>
 
-                                        <div className="space-y-2">
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Implementation Rating (1-5)</div>
-                                            <div className="flex items-center gap-2">
-                                                {[1, 2, 3, 4, 5].map((level) => (
-                                                    <button
-                                                        key={`${currentFeature.id}-rating-${level}`}
-                                                        type="button"
-                                                        onClick={() => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, rating: level as 1 | 2 | 3 | 4 | 5 }))}
-                                                        className={`h-8 w-8 rounded-lg border text-[11px] font-black transition-all ${
-                                                            currentFeature.rating === level
-                                                                ? getRatingStyle(level)
-                                                                : 'border-white/10 bg-white/5 text-white/40 hover:text-white/60'
-                                                        }`}
-                                                    >
-                                                        {level}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="flex justify-between pt-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(1)}
-                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/60 transition-all"
-                                            >
-                                                ← Back
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(3)}
-                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/80 transition-all border border-white/5"
-                                            >
-                                                Next: AI Questions →
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeStepObj.id.startsWith('question-') && (
-                                    <div className="space-y-4 animate-fade-in p-1">
-                                        <div className="space-y-2 p-4 rounded-xl border border-white/5 bg-black/30">
-                                            <label className="text-xs font-semibold text-white/90 block leading-relaxed">
-                                                {activeStepObj.question}
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={questionAnswers[activeStepObj.questionIndex] || ''}
-                                                onChange={(e) => setQuestionAnswers(prev => ({ ...prev, [activeStepObj.questionIndex]: e.target.value }))}
-                                                placeholder="Type your answer or select a quick option below..."
-                                                className="w-full h-10 rounded-lg bg-black/40 border border-white/10 px-3 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 mt-2"
-                                            />
-                                            <div className="flex flex-wrap items-center gap-1.5 pt-2">
-                                                {['Yes', 'No', 'Not sure', 'Standard approach', 'Needs research', 'Custom design'].map((pill) => (
-                                                    <button
-                                                        key={pill}
-                                                        type="button"
-                                                        onClick={() => setQuestionAnswers(prev => ({ ...prev, [activeStepObj.questionIndex]: pill }))}
-                                                        className={`px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-white/50 hover:text-white transition-all`}
-                                                    >
-                                                        {pill}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex justify-between pt-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(activeWizardStep - 1)}
-                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/60 transition-all"
-                                            >
-                                                ← Back
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(activeWizardStep + 1)}
-                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/80 transition-all border border-white/5"
-                                            >
-                                                Next →
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeStepObj.id === 'actions' && (
-                                    <div className="space-y-4 animate-fade-in p-1">
-                                        {Object.keys(questionAnswers).length > 0 && (
-                                            <div className="rounded-xl border border-white/5 bg-black/40 p-3 space-y-2">
-                                                <div className="text-[9px] font-black uppercase tracking-widest text-white/45">Summary of your answers</div>
-                                                <div className="space-y-1.5 max-h-[120px] overflow-y-auto custom-scrollbar">
-                                                    {(currentFeature.clarifying_questions || []).map((q, idx) => {
-                                                        const ans = questionAnswers[idx];
-                                                        if (!ans) return null;
-                                                        return (
-                                                            <div key={idx} className="text-[11px] text-white/70">
-                                                                <span className="font-semibold text-white/50 block">Q: {q}</span>
-                                                                <span className="text-white block pl-2 mt-0.5">• {ans}</span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
+                                <div className="pt-4 border-t border-white/5 flex items-center justify-end gap-3 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => reviewCurrentFeature('reject')}
+                                        disabled={isChatting || detailsLoadingId === activeFeature.id}
+                                        className="h-10 px-4 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/50 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/5 disabled:opacity-50 transition-all"
+                                    >
+                                        Reject
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => reviewCurrentFeature('revise')}
+                                        disabled={isChatting || detailsLoadingId === activeFeature.id}
+                                        className="h-10 px-5 rounded-xl text-xs font-bold bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/20 hover:text-indigo-200 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                                    >
+                                        {detailsLoadingId === activeFeature.id ? (
+                                            <>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 animate-bounce" />
+                                                Rewriting...
+                                            </>
+                                        ) : (
+                                            'Revise with AI'
                                         )}
-
-                                        <div className="space-y-2">
-                                            <div className="text-[10px] font-black uppercase tracking-widest text-white/45">Additional Custom Notes / Revision Requests</div>
-                                            <textarea
-                                                value={currentFeature.comment}
-                                                onChange={(e) => setFeatureDecision(currentFeature.id, (feature) => ({ ...feature, comment: e.target.value }))}
-                                                placeholder="Type any specific changes you want the AI to make when rewriting, or general thoughts..."
-                                                rows={2}
-                                                className="w-full rounded-xl bg-black/25 border border-white/10 px-3 py-2.5 text-xs text-white/90 placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none font-sans"
-                                            />
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-2 pt-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => reviewCurrentFeature('revise')}
-                                                disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                                className="h-10 px-4 flex-1 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
-                                            >
-                                                {detailsLoadingId === currentFeature.id ? (
-                                                    <>
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-white/55 animate-bounce" />
-                                                        Rewriting...
-                                                    </>
-                                                ) : (
-                                                    'Ask AI to Rewrite'
-                                                )}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => reviewCurrentFeature('approve')}
-                                                disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                                className="h-10 px-4 rounded-xl text-xs font-black bg-white text-black hover:bg-white/90 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-                                            >
-                                                Approve & Integrate
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => reviewCurrentFeature('reject')}
-                                                disabled={isChatting || detailsLoadingId === currentFeature.id}
-                                                className="h-10 px-3 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/40 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/5 disabled:opacity-50 transition-all"
-                                            >
-                                                Reject
-                                            </button>
-                                        </div>
-
-                                        <div className="flex justify-start">
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveWizardStep(wizardSteps.length - 1)}
-                                                className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/5 hover:bg-white/10 text-white/60 transition-all"
-                                            >
-                                                ← Back to Questions
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        );
-                    })()}
-                </div>
-
-                <div className="text-[11px] text-white/45">
-                    Final draft readiness: {selectedFeatures.length} approved feature(s), average rating {averageRating || 0}/5.
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => reviewCurrentFeature('approve')}
+                                        disabled={isChatting || detailsLoadingId === activeFeature.id}
+                                        className="h-10 px-5 rounded-xl text-xs font-black bg-white text-black hover:bg-white/90 disabled:opacity-50 transition-all shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                                    >
+                                        Approve
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -1946,7 +1844,7 @@ export default function IdeaWorkshop({
 
     return (
         <div
-            className={`w-full flex flex-col bg-[var(--ide-bg-panel)] overflow-hidden relative ${
+            className={`w-full flex flex-col bg-[#050508] text-white overflow-hidden relative ${
                 fullScreen
                     ? 'h-full rounded-none border-0 shadow-none'
                     : 'max-w-4xl mx-auto h-[80vh] rounded-3xl border border-[var(--ide-border-strong)] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5)] animate-slide-up'
@@ -2110,132 +2008,212 @@ export default function IdeaWorkshop({
                     </div>
                 )}
 
-                {(phase === 'analyzing' || phase === 'refining') && (
-                    <div className="h-full min-h-0 animate-fade-in grid grid-cols-1 xl:grid-cols-[1.1fr,0.9fr] gap-4">
-                        <div className="min-w-0 bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl p-4 space-y-4">
-                            <div className="flex items-center gap-3">
-                                <div className="relative">
-                                    <div className="w-14 h-14 border-4 border-white/10 border-t-white/60 rounded-full animate-spin"></div>
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-black text-white">
-                                        {phase === 'analyzing' ? 'Building the project concept...' : 'Polishing the final PRD...'}
-                                    </h3>
-                                    <p className="text-sm text-[var(--ide-text-secondary)]">
-                                        {phase === 'analyzing'
-                                            ? 'Understanding the idea first, then filling the concept sections progressively.'
-                                            : 'Converting the approved concept into the final structured output.'}
-                                    </p>
-                                </div>
+                {phase === 'failure' && (
+                    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050508]/95 backdrop-blur-md animate-fade-in">
+                        <div className="pointer-events-none absolute inset-0">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-red-600/8 blur-[140px]" />
+                        </div>
+                        <div className="relative flex flex-col items-center gap-6 max-w-md text-center px-6">
+                            <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                                <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {Array.from({ length: 8 }).map((_, index) => (
-                                    <div key={`preview-skeleton-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 min-h-[148px]">
-                                        <div className="h-3 w-24 rounded-full bg-white/10 animate-pulse" />
-                                        <div className="mt-4 space-y-2">
-                                            <div className="h-3 rounded-full bg-white/8 animate-pulse" />
-                                            <div className="h-3 w-5/6 rounded-full bg-white/8 animate-pulse" />
-                                            <div className="h-3 w-2/3 rounded-full bg-white/8 animate-pulse" />
-                                        </div>
-                                    </div>
-                                ))}
+                            <div className="space-y-2">
+                                <h2 className="text-xl font-black tracking-tight text-white">
+                                    {lastPhaseBeforeFailure === 'discussion' ? 'Refinement Failed' : 'Analysis Failed'}
+                                </h2>
+                                <p className="text-sm text-white/50 leading-relaxed">{lastError}</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setPhase(lastPhaseBeforeFailure)}
+                                    className="px-5 py-2.5 rounded-xl border border-white/10 text-white/60 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+                                >
+                                    Go Back
+                                </button>
+                                <button
+                                    onClick={() => lastPhaseBeforeFailure === 'discussion' ? handleRefine() : runAnalyze()}
+                                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all text-sm"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        Retry
+                                    </span>
+                                </button>
                             </div>
                         </div>
+                    </div>
+                )}
 
-                        <div className="min-w-0 bg-black/20 border border-white/10 rounded-2xl p-4 space-y-4">
-                            <div className="text-[10px] font-black uppercase tracking-widest text-white/40">Feature Queue Skeleton</div>
-                            <div className="space-y-3">
-                                {Array.from({ length: 4 }).map((_, index) => (
-                                    <div key={`queue-skeleton-${index}`} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                                        <div className="h-3 w-20 rounded-full bg-white/10 animate-pulse" />
-                                        <div className="mt-3 h-4 w-3/4 rounded-full bg-white/8 animate-pulse" />
-                                        <div className="mt-2 h-3 w-full rounded-full bg-white/8 animate-pulse" />
-                                        <div className="mt-2 h-3 w-2/3 rounded-full bg-white/8 animate-pulse" />
-                                    </div>
-                                ))}
+                {(phase === 'analyzing' || phase === 'refining') && (
+                    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#050508]/95 backdrop-blur-md animate-fade-in">
+                        <div className="pointer-events-none absolute inset-0">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-indigo-600/8 blur-[140px]" />
+                        </div>
+                        <div className="relative flex flex-col items-center gap-8 max-w-lg text-center px-6">
+                            <div className="relative w-20 h-20">
+                                <div className="absolute inset-0 rounded-full border-2 border-white/8" />
+                                <div className="absolute inset-0 rounded-full border-t-2 border-indigo-400 animate-spin" />
+                                <div className="absolute inset-2 rounded-full border-t border-violet-300/60 animate-spin" style={{ animationDuration: "1.5s" }} />
+                            </div>
+
+                            <div className="space-y-1.5 w-full">
+                                {[
+                                    { key: "analyze", label: phase === 'analyzing' ? "Understanding idea..." : "Generating markdown..." },
+                                    { key: "concept", label: phase === 'analyzing' ? "Structuring concept..." : "Organizing features..." },
+                                    { key: "queue",   label: phase === 'analyzing' ? "Queuing feature decisions..." : "Finalizing PRD..." },
+                                ].map(({ key, label }, index) => {
+                                    // Make progress based on some mock state, or just show them all spinning for now
+                                    // For visual polish we will just show them pulsing if active
+                                    const isDone = false;
+                                    const isActive = true;
+                                    
+                                    return (
+                                        <div key={key} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
+                                            isActive ? "bg-white/8 border border-white/12" : "opacity-40"
+                                        }`}>
+                                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black flex-shrink-0 ${
+                                                isDone ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/30" :
+                                                isActive ? "bg-indigo-500/30 text-indigo-300 border border-indigo-400/30" :
+                                                "bg-white/5 border border-white/10 text-white/20"
+                                            }`}>
+                                                {isDone ? "✓" : index + 1}
+                                            </div>
+                                            <span className={`text-sm font-medium ${
+                                                isActive ? "text-white" : isDone ? "text-white/60" : "text-white/20"
+                                            }`}>{label}</span>
+                                            {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30">Phase Transition</p>
+                                <h2 className="text-xl font-black tracking-tight text-white">
+                                    {phase === 'analyzing' ? 'Building the project concept...' : 'Polishing the final PRD...'}
+                                </h2>
+                                <p className="text-sm text-white/40">
+                                    {phase === 'analyzing'
+                                        ? 'Understanding the idea first, then filling the concept sections.'
+                                        : 'Converting the approved concept into the final structured output.'}
+                                </p>
                             </div>
                         </div>
                     </div>
                 )}
 
                 {phase === 'discussion' && analysis && (
-                    <div
-                        className={`h-full min-h-0 animate-fade-in ${
-                            fullScreen ? 'grid h-full items-stretch grid-cols-1 xl:grid-cols-[1.1fr,0.9fr] gap-4' : 'flex flex-col space-y-6'
-                        }`}
-                    >
-                        <div
-                            className={`space-y-4 ${
-                                fullScreen ? 'h-full min-h-0 min-w-0 overflow-y-auto custom-scrollbar pr-1' : 'shrink-0'
-                            }`}
-                        >
-                            <div className="h-full min-h-0 rounded-3xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4 md:p-5 flex flex-col gap-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                                <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/5 rounded-2xl p-5 relative overflow-hidden">
-                                    <div className="absolute -inset-4 bg-indigo-500/5 blur-xl" />
-                                    <div className="relative z-10">
-                                        <div className="text-xs font-black text-[var(--ide-text-secondary)] uppercase tracking-widest mb-2">
-                                            Viability Score
-                                        </div>
-                                        <div className={`text-5xl font-black ${getScoreColor(Number(analysis.score || 0))}`}>
-                                            {analysis.score ?? 0}
-                                        </div>
-                                        <p className="text-xs text-[var(--ide-text-muted)] mt-3 italic">
-                                            "{analysis.summary || 'No summary provided.'}"
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-2">Strengths</div>
-                                        <ul className="space-y-1.5">
-                                            {(analysis.strengths || []).map((s: string, i: number) => (
-                                                <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
-                                                    <span className="text-white/30 mt-0.5">•</span>
-                                                    {s}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-
-                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-2">Risks</div>
-                                        <ul className="space-y-1.5">
-                                            {(analysis.weaknesses || []).map((w: string, i: number) => (
-                                                <li key={i} className="text-xs text-[var(--ide-text-secondary)] flex items-start gap-2">
-                                                    <span className="text-white/30 mt-0.5">•</span>
-                                                    {w}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                                    <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-2">Questions</div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {(analysis.questions || []).map((q: string, i: number) => (
-                                            <button
-                                                key={i}
-                                                onClick={() => handleQuickPrompt(q)}
-                                                className="px-2.5 py-1 bg-white/10 text-white/70 text-[11px] rounded-lg border border-white/15 hover:bg-white/20 transition-all"
-                                            >
-                                                {q}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 min-h-[420px]">
-                                    {renderProgressiveConceptPreview()}
-                                </div>
-                            </div>
+                    <div className="h-full min-h-0 animate-fade-in flex flex-col gap-4">
+                        <div className="flex-shrink-0 min-h-0 overflow-y-auto custom-scrollbar">
+                            {renderFeatureDecisionBoard()}
                         </div>
 
-                        <div className="min-h-0 min-w-0 flex h-full flex-col gap-4">
-                            {renderFeatureDecisionBoard()}
-                            {renderChatPanel()}
+                        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr,1.2fr] gap-4 overflow-hidden">
+                            <div className="min-h-0 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+                                <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                                    <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Project Concept</div>
+                                    {workingDoc?.summary && (
+                                        <p className="text-sm text-white/80 leading-relaxed mb-4 italic">
+                                            "{workingDoc.summary}"
+                                        </p>
+                                    )}
+                                    {workingDoc?.target_audience && workingDoc.target_audience.length > 0 && (
+                                        <div className="mb-3">
+                                            <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Target Audience</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {workingDoc.target_audience.map((item, i) => (
+                                                    <span key={i} className="px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white/70">{item}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {workingDoc?.core_value_proposition && workingDoc.core_value_proposition.length > 0 && (
+                                        <div className="mb-3">
+                                            <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Value Proposition</div>
+                                            <ul className="space-y-1">
+                                                {workingDoc.core_value_proposition.map((item, i) => (
+                                                    <li key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                                        <span className="text-white/30 mt-0.5">•</span>{item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {analysis.strengths && analysis.strengths.length > 0 && (
+                                        <div className="mb-3">
+                                            <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Strengths</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {analysis.strengths.map((s, i) => (
+                                                    <span key={i} className="px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300/80">{s}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {analysis.weaknesses && analysis.weaknesses.length > 0 && (
+                                        <div>
+                                            <div className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1.5">Risks</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {analysis.weaknesses.map((w, i) => (
+                                                    <span key={i} className="px-2 py-0.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300/80">{w}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {workingDoc?.technical_architecture && workingDoc.technical_architecture.length > 0 && (
+                                    <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
+                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Technical Architecture</div>
+                                        <ul className="space-y-1.5">
+                                            {workingDoc.technical_architecture.map((item, i) => (
+                                                <li key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                                    <span className="text-white/30 mt-0.5">•</span>{item}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {workingDoc?.milestones && workingDoc.milestones.length > 0 && (
+                                    <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
+                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Milestones</div>
+                                        <div className="space-y-2">
+                                            {workingDoc.milestones.map((m, i) => (
+                                                <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-3">
+                                                    <div className="text-sm font-bold text-white">{m.milestone}</div>
+                                                    <div className="text-[11px] text-white/50 mt-0.5">{m.scope}</div>
+                                                    {m.owner_role && <div className="text-[10px] text-white/30 mt-1">Owner: {m.owner_role}</div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {analysis.questions && analysis.questions.length > 0 && (
+                                    <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
+                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Questions to Consider</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(analysis.questions || []).map((q: string, i: number) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => handleQuickPrompt(q)}
+                                                    className="px-2.5 py-1 bg-white/10 text-white/70 text-[11px] rounded-lg border border-white/15 hover:bg-white/20 transition-all"
+                                                >
+                                                    {q}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="min-h-0 flex flex-col">
+                                {renderChatPanel()}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -2274,7 +2252,7 @@ export default function IdeaWorkshop({
                 <div className="flex items-center gap-2">
                     {phase === 'discussion' && (
                         <button
-                            onClick={runAnalyze}
+                            onClick={() => runAnalyze()}
                             className="h-10 px-4 rounded-xl border border-white/10 bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all text-xs font-bold"
                         >
                             Re-analyze
@@ -2314,7 +2292,7 @@ export default function IdeaWorkshop({
                 <div className="flex items-center gap-3">
                     {phase === 'input' && (
                         <button
-                            onClick={runAnalyze}
+                            onClick={() => runAnalyze()}
                             disabled={!idea.trim()}
                             className="btn-modern-primary !h-10 !px-8 text-xs disabled:opacity-50"
                         >

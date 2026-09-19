@@ -2,16 +2,31 @@ import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { simpleGit } from 'simple-git';
 import fs from 'fs-extra';
+import * as path from 'node:path';
 
 async function getGit(projectId: string) {
     const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project || !project.rootPath) {
-        throw new Error('Project not tracked in git');
+    if (!project) {
+        throw new Error('Project not found');
     }
-    if (!fs.existsSync(project.rootPath)) {
-        throw new Error('Project path does not exist');
+
+    let rootPath = project.rootPath;
+    if (!rootPath) {
+        rootPath = path.join(process.cwd(), 'projects', projectId);
+        try {
+            await prisma.project.update({
+                where: { id: projectId },
+                data: { rootPath }
+            });
+        } catch (dbErr) {
+            console.error('Failed to auto-save rootPath in getGit:', dbErr);
+        }
     }
-    return simpleGit(project.rootPath);
+
+    if (!fs.existsSync(rootPath)) {
+        await fs.ensureDir(rootPath);
+    }
+    return simpleGit(rootPath);
 }
 
 export async function getStatus(req: Request, res: Response) {

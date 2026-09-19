@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
 import { randomUUID } from 'crypto';
+import { safeJsonParse } from '../utils/safeJsonParse.js';
 
 export async function listComponents(req: Request, res: Response) {
     try {
@@ -16,13 +17,13 @@ export async function listComponents(req: Request, res: Response) {
 
         const response = components.map(b => ({
             ...b,
-            properties: JSON.parse(b.properties),
-            styles: JSON.parse(b.styles),
-            responsive_styles: JSON.parse(b.responsiveStyles),
-            classes: JSON.parse(b.classes),
-            bindings: JSON.parse(b.bindings),
-            event_handlers: JSON.parse(b.events),
-            children: JSON.parse(b.children)
+            properties: safeJsonParse(b.properties, {}),
+            styles: safeJsonParse(b.styles, {}),
+            responsive_styles: safeJsonParse(b.responsiveStyles, {}),
+            classes: safeJsonParse(b.classes, []),
+            bindings: safeJsonParse(b.bindings, {}),
+            event_handlers: safeJsonParse(b.events, []),
+            children: safeJsonParse(b.children, [])
         }));
 
         res.json(response);

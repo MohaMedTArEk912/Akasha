@@ -16,7 +16,7 @@ import {
 import type { UiBuilderGenerateRequest, UiBuilderGenerateResponse } from "../types/uiBuilder";
 import { getSampleProjectTemplateJson } from "../utils/projectImportTemplate";
 
-const API_BASE_URL = "http://localhost:3001/api";
+const API_BASE_URL = "/api/akasha";
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -31,10 +31,14 @@ client.interceptors.request.use((config) => {
     const apiKey = localStorage.getItem("akasha_api_key")?.trim();
     const model = localStorage.getItem("akasha_model")?.trim();
     const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
+    const token = (localStorage.getItem("akasha_token") || localStorage.getItem("token"))?.trim();
+    const ghSession = localStorage.getItem("gh_session")?.trim();
     
     if (apiKey) config.headers["x-ai-api-key"] = apiKey;
     if (model) config.headers["x-ai-model"] = model;
     if (apiBaseUrl) config.headers["x-ai-api-base-url"] = apiBaseUrl;
+    if (token) config.headers["Authorization"] = `Bearer ${token}`;
+    if (ghSession) config.headers["x-gh-session"] = ghSession;
   }
   return config;
 });
@@ -218,8 +222,8 @@ export const httpApi = {
     });
     return res.data;
   },
-  updatePage: async (id: string, name?: string, path?: string) => {
-    const res = await client.put(`/pages/${id}`, { name, path });
+  updatePage: async (id: string, name?: string, path?: string, meta?: any) => {
+    const res = await client.put(`/pages/${id}`, { name, path, meta });
     return res.data;
   },
   archivePage: async (id: string) => {
@@ -253,9 +257,13 @@ export const httpApi = {
       const apiKey = localStorage.getItem("akasha_api_key")?.trim();
       const model = localStorage.getItem("akasha_model")?.trim();
       const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
+      const token = (localStorage.getItem("akasha_token") || localStorage.getItem("token"))?.trim();
+      const ghSession = localStorage.getItem("gh_session")?.trim();
       if (apiKey) headers["x-ai-api-key"] = apiKey;
       if (model) headers["x-ai-model"] = model;
       if (apiBaseUrl) headers["x-ai-api-base-url"] = apiBaseUrl;
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (ghSession) headers["x-gh-session"] = ghSession;
     }
     return fetch(`${API_BASE_URL}/ai/ui-builder/stream`, {
       method: "POST",
@@ -699,8 +707,48 @@ export const httpApi = {
     const res = await client.post("/github/disconnect");
     return res.data;
   },
+  getProjectRole: async (projectId: string) => {
+    const res = await client.get(`/project/${projectId}/role`);
+    return res.data;
+  },
+  updateCheckpoint: async (projectId: string, checkpoint: number, pipelineData: any, status?: string) => {
+    const res = await client.put(`/project/${projectId}/checkpoint`, { checkpoint, pipelineData, status });
+    return res.data;
+  },
+  addComment: async (projectId: string, questionId: number, text: string) => {
+    const res = await client.post(`/project/${projectId}/comments`, { questionId, text });
+    return res.data;
+  },
+  handleComment: async (projectId: string, commentId: string, action: 'accepted' | 'rejected') => {
+    const res = await client.put(`/project/${projectId}/comments/${commentId}`, { action });
+    return res.data;
+  },
   testConnection: async (payload: { apiKey?: string; model?: string; apiBaseUrl?: string }) => {
     const res = await client.post("/ai/test-connection", payload);
+    return res.data;
+  },
+
+  // ─── AI Sandbox Persistence ────────────────────
+  sandboxSave: async (projectId: string, data: {
+    idea: string;
+    pages: any[];
+    theme: any;
+    chatMessages: any[];
+  }) => {
+    const res = await client.post("/ai/sandbox/save", { projectId, ...data });
+    return res.data;
+  },
+  sandboxLoad: async (projectId: string) => {
+    const res = await client.get(`/ai/sandbox/load/${projectId}`);
+    return res.data;
+  },
+  sandboxAutoSave: async (projectId: string, data: {
+    idea?: string;
+    pages?: any[];
+    theme?: any;
+    chatMessages?: any[];
+  }) => {
+    const res = await client.post("/ai/sandbox/auto-save", { projectId, ...data });
     return res.data;
   },
 };

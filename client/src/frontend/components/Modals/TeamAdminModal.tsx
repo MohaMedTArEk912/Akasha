@@ -8,7 +8,7 @@ interface TeamAdminModalProps {
     teamName: string;
 }
 
-const API_BASE = "http://localhost:3001/api/ai";
+const API_BASE = "/api/akasha/ai";
 
 const TeamAdminModal: React.FC<TeamAdminModalProps> = ({ isOpen, onClose, teamName }) => {
     const toast = useToast();
@@ -21,7 +21,10 @@ const TeamAdminModal: React.FC<TeamAdminModalProps> = ({ isOpen, onClose, teamNa
         if (!sessionId) return;
 
         try {
-            const res = await fetch(`${API_BASE}/admin-data?sessionId=${sessionId}`);
+            const token = localStorage.getItem("akasha_token") || localStorage.getItem("token") || "";
+            const res = await fetch(`${API_BASE}/admin-data?sessionId=${sessionId}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined
+            });
             const data = await res.json();
             if (res.ok) {
                 setPendingRequests(data.pendingRequests || []);
@@ -45,9 +48,13 @@ const TeamAdminModal: React.FC<TeamAdminModalProps> = ({ isOpen, onClose, teamNa
         const adminSessionId = localStorage.getItem("akasha_user_session");
         setLoading(true);
         try {
+            const token = localStorage.getItem("akasha_token") || localStorage.getItem("token") || "";
             const res = await fetch(`${API_BASE}/resolve-request`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({ adminSessionId, userSessionId, action })
             });
             if (res.ok) {

@@ -1,5 +1,6 @@
 import './env.js';
 import { MongoClient, ObjectId } from 'mongodb';
+import * as path from 'node:path';
 
 type Dict = Record<string, any>;
 
@@ -38,6 +39,7 @@ export type PrismaLikeClient = {
 	logicFlow: ModelDelegate;
 	useCase: ModelDelegate;
 	apiRequest: ModelDelegate;
+	diagram: ModelDelegate;
 	team: ModelDelegate;
 	teamMember: ModelDelegate;
 	joinRequest: ModelDelegate;
@@ -51,7 +53,7 @@ export type PrismaLikeClient = {
 
 const MODEL_CONFIG: Record<string, ModelConfig> = {
 	project: {
-		collection: 'Project',
+		collection: 'projects',
 		idField: 'id',
 		relations: {
 			pages: { model: 'page', type: 'many', localField: 'id', foreignField: 'projectId' },
@@ -61,6 +63,7 @@ const MODEL_CONFIG: Record<string, ModelConfig> = {
 			logicFlows: { model: 'logicFlow', type: 'many', localField: 'id', foreignField: 'projectId' },
 			useCases: { model: 'useCase', type: 'many', localField: 'id', foreignField: 'projectId' },
 			apiRequests: { model: 'apiRequest', type: 'many', localField: 'id', foreignField: 'projectId' },
+			diagrams: { model: 'diagram', type: 'many', localField: 'id', foreignField: 'projectId' },
 		},
 	},
 	page: {
@@ -84,6 +87,7 @@ const MODEL_CONFIG: Record<string, ModelConfig> = {
 	logicFlow: { collection: 'LogicFlow', idField: 'id', relations: {} },
 	useCase: { collection: 'UseCase', idField: 'id', relations: {} },
 	apiRequest: { collection: 'ApiRequest', idField: 'id', relations: {} },
+	diagram: { collection: 'Diagram', idField: 'id', relations: {} },
 	team: {
 		collection: 'Team',
 		idField: 'id',
@@ -279,7 +283,7 @@ function inferDatabaseName(uri: string): string {
 	return match?.[1] || 'akasha_prototype';
 }
 
-const mongoUri = process.env.DATABASE_URL || 'mongodb://127.0.0.1:27017/akasha_prototype';
+const mongoUri = process.env.DATABASE_URL || process.env.DB_URI || 'mongodb://127.0.0.1:27017/akasha_prototype';
 const dbName = process.env.MONGODB_DB_NAME || inferDatabaseName(mongoUri);
 
 const globalMongo = globalThis as unknown as {
@@ -418,6 +422,13 @@ function buildPrismaLikeClient(): PrismaLikeClient {
 
 				if (!insertDoc._id) {
 					insertDoc._id = new ObjectId();
+				}
+
+				if (model === 'project') {
+					if (!insertDoc.rootPath) {
+						const projectIdStr = insertDoc._id instanceof ObjectId ? insertDoc._id.toHexString() : String(insertDoc._id);
+						insertDoc.rootPath = path.join(process.cwd(), 'projects', projectIdStr);
+					}
 				}
 
 				await coll.insertOne(insertDoc);

@@ -87,11 +87,68 @@ function extractJsonObject(raw: string): string {
     return text.slice(start, end + 1);
 }
 
+function parseAllJsonObjects(text: string): any[] {
+    const objects: any[] = [];
+    let braceCount = 0;
+    let startIdx = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+
+        if (escape) {
+            escape = false;
+            continue;
+        }
+
+        if (char === '\\') {
+            escape = true;
+            continue;
+        }
+
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+
+        if (!inString) {
+            if (char === '{') {
+                if (braceCount === 0) {
+                    startIdx = i;
+                }
+                braceCount++;
+            } else if (char === '}') {
+                braceCount--;
+                if (braceCount === 0 && startIdx !== -1) {
+                    const candidate = text.slice(startIdx, i + 1);
+                    try {
+                        const parsed = JSON.parse(candidate);
+                        objects.push(parsed);
+                    } catch (e) {
+                        try {
+                            const cleaned = candidate
+                                .replace(/,\s*([}\]])/g, '$1')
+                                .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?\s*:/g, '"$2":');
+                            objects.push(JSON.parse(cleaned));
+                        } catch (e2) {
+                            // Ignore malformed sub-blocks
+                        }
+                    }
+                    startIdx = -1;
+                }
+            }
+        }
+    }
+    return objects;
+}
+
 /**
  * Attempts to repair and parse JSON from AI model output.
  * If standard JSON.parse fails, it:
  * 1. Performs basic regex cleanup (trailing commas)
- * 2. Uses a secondary LLM pass (temperature 0) to fix the syntax.
+ * 2. Parses and merges multiple JSON objects if the model split its output
+ * 3. Uses a secondary LLM pass (temperature 0) to fix the syntax.
  */
 async function safeParseJson(
     raw: string,
@@ -111,11 +168,21 @@ async function safeParseJson(
             return JSON.parse(cleaned);
         }
     } catch (extractOrParseErr) {
-        // 3. Last resort: LLM Repair
+        // 3. Fallback: Try parsing and merging multiple JSON objects if split output occurred
+        try {
+            const parsedObjects = parseAllJsonObjects(raw);
+            if (parsedObjects.length > 0) {
+                return parsedObjects.reduce((acc, obj) => ({ ...acc, ...obj }), {});
+            }
+        } catch (mergeErr) {
+            console.warn('[AI] Local multi-object JSON parse and merge failed:', mergeErr);
+        }
+
+        // 4. Last resort: LLM Repair
         const llmProvider = getLLMProvider();
         try {
             const repaired = await llmProvider.chat({
-                model: options?.model || 'google/gemma-3-4b-it:free',
+                model: options?.model,
                 temperature: 0,
                 max_tokens: 3000,
                 apiKey: options?.apiKey,
@@ -267,29 +334,152 @@ function normalizeStructuredChat(parsed: unknown, fallbackAnswer: string): Struc
     };
 }
 
+function generateLocalFallbackResponse(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    errorMsg: string
+): StructuredChatResponse {
+    // Find system message to extract context
+    const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+    const userMsg = messages[messages.length - 1]?.content || '';
+
+    // Extract project name
+    const nameMatch = systemMsg.match(/PROJECT NAME:\s*([^\n]+)/i);
+    const projectName = nameMatch ? (nameMatch && nameMatch[1] ? nameMatch[1] : '').trim() : 'Active Project';
+
+    const query = userMsg.toLowerCase();
+    let answer = '';
+    let highlights: string[] = [];
+    let nextActions: string[] = [];
+
+    const warningText = `Google Gemini API key in .env is invalid or restricted (AQ. format). Showing local simulated response.`;
+
+    if (query.includes('database') || query.includes('schema') || query.includes('model') || query.includes('erd') || query.includes('table') || query.includes('sql')) {
+        answer = `### 📊 Database Design Assistant (Local Fallback)
+I analyzed your request for the database structure of **${projectName}**.
+
+Here is a recommended database schema to support your requirements:
+
+1. **User Profile & Authentication**:
+   - \`User\`: id, email, passwordHash, username, displayName, avatarUrl, role, createdAt.
+   - \`Session\`: id, userId, token, expiresAt, deviceDetails.
+
+2. **Core Features**:
+   - \`Project\`: id, name, description, ownerId, status, settings (JSON), createdAt.
+   - \`BlockDefinition\`: id, type, label, categoryId, properties (JSON).
+
+3. **Relations**:
+   - A **User** has many **Projects** (One-to-Many).
+   - An **Organization** has many **Members** and **Projects** (Many-to-Many).
+
+To implement this, go to the **Database tab**, click **Add Data Model**, and define your fields. You can also generate the Prisma schema files and run migrations directly from the IDE.`;
+        highlights = ['Data Models proposed', 'Prisma Schema ready'];
+        nextActions = ['Create User Model', 'Create Project Model', 'Define Foreign Key Relationships'];
+    } else if (query.includes('api') || query.includes('endpoint') || query.includes('route') || query.includes('http') || query.includes('controller')) {
+        answer = `### 🔗 API Router Assistant (Local Fallback)
+I analyzed your project's API design for **${projectName}**.
+
+Here are the recommended API endpoints for your core modules:
+
+- **Authentication**:
+  - \`POST /api/auth/register\` — Register a new account.
+  - \`POST /api/auth/login\` — Login and receive a JWT.
+
+- **Projects & Storage**:
+  - \`GET /api/projects\` — Retrieve all projects.
+  - \`POST /api/projects\` — Create a new project.
+  - \`GET /api/projects/:id/files\` — Retrieve files for a specific project.
+
+- **Real-Time & Integration**:
+  - \`GET /api/github/status\` — Check GitHub connection status.
+
+You can configure and test these routes in the **API Endpoints** tab, and then export the Express route controllers automatically.`;
+        highlights = ['RESTful API structure mapped', 'JWT Auth endpoints included'];
+        nextActions = ['Create Auth endpoints', 'Define Projects CRUD routes', 'Test using the API Proxy'];
+    } else if (query.includes('ui') || query.includes('page') || query.includes('layout') || query.includes('component') || query.includes('design') || query.includes('css')) {
+        answer = `### 🎨 UI Builder Assistant (Local Fallback)
+I analyzed your interface structure for **${projectName}**.
+
+For a polished and modern aesthetic, I recommend structuring your layout as follows:
+
+1. **Global Shell Layout**:
+   - A left-aligned collapsible navigation sidebar (icons + labels, dark glassmorphism styling).
+   - A top main header with breadcrumbs, project search bar, and user profile avatar.
+   - A central workspace area with card-based grid layouts, responsive padding, and subtle box-shadows.
+
+2. **Interactive Elements**:
+   - Add hover states (\`transition: all 0.2s ease\`) on buttons.
+   - Use curated modern typography (e.g. Google Fonts Inter or Outfit).
+
+To build this layout, open the **UI Builder** tab, select a template or drag layout container blocks, and apply custom styling properties in the editor panel.`;
+        highlights = ['Responsive design guidelines', 'Inter/Outfit typography recommendations'];
+        nextActions = ['Open UI Builder', 'Add sidebar navigation block', 'Configure page theme styling'];
+    } else if (query.includes('logic') || query.includes('flow') || query.includes('workflow') || query.includes('usecase')) {
+        answer = `### ⚙️ Logic Flow & Use Cases (Local Fallback)
+I mapped out the logic workflow for **${projectName}**.
+
+Here is the recommended step-by-step logic execution for your project's core controller:
+
+1. **Validation & Auth**: Validate request body using Zod/Joi schemas, check headers for a valid Bearer JWT.
+2. **Database Execution**: Execute Prisma/Mongoose query to fetch or update records.
+3. **External Integrations**: Call third-party APIs (e.g. GitHub/Google) or dispatch socket notifications if needed.
+4. **Structured Response**: Return standard JSON payload or trigger global error handler in case of failure.
+
+Map these paths out visually in the **Logic Flows** tab or document them as **Use Cases** to generate backend logic automatically.`;
+        highlights = ['Workflow sequence defined', 'Validation & Error paths included'];
+        nextActions = ['Create a Logic Flow', 'Add validation step block', 'Define error handling paths'];
+    } else {
+        answer = `### 🔮 Akasha AI Assistant (Local Fallback)
+Hello! I am your Akasha development assistant. 
+
+I am currently running in **Local Fallback Mode** because the Google Gemini API key configured in \`backend/.env\` is restricted or invalid. However, I can still help you build **${projectName}**!
+
+Here is what you can do next:
+- **Feasibility & Architecture**: Ask me about database design, REST APIs, UI design systems, or logic flows.
+- **Visual Mapping**: Use the tabs on the left to plan your database models, draw system diagrams, configure API endpoints, and design UI pages.
+- **Git Sync**: Sync your codebase directly to GitHub once you connect your account.
+
+Describe what part of **${projectName}** you are working on, and I will guide you step-by-step.`;
+        highlights = ['Local fallback active', 'IDE context fully loaded'];
+        nextActions = ['Ask about Database design', 'Ask about REST API routes', 'Navigate to UI Builder'];
+    }
+
+    return {
+        answer_markdown: answer,
+        summary: `Local assistant fallback active for ${projectName}.`,
+        highlights,
+        next_actions: nextActions,
+        warnings: [warningText]
+    };
+}
+
 async function getStructuredChatResponse(
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     options?: { model?: string; temperature?: number; max_tokens?: number; apiKey?: string; apiBaseUrl?: string }
 ): Promise<StructuredChatResponse> {
-    const llmProvider = getLLMProvider();
-    const modelOutput = await llmProvider.chat({
-        model: options?.model || 'google/gemma-3-4b-it:free',
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.max_tokens,
-        apiKey: options?.apiKey,
-        apiBaseUrl: options?.apiBaseUrl,
-        messages: [
-            { role: 'system', content: STRUCTURED_CHAT_SYSTEM_PROMPT },
-            ...messages
-        ]
-    });
-
     try {
-        const jsonText = extractJsonObject(modelOutput);
-        const parsed = JSON.parse(jsonText);
-        return normalizeStructuredChat(parsed, modelOutput);
-    } catch {
-        return normalizeStructuredChat({}, modelOutput);
+        const llmProvider = getLLMProvider();
+        const modelOutput = await llmProvider.chat({
+            model: options?.model,
+            temperature: options?.temperature ?? 0.3,
+            max_tokens: options?.max_tokens,
+            apiKey: options?.apiKey,
+            apiBaseUrl: options?.apiBaseUrl,
+            messages: [
+                { role: 'system', content: STRUCTURED_CHAT_SYSTEM_PROMPT },
+                ...messages
+            ]
+        });
+
+        try {
+            const jsonText = extractJsonObject(modelOutput);
+            const parsed = JSON.parse(jsonText);
+            return normalizeStructuredChat(parsed, modelOutput);
+        } catch {
+            return normalizeStructuredChat({}, modelOutput);
+        }
+    } catch (err: any) {
+        console.warn('[LLM Provider] Chat failed, falling back to local response generator. Error:', err.message);
+        return generateLocalFallbackResponse(messages, err.message);
     }
 }
 
@@ -593,6 +783,87 @@ export async function getPipelineResult(req: Request, res: Response) {
     } catch (err: any) { res.status(500).json({ error: err.message }); }
 }
 
+const WORKSHOP_CHAT_SYSTEM_PROMPT = `You are an AI product manager assistant embedded in the Idea Workshop.
+
+The user will send their project context (idea, analysis, feature decisions, working document) followed by their question or request.
+
+Your job:
+1. Answer the user conversationally with markdown formatting in answer_markdown.
+2. When the user asks to ADD a new feature, output a feature_changes entry with _action: "add".
+3. When the user asks to MODIFY or UPDATE an existing feature, output a feature_changes entry with _action: "update".
+4. When the user asks to REMOVE or DELETE a feature, output a feature_changes entry with _action: "delete".
+5. When the user asks to change project info (summary, target audience, value proposition, strengths, risks, milestones, architecture, etc.), output doc_changes with only the fields that changed.
+6. If the user's request does not require changes, omit feature_changes and doc_changes.
+
+For "add" actions, include all fields of the new feature.
+For "update" actions, include the feature id and only the fields to change.
+For "delete" actions, include only the feature id.
+
+Respond with valid JSON. Always include answer_markdown, summary, highlights, next_actions, warnings.
+Only include feature_changes and doc_changes when the user requests modifications.
+
+Schema:
+{
+  "answer_markdown": "string - conversational answer with markdown",
+  "summary": "string - brief summary (max 30 words)",
+  "highlights": ["string"] - max 5 items,
+  "next_actions": ["string"] - max 5 items,
+  "warnings": ["string"] - max 5 items,
+  "feature_changes": [
+    {
+      "_action": "add" | "update" | "delete",
+      "id": "string - feature id (required for update/delete)",
+      "title": "string",
+      "description": "string",
+      "rationale": "string",
+      "priority": "critical" | "high" | "medium" | "low",
+      "include": true | false,
+      "rating": 1 | 2 | 3 | 4 | 5,
+      "status": "pending" | "approved" | "rejected",
+      "comment": "string",
+      "integratedSummary": "string",
+      "clarifying_questions": ["string"]
+    }
+  ],
+  "doc_changes": {
+    "summary": "string or null",
+    "target_audience": ["string"] or null,
+    "core_value_proposition": ["string"] or null,
+    "problem_statement": ["string"] or null,
+    "technical_architecture": ["string"] or null,
+    "milestones": [{"milestone": "string", "scope": "string", "owner_role": "string", "eta": "string"}] or null,
+    "success_metrics": ["string"] or null,
+    "risks": [{"risk": "string", "impact": "string", "mitigation": "string"}] or null,
+    "implementation_checklist": ["string"] or null,
+    "user_flows": ["string"] or null,
+    "data_api_requirements": ["string"] or null,
+    "open_questions": ["string"] or null,
+    "key_features": [{"feature": "string", "include": true|false, "rating": 1-5, "rationale": "string"}] or null,
+    "strengths": ["string"] or null,
+    "weaknesses": ["string"] or null
+  }
+}`;
+
+async function getWorkshopChatResponse(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    options?: { model?: string; temperature?: number; max_tokens?: number; apiKey?: string; apiBaseUrl?: string }
+): Promise<any> {
+    const llmProvider = getLLMProvider();
+    const modelOutput = await llmProvider.chat({
+        model: options?.model,
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.max_tokens,
+        apiKey: options?.apiKey,
+        apiBaseUrl: options?.apiBaseUrl,
+        messages: [
+            { role: 'system', content: WORKSHOP_CHAT_SYSTEM_PROMPT },
+            ...messages
+        ]
+    });
+
+    return safeParseJson(modelOutput, options);
+}
+
 // --- Simple Chat (from merged server.js) ---
 
 export async function simpleChat(req: Request, res: Response) {
@@ -614,6 +885,44 @@ export async function simpleChat(req: Request, res: Response) {
             apiBaseUrl: activeApiBaseUrl,
         });
         res.json({ reply: structured.answer_markdown, response: structured });
+    } catch (err: any) {
+        console.error('LLM error:', err.message);
+        res.status(500).json({ error: 'Failed to get AI response' });
+    }
+}
+
+export async function workshopChat(req: Request, res: Response) {
+    const { message, apiKey, model, apiBaseUrl } = req.body;
+    if (!message || typeof message !== 'string') {
+        return res.status(400).json({ error: 'Invalid message' });
+    }
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
+    try {
+        const parsed = await getWorkshopChatResponse([
+            { role: 'user', content: message }
+        ], {
+            model: activeModel || undefined,
+            temperature: 0.3,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
+        });
+        const answer_markdown = parsed.answer_markdown || '';
+        const summary = parsed.summary || '';
+        res.json({
+            reply: answer_markdown,
+            response: {
+                answer_markdown,
+                summary,
+                highlights: Array.isArray(parsed.highlights) ? parsed.highlights.slice(0, 5) : [],
+                next_actions: Array.isArray(parsed.next_actions) ? parsed.next_actions.slice(0, 5) : [],
+                warnings: Array.isArray(parsed.warnings) ? parsed.warnings.slice(0, 5) : [],
+                feature_changes: Array.isArray(parsed.feature_changes) ? parsed.feature_changes : undefined,
+                doc_changes: parsed.doc_changes && typeof parsed.doc_changes === 'object' ? parsed.doc_changes : undefined,
+            },
+        });
     } catch (err: any) {
         console.error('LLM error:', err.message);
         res.status(500).json({ error: 'Failed to get AI response' });
@@ -682,6 +991,167 @@ Your role:
         res.json({ reply: structured.answer_markdown, response: structured, projectName: project.name });
     } catch (err: any) {
         console.error('Project chat error:', err.message);
+        res.status(500).json({ error: `AI Connection failed: ${err.message}` });
+    }
+}
+
+// --- Diagram AI Chat ---
+
+export async function diagramChat(req: Request, res: Response) {
+    const { message, projectId, history, currentDiagramName, currentDiagramContent } = req.body;
+    if (!message || !projectId) {
+        return res.status(400).json({ error: 'Message and projectId are required' });
+    }
+
+    try {
+        // Load project with all related context
+        const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            include: {
+                pages: { where: { archived: false } },
+                dataModels: { where: { archived: false } },
+                useCases: { where: { archived: false } },
+                logicFlows: { where: { archived: false } },
+                apis: { where: { archived: false } },
+            },
+        });
+
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        // Format pages
+        const pagesText = project.pages.length > 0
+            ? project.pages.map((p: any) => `- ${p.name} (path: ${p.path}${p.isDynamic ? ', dynamic' : ''})`).join('\n')
+            : 'No pages defined yet.';
+
+        // Format data models
+        const dataModelsText = project.dataModels.length > 0
+            ? project.dataModels.map((dm: any) => {
+                let schemaDisplay = '';
+                try {
+                    const schema = JSON.parse(dm.schema);
+                    if (schema.fields && Array.isArray(schema.fields)) {
+                        schemaDisplay = '\n  Fields: ' + schema.fields.map((f: any) =>
+                            `${f.name}: ${f.type}${f.required ? ' (required)' : ''}`
+                        ).join(', ');
+                    }
+                } catch { schemaDisplay = ''; }
+                return `- ${dm.name}${schemaDisplay}`;
+            }).join('\n')
+            : 'No data models defined yet.';
+
+        // Format use cases
+        const useCasesText = project.useCases.length > 0
+            ? project.useCases.map((uc: any) => {
+                let actors: string[] = [];
+                let steps: string[] = [];
+                try { actors = JSON.parse(uc.actors); } catch { }
+                try {
+                    const rawSteps = JSON.parse(uc.steps);
+                    steps = rawSteps.map((s: any) => s.description || String(s));
+                } catch { }
+                return `- ${uc.name} [${uc.priority}]\n  Actors: ${actors.join(', ') || 'N/A'}\n  Steps: ${steps.slice(0, 4).join(' → ') || 'N/A'}`;
+            }).join('\n')
+            : 'No use cases defined yet.';
+
+        // Format logic flows
+        const logicFlowsText = project.logicFlows.length > 0
+            ? project.logicFlows.map((lf: any) => `- ${lf.name}`).join('\n')
+            : 'No logic flows defined yet.';
+
+        // Format API endpoints
+        const apisText = project.apis && project.apis.length > 0
+            ? project.apis.map((api: any) => {
+                let configDisplay = '';
+                try {
+                    const config = JSON.parse(api.config);
+                    if (config.body) {
+                        configDisplay = `\n  Body: ${JSON.stringify(config.body)}`;
+                    }
+                } catch {}
+                return `- [${api.method.toUpperCase()}] ${api.path} (${api.name})${configDisplay}`;
+            }).join('\n')
+            : 'No API endpoints defined yet.';
+
+        const projectDescription = project.description || 'No description provided.';
+        const diagramContext = currentDiagramName
+            ? `Current Diagram: ${currentDiagramName}\nContent: ${currentDiagramContent || 'Empty diagram.'}`
+            : 'No diagram currently selected.';
+
+        const systemPrompt = `You are an expert software architect and senior technical diagram assistant embedded inside a collaborative visual IDE called "Akasha Visual IDE".
+
+You help software engineers create, analyze, improve, and explain technical diagrams using Mermaid syntax.
+Always output valid Mermaid code wrapped in \`\`\`mermaid blocks.
+
+════ PROJECT CONTEXT ════
+Project Name: ${project.name}
+Description / PRD:
+${projectDescription}
+
+════ PAGES ════
+${pagesText}
+
+════ DATA MODELS ════
+${dataModelsText}
+
+════ USE CASES ════
+${useCasesText}
+
+════ LOGIC FLOWS ════
+${logicFlowsText}
+
+════ API ENDPOINTS ════
+${apisText}
+
+════ CURRENT DIAGRAM ════
+${diagramContext}
+
+════ YOUR CAPABILITIES ════
+MODE 1 — GENERATE: When asked to generate/create/draw a diagram, identify the type (ERD/Sequence/Flowchart/Architecture/UseCase/Class/Deployment/StateMachine) and output valid Mermaid code using REAL names from the project context above. Never use placeholder names.
+
+MODE 2 — ANALYZE: When asked to analyze/review/check a diagram, review it against the project context and return numbered findings with [CRITICAL], [WARNING], or [SUGGESTION] labels. End with: DIAGRAM QUALITY SCORE: X/100.
+
+MODE 3 — IMPROVE: When asked to improve/enhance/fix, list 3-5 concrete improvements using real project names with corrected Mermaid snippets.
+
+MODE 4 — EXPLAIN: When asked to explain/describe, write a clear 3-paragraph plain-English explanation under 250 words.
+
+MODE 5 — CHAT: For general questions, answer concisely grounded in the project context.
+
+RULES:
+- Always use real entity/actor/component names from the context above
+- Keep Mermaid syntax valid and paste-ready
+- After every diagram add: "Ready to paste into draw.io via Extras → Edit Diagram"
+- Prioritize clarity and correctness over length`;
+
+        const messages: any[] = [{ role: 'system', content: systemPrompt }];
+
+        if (Array.isArray(history)) {
+            for (const msg of history.slice(-8)) {
+                messages.push({
+                    role: msg.role === 'user' ? 'user' : 'assistant',
+                    content: msg.content,
+                });
+            }
+        }
+
+        messages.push({ role: 'user', content: message });
+
+        const store = aiConfigStorage.getStore();
+        const apiKey = store?.apiKey || req.body.apiKey || undefined;
+        const modelOverride = store?.model || req.body.model || undefined;
+        const apiBaseUrl = store?.apiBaseUrl || req.body.apiBaseUrl || undefined;
+
+        const structured = await getStructuredChatResponse(messages, {
+            model: modelOverride || undefined,
+            temperature: 0.4,
+            apiKey,
+            apiBaseUrl,
+        });
+
+        res.json({ reply: structured.answer_markdown, response: structured, projectName: project.name });
+    } catch (err: any) {
+        console.error('Diagram chat error:', err.message);
         res.status(500).json({ error: `AI Connection failed: ${err.message}` });
     }
 }
@@ -1876,9 +2346,7 @@ export async function testConnection(req: Request, res: Response) {
     try {
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: model || 'google/gemma-3-4b-it:free',
-            temperature: 0.1,
-            max_tokens: 10,
+            model: model || undefined,
             apiKey: apiKey || undefined,
             apiBaseUrl: apiBaseUrl || undefined,
             bypassStore: true,
@@ -1886,7 +2354,7 @@ export async function testConnection(req: Request, res: Response) {
                 { role: 'user', content: 'respond with exactly the word "ok".' }
             ]
         });
-        
+
         if (!modelOutput || modelOutput.trim().length === 0) {
             throw new Error('No response received from the custom AI endpoint.');
         }
@@ -1895,6 +2363,554 @@ export async function testConnection(req: Request, res: Response) {
     } catch (err: any) {
         console.error('AI connection test error:', err.message);
         res.status(400).json({ error: err.message });
+    }
+}
+
+export async function sandboxGeneratePages(req: Request, res: Response) {
+    const { idea, projectId, apiKey, model, apiBaseUrl } = req.body;
+    if (!idea || typeof idea !== 'string') {
+        return res.status(400).json({ error: 'idea is required' });
+    }
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
+
+    let projectContext = '';
+    if (projectId) {
+        try {
+            const project = await prisma.project.findUnique({
+                where: { id: projectId },
+                include: { useCases: { where: { archived: false } }, dataModels: { where: { archived: false } } }
+            });
+            if (project) {
+                projectContext = `Project Name: ${project.name}\nDescription: ${project.description || ''}\n`;
+                if (project.useCases.length > 0) {
+                    projectContext += `Use Cases:\n${project.useCases.map((u: any) => `- ${u.name}: ${u.description || ''}`).join('\n')}\n`;
+                }
+                if (project.dataModels.length > 0) {
+                    projectContext += `Data Models:\n${project.dataModels.map((d: any) => `- ${d.name}`).join('\n')}\n`;
+                }
+            }
+        } catch (dbErr) {
+            console.error('[Sandbox AI] DB project lookup failed:', dbErr);
+        }
+    }
+
+    try {
+        const llmProvider = getLLMProvider();
+        let modelOutput = await llmProvider.chat({
+            model: activeModel || undefined,
+            temperature: 0.2,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are a senior UX product planner and information architect. Given a product idea and project context, design a complete, logical sitemap.
+
+RULES:
+- Respond ONLY with a JSON array of page objects. No text, no markdown, no code fences.
+- Generate exactly 6-8 pages that represent a complete, production-ready application.
+- Each page: {"name":"Page Name","path":"/path","type":"dashboard|auth|settings|list|detail|landing|search|profile","description":"A detailed 2-3 sentence description of what this page contains, its key sections, and what data it displays."}
+- Page names should be specific to the product (e.g. "Invoice Manager" not "List Page", "Patient Records" not "Data List").
+- Descriptions should be rich enough to guide a developer building the page — mention specific UI sections, data tables, charts, forms, or interactive elements.
+- Always include: a main dashboard/overview, at least one data list/management page, a settings/configuration page.
+- Paths should use clean kebab-case slugs (e.g. /invoices, /team-members, /analytics).
+- Types must be exactly one of: dashboard, auth, settings, list, detail, landing, search, profile.`
+                },
+                {
+                    role: 'user',
+                    content: `Product Idea: ${idea}\n\nProject Context:\n${projectContext}`
+                }
+            ]
+        });
+
+        modelOutput = modelOutput.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(extractJsonObject(modelOutput));
+        res.json(parsed);
+    } catch (err: any) {
+        console.error('[Sandbox AI] Generate pages error:', err.message);
+        res.status(500).json({ error: 'Failed to generate pages: ' + err.message });
+    }
+}
+
+export async function sandboxGeneratePageHtml(req: Request, res: Response) {
+    const { pageName, pageType, pageDescription, idea, themeDesc, apiKey, model, apiBaseUrl } = req.body;
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
+
+    const systemPrompt = `You are an elite senior frontend engineer and product designer. Generate a COMPLETE, standalone, production-quality HTML page that looks like a top-tier SaaS product.
+
+CRITICAL RULES:
+- Respond ONLY with the full HTML document. No markdown fences, no explanation, no commentary.
+- The page must be a COMPLETE <!DOCTYPE html> document with <html>, <head>, and <body> tags.
+- ALL CSS must be inline in a <style> tag inside <head>. No external CSS files.
+- Import ONE Google Font via @import at the top of <style> matching the theme font token.
+- Import Tabler Icons in the <head>: <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+- Use Tabler Icons (e.g. <i class="ti ti-[icon-name]"></i>) for ALL iconography — never use emoji or Unicode symbols for UI elements.
+- No external JavaScript libraries (like jQuery, React, Vue). Use clean, modular, vanilla JavaScript inside a <script> tag for interactivity.
+- NEVER use generic placeholders (like "Lorem Ipsum" or "John Doe"). Use specific, context-appropriate, rich copy that sounds real.
+- The page must feel like a production-grade SaaS interface — polished, dense, functional, and animated.
+
+DESIGN STANDARDS:
+- FULL-WIDTH edge-to-edge layout. NO max-width containers or centered wrappers except for auth cards. Use responsive side padding (2rem-4rem) instead.
+- Use the provided theme tokens as CSS variables in :root:
+  :root {
+    --primary: [Accent Color];
+    --primary-dark: [Accent Dark/Shaded Color];
+    --primary-light: [Accent at 10-15% opacity];
+    --radius: [Border Radius]px;
+    --font: '[Font Family]', sans-serif;
+    --bg: [light/dark background];
+    --bg-elevated: [slightly lighter/darker surface];
+    --bg-sidebar: [sidebar background];
+    --text: [primary text];
+    --text-secondary: [muted text];
+    --border: [subtle border];
+    --shadow: [card shadow];
+  }
+- Use CSS Grid and Flexbox for all layouts. No float or table-based layouts.
+- Color palette: deep neutrals for backgrounds (like #f5f7fa light / #0b0f19 dark), subtle borders (rgba(0,0,0,0.06) or rgba(255,255,255,0.08)), vibrant gradients for accents.
+- EVERY interactive element must have CSS transitions (0.15s-0.2s ease) on hover/focus for transform, box-shadow, and background-color.
+- Add at least 3 @keyframe animations (fade-in, slide-up, pulse, shimmer, or gradient-shift). Apply them to sections on load for a polished feel.
+- Cards, modals, and dropdowns must have subtle box-shadow and border-radius using the provided radius token.
+- Typography must use the theme font with a clear hierarchy: large bold headings, smaller subheadings, and compact body text.
+
+CONTENT STANDARDS:
+- Tables must have 5-8 columns and 6-10 rows of realistic data (real-sounding names, emails, amounts, statuses, dates).
+- Status badges: pill-shaped with soft tinted backgrounds (emerald for active/paid, amber for pending, rose for failed/cancelled, slate for draft).
+- Use colored avatar initials for user representations (e.g., circle with initials in contrasting colors).
+- All timestamps should be realistic (e.g., "Mar 12, 2025 at 3:42pm", "2 hours ago", "Yesterday").
+- Monetary values must be formatted ($1,234.56).
+
+PAGE-SPECIFIC COMPONENT EXPECTATIONS:
+- Dashboard: Full-width left sidebar (collapsible via hamburger), top navbar with breadcrumbs/search/bell+avatar, 3-4 metric cards with micro line/SVG charts, data grid table with sortable headers and pagination, recent activity feed.
+- Landing Page: Fixed navbar with logo+links+CTA, full-bleed hero with gradient text headline, sub-text, dual CTA buttons, feature grid (3-col) with hover-lift cards, testimonial carousel with dots, accordion FAQ, 4-col footer with link groups.
+- Auth Page: Split-screen (brand illustration or gradient left, form right) or centered card on gradient background. Floating labels, social buttons (Google/GitHub), password show/hide toggle, validation states.
+- Settings Page: Vertical tab/sidebar menu with sections (Profile, Account, Notifications, Billing). Toggle switches, select dropdowns, avatar upload zone, danger zone with delete button.
+- List Page: Search bar with icon, filter dropdowns + active filter chips, sortable table rows with checkboxes, bulk action bar, pagination.
+- Detail Page: Back link, heading with breadcrumbs, 3-tab layout (Overview, Activity, Settings) with JS tab switching, metadata sidebar, tag pills, action buttons.
+- Profile Page: Cover banner image, large circular avatar overlapping banner, edit info cards, tabbed content (Posts, Activity, Settings), stats row.
+
+INTERACTIVE BEHAVIOR (VANILLA JS):
+- Sidebar toggle: hamburger button adds/removes "collapsed" class on sidebar, animating width.
+- Tab switching: click tabs to show/hide corresponding content panels.
+- Dropdown: click avatar or "More" button to show a positioned dropdown menu; click outside to close.
+- Search filter: on keyup, filter table rows by matching text.
+- Form simulation: on submit, show a toast/snackbar notification at top-right, then reset form.
+- Notifications: click bell icon to show a small dropdown with 2-3 notification items.
+- Iframes: When generating an iframe (e.g. for previews, dashboards, or embeds), NEVER use an empty src="" or src="#" as this causes browser security errors (CORS/unique origin violations) when the page is exported and loaded locally under the file:// protocol. Always use src="about:blank" as the default/fallback source.
+
+OUTPUT: Just the complete HTML. Nothing else.`;
+
+    try {
+        const llmProvider = getLLMProvider();
+        let modelOutput = await llmProvider.chat({
+            model: activeModel || undefined,
+            temperature: 0.35,
+            max_tokens: 8192,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt
+                },
+                {
+                    role: 'user',
+                    content: `Page Name: ${pageName}\nPage Type: ${pageType}\nPage Description: ${pageDescription}\nProduct Context: ${idea}\nTheme Tokens: ${themeDesc}\n\nGenerate the full HTML page now.`
+                }
+            ]
+        });
+
+        modelOutput = modelOutput.replace(/```html|```/g, '').trim();
+        res.json({ html: modelOutput });
+    } catch (err: any) {
+        console.error('[Sandbox AI] Generate page HTML error:', err.message);
+        res.status(500).json({ error: 'Failed to generate page HTML: ' + err.message });
+    }
+}
+
+export async function sandboxEditPage(req: Request, res: Response) {
+    const { pageName, pageType, currentHTML, message, themeDesc, apiKey, model, apiBaseUrl } = req.body;
+    const store = aiConfigStorage.getStore();
+    const activeApiKey = apiKey || store?.apiKey || undefined;
+    const activeModel = model || store?.model || undefined;
+    const activeApiBaseUrl = apiBaseUrl || store?.apiBaseUrl || undefined;
+
+    const editSystemPrompt = `You are an elite senior frontend engineer acting as a live page editor. The user provides instructions to modify a standalone HTML page.
+
+RESPONSE FORMAT — you MUST respond with exactly TWO parts separated by this delimiter: |||HTML_START|||
+
+Part 1 (before delimiter): A SHORT conversational explanation of what you changed (2-3 sentences max, plain text, no markdown). Be specific about what was modified.
+
+Part 2 (after delimiter): The COMPLETE updated HTML page. This must be the FULL <!DOCTYPE html> document from start to finish. Never truncate, never use "..." or "<!-- rest of content -->". Every single line of code must be present. Omit NOTHING.
+
+EDITING RULES:
+- Preserve ALL existing content, structure, and styles unless the user explicitly asks to edit or remove them.
+- Ensure the page contains the Tabler Icons CDN: <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+- Use Tabler Icons (<i class="ti ti-[icon-name]"></i>) for ALL icons — never use emoji or Unicode for UI icons.
+- Avoid restrictive centered page containers or wrappers. Support full-width, edge-to-edge layouts using responsive side padding.
+- When adding new sections, match the existing design language exactly (colors, fonts, border-radius, shadows, transitions, spacing scale).
+- Apply the theme tokens: ${themeDesc}
+- Include :hover and :focus transitions on ALL interactive elements (0.15s-0.2s ease).
+- For "more content" or "realistic data", add detailed mock data (full names, email addresses, timestamps, status badges, monetary amounts with $) — never use "Lorem Ipsum" or placeholder text.
+- If interactivity is requested, add vanilla JavaScript inside the <script> tags — do not import external libraries.
+- Every edit must maintain or improve the visual polish: proper box-shadows, border-radius from theme, smooth animations, and consistent spacing.
+- When modifying or generating an iframe (e.g. for previews, dashboards, or embeds), NEVER use an empty src="" or src="#" as this causes browser security errors (CORS/unique origin violations) when the page is exported and loaded locally under the file:// protocol. Always use src="about:blank" as the default/fallback source.
+- The final output must be a completely valid, self-contained, and working HTML page.`;
+
+    try {
+        const llmProvider = getLLMProvider();
+        let modelOutput = await llmProvider.chat({
+            model: activeModel || undefined,
+            temperature: 0.25,
+            max_tokens: 8192,
+            apiKey: activeApiKey,
+            apiBaseUrl: activeApiBaseUrl,
+            messages: [
+                {
+                    role: 'system',
+                    content: editSystemPrompt
+                },
+                {
+                    role: 'user',
+                    content: `Current page: ${pageName} (${pageType})\nTheme: ${themeDesc}\n\nCurrent HTML:\n${currentHTML.slice(0, 15000)}\n\nUser instruction: ${message}`
+                }
+            ]
+        });
+
+        res.json({ response: modelOutput });
+    } catch (err: any) {
+        console.error('[Sandbox AI] Edit page error:', err.message);
+        res.status(500).json({ error: 'Failed to edit page: ' + err.message });
+    }
+}
+
+export async function sandboxSave(req: Request, res: Response) {
+    const { projectId, idea, pages, theme, chatMessages } = req.body;
+    if (!projectId) return res.status(400).json({ error: 'projectId is required' });
+
+    try {
+        await prisma.project.update({
+            where: { id: projectId },
+            data: {
+                sandbox: {
+                    idea: idea || '',
+                    pages: pages || [],
+                    theme: theme || null,
+                    chatMessages: chatMessages || [],
+                    updatedAt: new Date().toISOString(),
+                }
+            }
+        });
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error('[Sandbox] Save error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+export async function sandboxLoad(req: Request, res: Response) {
+    const { projectId } = req.params;
+    if (!projectId) return res.status(400).json({ error: 'projectId is required' });
+
+    try {
+        const project = await prisma.project.findUnique({
+            where: { id: projectId }
+        });
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        res.json({ sandbox: project.sandbox || null });
+    } catch (err: any) {
+        console.error('[Sandbox] Load error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+export async function sandboxAutoSave(req: Request, res: Response) {
+    const { projectId, idea, pages, theme, chatMessages } = req.body;
+    if (!projectId) return res.status(400).json({ error: 'projectId is required' });
+
+    try {
+        // Atomic upsert – only writes fields that changed
+        await prisma.project.update({
+            where: { id: projectId },
+            data: {
+                sandbox: {
+                    idea: idea ?? '',
+                    pages: pages ?? [],
+                    theme: theme ?? null,
+                    chatMessages: chatMessages ?? [],
+                    updatedAt: new Date().toISOString(),
+                }
+            }
+        });
+        res.json({ success: true, savedAt: new Date().toISOString() });
+    } catch (err: any) {
+        console.error('[Sandbox] Auto-save error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+export async function getTeamMembers(req: Request, res: Response) {
+    const { sessionId } = req.query;
+    if (!sessionId || typeof sessionId !== 'string') return res.status(400).json({ error: 'Missing sessionId' });
+    try {
+        const member = await prisma.teamMember.findFirst({ where: { sessionId } });
+        if (!member) {
+            return res.json({ members: [] });
+        }
+        const team = await prisma.team.findUnique({
+            where: { id: member.teamId },
+            include: { members: true }
+        });
+        if (!team) {
+            return res.json({ members: [] });
+        }
+        res.json({
+            members: team.members.map((m: any) => ({
+                sessionId: m.sessionId,
+                username: m.username,
+                role: m.role
+            }))
+        });
+    } catch (err: any) {
+        console.error('[getTeamMembers] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// Fetch organization members for a project - auto-detects team from project's org
+export async function getOrgMembers(req: Request, res: Response) {
+    const { projectId } = req.query;
+    if (!projectId || typeof projectId !== 'string') return res.status(400).json({ error: 'Missing projectId' });
+    try {
+        let OrgMember: any, User: any, Organization: any;
+        try {
+            const orgMemberMod = '../../models/OrgMember.js';
+            const userMod = '../../models/User.js';
+            const orgMod = '../../models/Organization.js';
+            OrgMember = (await import(orgMemberMod)).default;
+            User = (await import(userMod)).default;
+            Organization = (await import(orgMod)).default;
+        } catch {
+            return res.json({ members: [], orgName: null });
+        }
+
+        // Find the project to get its orgId
+        const project = await prisma.project.findUnique({ where: { id: projectId } });
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        const orgId = (project as any).orgId;
+        if (!orgId) {
+            // No org attached — return empty so the frontend falls back to local members
+            return res.json({ members: [], orgName: null });
+        }
+
+        // Fetch the org name
+        const org = await Organization.findById(orgId).select('name').lean();
+        const orgName = org?.name || null;
+
+        // Fetch all accepted members of this organization with their user details
+        const memberships = await OrgMember.find({ orgId, status: 'accepted' })
+            .populate('userId', 'username displayName jobTitle skillTags avatarUrl email')
+            .lean();
+
+        const members = memberships
+            .filter((m: any) => m.userId) // guard against deleted users
+            .map((m: any) => {
+                const user = m.userId;
+                return {
+                    id: user._id?.toString?.() || '',
+                    username: user.username || user.displayName || 'Unknown',
+                    displayName: user.displayName || user.username || '',
+                    jobTitle: user.jobTitle || '',
+                    skillTags: user.skillTags || [],
+                    avatarUrl: user.avatarUrl || '',
+                    email: user.email || '',
+                    orgRole: m.role || 'member',   // 'leader' | 'member'
+                };
+            });
+
+        res.json({ members, orgName });
+    } catch (err: any) {
+        console.error('[getOrgMembers] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+// Role-based task assignment logic - maps task types to suitable roles
+const ROLE_TASK_MAPPING: Record<string, string[]> = {
+    "frontend": ["Frontend Engineer", "Fullstack Engineer", "UI/UX Designer"],
+    "backend": ["Backend Engineer", "Fullstack Engineer"],
+    "database": ["Backend Engineer", "Fullstack Engineer", "Database Admin"],
+    "api": ["Backend Engineer", "Fullstack Engineer"],
+    "ui": ["Frontend Engineer", "Fullstack Engineer", "UI/UX Designer"],
+    "design": ["UI/UX Designer", "Frontend Engineer"],
+    "architecture": ["Project Lead", "Backend Engineer", "Fullstack Engineer"],
+    "testing": ["QA Engineer", "Fullstack Engineer", "Frontend Engineer", "Backend Engineer"],
+    "devops": ["DevOps Engineer", "Backend Engineer", "Fullstack Engineer"],
+    "mobile": ["Mobile Engineer", "Fullstack Engineer", "Frontend Engineer"],
+    "all": ["Project Lead", "Fullstack Engineer", "Frontend Engineer", "Backend Engineer", "UI/UX Designer", "QA Engineer"]
+};
+
+function getLocalFallbackMilestones(projectName: string, projectDescription: string, teamMembers: any[]): any[] {
+    const roles = teamMembers && teamMembers.length > 0
+        ? teamMembers
+        : [{ username: 'All', role: 'Team' }];
+        
+    // Enhanced milestones with task categories for role-based assignment
+    const defaultMilestones = [
+        { title: "Define Project Architecture & Specs", description: "Document technical requirements, framework selection, and scope based on: " + (projectDescription ? projectDescription.slice(0, 100) + "..." : "project specifications."), category: "architecture" },
+        { title: "Design UI Wireframes & Layouts", description: "Create mockups and initial interface wireframes for the views.", category: "design" },
+        { title: "Configure Database Schema & Relationships", description: "Define relational models, tables, and associations in schema.", category: "database" },
+        { title: "Develop API Endpoints & Routes", description: "Build backend REST endpoints and tie logic flows.", category: "api" },
+        { title: "Integrate Visual Components & State", description: "Mount and bind interactive UI components to frontend data stores.", category: "frontend" },
+        { title: "Perform QA Testing & Bug Fixing", description: "Test core use cases, logic flows, and patch edge-case errors.", category: "testing" }
+    ];
+
+    return defaultMilestones.map((m, index) => {
+        let assignedTo = "All";
+        const suitableRoles = (ROLE_TASK_MAPPING as Record<string, string[]>)[m.category] || ROLE_TASK_MAPPING["all"] || [];
+        
+        // Find team member with matching role
+        for (const suitableRole of suitableRoles) {
+            const match = roles.find(r => r.role?.toLowerCase().includes(suitableRole.toLowerCase()));
+            if (match) {
+                assignedTo = match.username;
+                break;
+            }
+        }
+        
+        // Fallback: round-robin if no role match
+        if (assignedTo === "All" && roles.length > 0) {
+            assignedTo = roles[index % roles.length].username;
+        }
+
+        return {
+            id: `task-fallback-${Date.now()}-${index}`,
+            title: m.title,
+            description: m.description,
+            assignedTo,
+            status: "todo",
+            createdAt: new Date().toISOString()
+        };
+    });
+}
+
+// Helper to find best assignee for a task based on category and team composition
+function findBestAssignee(taskCategory: string, teamMembers: any[]): string {
+    const suitableRoles = (ROLE_TASK_MAPPING as Record<string, string[]>)[taskCategory] || ROLE_TASK_MAPPING["all"] || [];
+    for (const suitableRole of suitableRoles) {
+        const match = teamMembers.find(r => r.role?.toLowerCase().includes(suitableRole.toLowerCase()));
+        if (match) return match.username;
+    }
+    return teamMembers.length > 0 ? teamMembers[0].username : "All";
+}
+
+export async function generateTeamTasks(req: Request, res: Response) {
+    const { projectName, projectDescription, ideaDetails, teamMembers } = req.body;
+    const membersList = Array.isArray(teamMembers) ? teamMembers : [];
+    
+    try {
+        const llmProvider = getLLMProvider();
+        
+        const membersListStr = membersList.length > 0
+            ? membersList.map((m: any) => `- Name: ${m.username}, Role: ${m.role || 'General'}`).join('\n')
+            : '- Name: All, Role: Team Milestone';
+
+        const prompt = `You are a project manager and tech lead assistant.
+Your task is to generate 5 to 8 concrete project milestones and tasks for a team.
+Here is the project information:
+Project Name: ${projectName || 'Unnamed Project'}
+Description: ${projectDescription || 'No description provided.'}
+Idea Details: ${ideaDetails ? JSON.stringify(ideaDetails) : 'None'}
+
+Here are the team members and their roles:
+${membersListStr}
+
+Generate 5 to 8 milestone tasks. Assign each task to a specific team member name based on their role, or assign it to "All" if it requires the entire team.
+Ensure the tasks are concrete, highly relevant to the project description, and follow standard software engineering milestones (e.g. database schema, UI mockups, backend APIs, testing).
+
+Output format: Return ONLY a valid JSON array of objects, with NO markdown code fences or explanatory text.
+Strict Rules:
+- Keys and values must use double quotes (not single quotes).
+- Do not use trailing commas inside JSON objects or arrays.
+
+JSON Structure:
+[
+  {
+    "id": "unique-uuid-like-string",
+    "title": "Task title",
+    "description": "Short, concrete description of the task",
+    "assignedTo": "Name of member (e.g. David, Sarah, Emily) or 'All'",
+    "status": "todo",
+    "createdAt": "${new Date().toISOString()}"
+  }
+]
+`;
+
+        let tasks: any[] = [];
+        try {
+            const responseText = await llmProvider.chat({
+                messages: [
+                    { role: 'system', content: 'You are a technical product manager. You always output valid JSON arrays. Do not include markdown formatting, backticks or text explanation.' },
+                    { role: 'user', content: prompt }
+                ],
+                temperature: 0.1 // Low temperature for maximum compliance
+            });
+
+            // Clean output in case LLM returns markdown formatting
+            let cleanText = responseText.trim();
+            if (cleanText.startsWith('```json')) {
+                cleanText = cleanText.substring(7);
+            }
+            if (cleanText.startsWith('```')) {
+                cleanText = cleanText.substring(3);
+            }
+            if (cleanText.endsWith('```')) {
+                cleanText = cleanText.substring(0, cleanText.length - 3);
+            }
+            cleanText = cleanText.trim();
+
+            try {
+                const parsed = JSON.parse(cleanText);
+                if (Array.isArray(parsed)) {
+                    tasks = parsed;
+                }
+            } catch (jsonErr: any) {
+                console.warn('[generateTeamTasks] First parse failed, attempting regex cleanup:', jsonErr.message);
+                // Regex cleanup: remove trailing commas
+                let fixedText = cleanText.replace(/,(\s*[\]}])/g, '$1');
+                // Replace single quoted keys/values with double quotes
+                fixedText = fixedText.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+                const parsed = JSON.parse(fixedText);
+                if (Array.isArray(parsed)) {
+                    tasks = parsed;
+                }
+            }
+        } catch (llmErr: any) {
+            console.error('[generateTeamTasks] LLM generation/parsing failed, falling back to local milestones:', llmErr.message);
+            tasks = getLocalFallbackMilestones(projectName, projectDescription, membersList);
+        }
+
+        if (tasks.length === 0) {
+            tasks = getLocalFallbackMilestones(projectName, projectDescription, membersList);
+        }
+
+        res.json({ tasks });
+    } catch (err: any) {
+        console.error('[generateTeamTasks] Final catch error, returning fallback:', err.message);
+        try {
+            const fallbackTasks = getLocalFallbackMilestones(projectName, projectDescription, membersList);
+            res.json({ tasks: fallbackTasks });
+        } catch (innerErr: any) {
+            res.status(500).json({ error: 'Failed to generate milestones: ' + err.message });
+        }
     }
 }
 

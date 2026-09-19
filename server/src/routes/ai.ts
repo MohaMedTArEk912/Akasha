@@ -11,9 +11,13 @@ router.post('/request-join', ctrl.requestJoin);
 router.get('/search-teams', ctrl.searchTeams);
 router.get('/teams', ctrl.listTeams);
 router.get('/admin', ctrl.getAdminData);
+router.get('/admin-data', ctrl.getAdminData);
 router.post('/resolve-request', ctrl.resolveRequest);
 router.get('/status', ctrl.getStatus);
 router.post('/leave', ctrl.leaveTeam);
+router.get('/team-members', ctrl.getTeamMembers);
+router.get('/org-members', ctrl.getOrgMembers);
+router.post('/generate-team-tasks', ctrl.generateTeamTasks);
 
 // Chat
 router.post('/chat', ctrl.teamChat);
@@ -30,8 +34,14 @@ router.get('/pipeline-result', ctrl.getPipelineResult);
 // Simple Chat (merged from server.js)
 router.post('/simple-chat', ctrl.simpleChat);
 
+// Idea Workshop Chat (with structured change support)
+router.post('/workshop-chat', ctrl.workshopChat);
+
 // Project-Context-Aware Chat
 router.post('/project-chat', ctrl.projectChat);
+
+// Diagram AI Assistant Chat
+router.post('/diagram-chat', ctrl.diagramChat);
 
 // UI Builder AI
 router.post('/ui-builder/generate', uiBuilderCtrl.generate);
@@ -49,5 +59,13 @@ router.post('/generate-schema', ctrl.generateSchemaFromIdea);
 
 // Connection Health Check
 router.post('/test-connection', ctrl.testConnection);
+
+// AI Sandbox endpoints
+router.post('/sandbox/generate-pages', ctrl.sandboxGeneratePages);
+router.post('/sandbox/generate-page-html', ctrl.sandboxGeneratePageHtml);
+router.post('/sandbox/edit-page', ctrl.sandboxEditPage);
+router.post('/sandbox/save', ctrl.sandboxSave);
+router.get('/sandbox/load/:projectId', ctrl.sandboxLoad);
+router.post('/sandbox/auto-save', ctrl.sandboxAutoSave);
 
 export default router;

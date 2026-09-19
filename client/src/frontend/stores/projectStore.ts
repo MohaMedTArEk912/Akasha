@@ -6,9 +6,9 @@
 
 import { api } from "../hooks/useApi";
 import { AxiosError } from "axios";
-import { ProjectSchema, BlockSchema, PageSchema, InstallResult } from "../types/api";
+import { ProjectSchema, BlockSchema, PageSchema, InstallResult, FieldSchema, RelationSchema } from "../types/api";
 import type { UiBuilderGenerateResponse, UiBuilderMode } from "../types/uiBuilder";
-import { BLOCK_REGISTRY } from "../components/features/VisualBuilder/hooks/craft/blockRegistry";
+import { BLOCK_REGISTRY } from "../hooks/blockRegistry";
 
 // Store state type
 interface ProjectState {
@@ -236,14 +236,21 @@ export async function initWorkspace(): Promise<void> {
                     console.error("Failed to restore project session:", err);
                     sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
                     sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+                    updateState(() => ({ isDashboardActive: true }));
                 }
             } else if (savedProjectId) {
                 sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
                 sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+                updateState(() => ({ isDashboardActive: true }));
+            } else {
+                updateState(() => ({ isDashboardActive: true }));
             }
+        } else if (!workspace_path && !state.project) {
+             updateState(() => ({ isDashboardActive: true }));
         }
     } catch (err) {
         console.error("Failed to init workspace:", err);
+        updateState(() => ({ isDashboardActive: true }));
     }
 }
 
@@ -636,11 +643,12 @@ export async function openProject(id: string): Promise<void> {
         }
 
         // Show IDE immediately — don't block on dependency check
+        const isInitializing = project.status === "initializing";
         updateState(() => ({
             project,
             selectedPageId: getFirstActivePageId(project),
             isDashboardActive: false,
-            activePage: "dashboard",
+            activePage: isInitializing ? "idea" : (project.orgId ? "team" : "ui"),
             openPageIds: allActivePageIds(project),
             pageHistory: [],
         }));
@@ -720,6 +728,8 @@ export function closeProject(): void {
     // ── Clear session so refresh goes to dashboard ──
     sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
     sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+
+    updateState(() => ({ isDashboardActive: true }));
 }
 
 /**
@@ -1026,8 +1036,8 @@ export async function addPage(name: string, path: string): Promise<PageSchema> {
 /**
  * Update a page
  */
-export async function updatePage(id: string, name?: string, path?: string): Promise<void> {
-    await api.updatePage(id, name, path);
+export async function updatePage(id: string, name?: string, path?: string, meta?: any): Promise<void> {
+    await api.updatePage(id, name, path, meta);
     await loadProject();
     isDirtyValue = true;
 
@@ -1145,7 +1155,20 @@ export async function addField(
     fieldType: string,
     required: boolean = true
 ): Promise<void> {
-    await api.addFieldToModel(modelId, name, fieldType, required);
+    const model = state.project?.data_models.find(m => m.id === modelId);
+    if (!model) {
+        await api.addFieldToModel(modelId, name, fieldType, required);
+    } else {
+        const newField: FieldSchema = {
+            id: crypto.randomUUID(),
+            name,
+            field_type: fieldType,
+            required,
+            unique: false,
+            primary_key: false,
+        };
+        await api.updateModel(modelId, { fields: [...model.fields, newField] });
+    }
     await loadProject();
     isDirtyValue = true;
 }
@@ -1158,7 +1181,15 @@ export async function updateField(
     fieldId: string,
     updates: { name?: string; field_type?: string; required?: boolean; unique?: boolean; description?: string }
 ): Promise<void> {
-    await api.updateField(modelId, fieldId, updates);
+    const model = state.project?.data_models.find(m => m.id === modelId);
+    if (!model) {
+        await api.updateField(modelId, fieldId, updates);
+    } else {
+        const fields = model.fields.map((f: FieldSchema) =>
+            f.id === fieldId ? { ...f, ...updates } : f,
+        );
+        await api.updateModel(modelId, { fields });
+    }
     await loadProject();
     isDirtyValue = true;
 }
@@ -1219,7 +1250,13 @@ export async function archiveDataModel(id: string): Promise<void> {
  * Delete a field from a data model
  */
 export async function deleteField(modelId: string, fieldId: string): Promise<void> {
-    await api.deleteField(modelId, fieldId);
+    const model = state.project?.data_models.find(m => m.id === modelId);
+    if (!model) {
+        await api.deleteField(modelId, fieldId);
+    } else {
+        const fields = model.fields.filter((f: FieldSchema) => f.id !== fieldId);
+        await api.updateModel(modelId, { fields });
+    }
     await loadProject();
     isDirtyValue = true;
 }
@@ -1233,7 +1270,40 @@ export async function addRelation(
     targetModelId: string,
     relationType: string
 ): Promise<void> {
-    await api.addRelation(modelId, name, targetModelId, relationType);
+    const model = state.project?.data_models.find(m => m.id === modelId);
+    const targetModel = modelId !== targetModelId
+        ? state.project?.data_models.find(m => m.id === targetModelId)
+        : model;
+
+    if (!model) {
+        await api.addRelation(modelId, name, targetModelId, relationType);
+    } else {
+        const newRelation: RelationSchema = {
+            id: crypto.randomUUID(),
+            name,
+            target_model_id: targetModelId,
+            relation_type: relationType,
+        };
+        await api.updateModel(modelId, { relations: [...model.relations, newRelation] });
+
+        // Add inverse relation to the target model
+        if (targetModel && modelId !== targetModelId) {
+            const inverseName = model.name.charAt(0).toLowerCase() + model.name.slice(1);
+            const inverseRelation: RelationSchema = {
+                id: crypto.randomUUID(),
+                name: inverseName,
+                target_model_id: modelId,
+                relation_type: relationType,
+            };
+            await api.updateModel(targetModelId, { relations: [...targetModel.relations, inverseRelation] });
+        }
+    }
+
+    // For ManyToMany, create a junction model (regardless of fallback path)
+    if (relationType === "ManyToMany") {
+        await api.addDataModel(name);
+    }
+
     await loadProject();
     isDirtyValue = true;
 }
@@ -1242,7 +1312,13 @@ export async function addRelation(
  * Delete a relation from a data model
  */
 export async function deleteRelation(modelId: string, relationId: string): Promise<void> {
-    await api.deleteRelation(modelId, relationId);
+    const model = state.project?.data_models.find(m => m.id === modelId);
+    if (!model) {
+        await api.deleteRelation(modelId, relationId);
+    } else {
+        const relations = model.relations.filter((r: RelationSchema) => r.id !== relationId);
+        await api.updateModel(modelId, { relations });
+    }
     await loadProject();
     isDirtyValue = true;
 }
@@ -1385,10 +1461,14 @@ export function setBuilderActive(active: boolean): void {
     updateState(() => ({ builderActive: active }));
 }
 
+export function setProject(project: any): void {
+    updateState(() => ({ project }));
+}
+
 /**
  * Switch the active feature page
  */
-export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings";
+export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings" | "team";
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";
@@ -1656,4 +1736,107 @@ export async function createDiagram(name: string): Promise<void> {
  */
 export async function deleteDiagram(name: string): Promise<void> {
     await api.deleteDiagram(name);
+}
+
+// ─── AI Sandbox Persistence ─────────────────────────────────────
+
+export interface SandboxData {
+    idea: string;
+    pages: {
+        name: string;
+        path: string;
+        type: string;
+        description: string;
+        _html?: string;
+    }[];
+    theme: {
+        accent: string;
+        accentDark: string;
+        font: string;
+        radius: number;
+        mode: 'light' | 'dark';
+    };
+    chatMessages: {
+        id: string;
+        role: 'user' | 'agent' | 'typing';
+        text: string;
+        html?: string;
+    }[];
+    updatedAt?: string;
+}
+
+let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSavedHash = '';
+
+function computeHash(data: any): string {
+    const str = JSON.stringify({ idea: data.idea, pages: data.pages, theme: data.theme });
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0;
+    }
+    return hash.toString(36);
+}
+
+export async function saveSandbox(projectId: string, data: SandboxData): Promise<boolean> {
+    try {
+        await api.sandboxSave(projectId, {
+            idea: data.idea,
+            pages: data.pages,
+            theme: data.theme,
+            chatMessages: data.chatMessages,
+        });
+        lastSavedHash = computeHash(data);
+        return true;
+    } catch (err) {
+        console.error('[SandboxStore] Save failed:', err);
+        return false;
+    }
+}
+
+export async function loadSandbox(projectId: string): Promise<{ sandbox: SandboxData | null }> {
+    try {
+        const result = await api.sandboxLoad(projectId);
+        if (result?.sandbox) {
+            lastSavedHash = computeHash(result.sandbox);
+        }
+        return result;
+    } catch (err) {
+        console.error('[SandboxStore] Load failed:', err);
+        return { sandbox: null };
+    }
+}
+
+export function hasSandboxChanges(data: SandboxData): boolean {
+    return computeHash(data) !== lastSavedHash;
+}
+
+export function scheduleSandboxAutoSave(
+    projectId: string,
+    data: SandboxData,
+    delayMs: number = 1500
+): void {
+    if (pendingSaveTimer) clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = setTimeout(async () => {
+        if (!hasSandboxChanges(data)) return;
+        try {
+            await api.sandboxAutoSave(projectId, {
+                idea: data.idea,
+                pages: data.pages,
+                theme: data.theme,
+                chatMessages: data.chatMessages,
+            });
+            lastSavedHash = computeHash(data);
+        } catch (err) {
+            console.error('[SandboxStore] Auto-save failed:', err);
+        }
+    }, delayMs);
+}
+
+export function clearSandboxAutoSave(): void {
+    if (pendingSaveTimer) {
+        clearTimeout(pendingSaveTimer);
+        pendingSaveTimer = null;
+    }
 }

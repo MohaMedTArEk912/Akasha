@@ -44,31 +44,31 @@ import pagesRouter from './routes/pages.js';
 import componentsRouter from './routes/components.js';
 import gitRouter from './routes/git.js';
 
-app.use('/api/project', projectRouter);
+app.use(['/api/project', '/api/akasha/project'], projectRouter);
 import blocksRouter from './routes/blocks.js';
-app.use('/api/blocks', blocksRouter);
-app.use('/api/workspace', workspaceRouter);
-app.use('/api/pages', pagesRouter);
+app.use(['/api/blocks', '/api/akasha/blocks'], blocksRouter);
+app.use(['/api/workspace', '/api/akasha/workspace'], workspaceRouter);
+app.use(['/api/pages', '/api/akasha/pages'], pagesRouter);
 import logicFlowsRouter from './routes/logicFlows.js';
-app.use('/api/logic-flows', logicFlowsRouter);
+app.use(['/api/logic-flows', '/api/akasha/logic-flows'], logicFlowsRouter);
 import dataModelsRouter from './routes/dataModels.js';
-app.use('/api/data-models', dataModelsRouter);
+app.use(['/api/data-models', '/api/akasha/data-models'], dataModelsRouter);
 import diagramsRouter from './routes/diagrams.js';
-app.use('/api/diagrams', diagramsRouter);
+app.use(['/api/diagrams', '/api/akasha/diagrams'], diagramsRouter);
 import codegenRouter from './routes/codegen.js';
-app.use('/api/codegen', codegenRouter);
-app.use('/api/components', componentsRouter);
-app.use('/api/git', gitRouter);
+app.use(['/api/codegen', '/api/akasha/codegen'], codegenRouter);
+app.use(['/api/components', '/api/akasha/components'], componentsRouter);
+app.use(['/api/git', '/api/akasha/git'], gitRouter);
 import usecasesRouter from './routes/usecases.js';
-app.use('/api/usecases', usecasesRouter);
+app.use(['/api/usecases', '/api/akasha/usecases'], usecasesRouter);
 import apiProxyRouter from './routes/apiProxy.js';
-app.use('/api/proxy', apiProxyRouter);
+app.use(['/api/proxy', '/api/akasha/proxy'], apiProxyRouter);
 import apiHistoryRouter from './routes/apiHistory.js';
-app.use('/api/api-history', apiHistoryRouter);
+app.use(['/api/api-history', '/api/akasha/api-history'], apiHistoryRouter);
 import aiRouter from './routes/ai.js';
-app.use('/api/ai', aiRouter);
+app.use(['/api/ai', '/api/akasha/ai'], aiRouter);
 import githubRouter from './routes/github.js';
-app.use('/api/github', githubRouter);
+app.use(['/api/github', '/api/akasha/github'], githubRouter);
 
 // Initialize servers
 async function startServer() {

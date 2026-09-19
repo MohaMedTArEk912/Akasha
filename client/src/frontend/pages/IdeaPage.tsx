@@ -35,11 +35,12 @@ const IdeaPage: React.FC = () => {
     const [generatingPlan, setGeneratingPlan] = useState(false);
 
     useEffect(() => {
-        if (project && project.settings?.ideaDetails) {
+        if (project?.settings?.ideaDetails) {
             setActiveTab("document");
+        } else {
+            setActiveTab("workspace");
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Only run once on mount to set the initial tab
+    }, [project?.settings?.ideaDetails]);
 
     const handleGeneratePlan = async () => {
         setGeneratingPlan(true);
@@ -128,27 +129,29 @@ const IdeaPage: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Idea / Workshop tabs */}
-                        <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1 backdrop-blur-sm">
-                            <button
-                                onClick={() => setActiveTab("document")}
-                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "document"
-                                    ? "bg-white text-black shadow-lg"
-                                    : "text-white/50 hover:text-white hover:bg-white/10"
-                                    }`}
-                            >
-                                Idea Document
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("workspace")}
-                                className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "workspace"
-                                    ? "bg-white/10 text-white shadow-lg border border-white/20"
-                                    : "text-white/50 hover:text-white hover:bg-white/10"
-                                    }`}
-                            >
-                                AI Workspace
-                            </button>
-                        </div>
+                        {/* Tab switcher — only shown once workbench is fully done */}
+                        {project.status !== "initializing" && project.status !== "initiated" && (
+                            <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-1 backdrop-blur-sm">
+                                <button
+                                    onClick={() => setActiveTab("document")}
+                                    className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "document"
+                                        ? "bg-white text-black shadow-lg"
+                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        }`}
+                                >
+                                    Idea Document
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("workspace")}
+                                    className={`h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === "workspace"
+                                        ? "bg-white/10 text-white shadow-lg border border-white/20"
+                                        : "text-white/50 hover:text-white hover:bg-white/10"
+                                        }`}
+                                >
+                                    AI Workspace
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 

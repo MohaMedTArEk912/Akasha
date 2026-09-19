@@ -1,9 +1,44 @@
+export interface FeatureChange {
+    _action: 'add' | 'update' | 'delete';
+    id?: string;
+    title?: string;
+    description?: string;
+    rationale?: string;
+    priority?: string;
+    include?: boolean;
+    rating?: number;
+    status?: string;
+    comment?: string;
+    integratedSummary?: string;
+    clarifying_questions?: string[];
+}
+
+export interface DocChanges {
+    summary?: string | null;
+    target_audience?: string[] | null;
+    core_value_proposition?: string[] | null;
+    problem_statement?: string[] | null;
+    technical_architecture?: string[] | null;
+    milestones?: unknown[] | null;
+    success_metrics?: string[] | null;
+    risks?: unknown[] | null;
+    implementation_checklist?: string[] | null;
+    user_flows?: string[] | null;
+    data_api_requirements?: string[] | null;
+    open_questions?: string[] | null;
+    key_features?: unknown[] | null;
+    strengths?: string[] | null;
+    weaknesses?: string[] | null;
+}
+
 export interface StructuredAiResponse {
     answer_markdown: string;
     summary: string;
     highlights: string[];
     next_actions: string[];
     warnings: string[];
+    feature_changes?: FeatureChange[];
+    doc_changes?: DocChanges | null;
 }
 
 const EMPTY_RESPONSE: StructuredAiResponse = {
@@ -80,11 +115,21 @@ export function normalizeAiResponse(payload: unknown): StructuredAiResponse {
         ? source.summary.trim().slice(0, 200)
         : summaryFromAnswer(answer_markdown);
 
+    const feature_changes = Array.isArray(source?.feature_changes)
+        ? source.feature_changes.filter((c: unknown) => c && typeof c === 'object')
+        : undefined;
+
+    const doc_changes = source?.doc_changes && typeof source.doc_changes === 'object'
+        ? source.doc_changes as DocChanges
+        : undefined;
+
     return {
         answer_markdown,
         summary,
         highlights: normalizeArray(source?.highlights),
         next_actions: normalizeArray(source?.next_actions ?? source?.nextSteps),
         warnings: normalizeArray(source?.warnings ?? source?.risks),
+        feature_changes: feature_changes as FeatureChange[] | undefined,
+        doc_changes,
     };
 }

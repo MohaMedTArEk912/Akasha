@@ -74,14 +74,6 @@ const FEATURES: FeatureCard[] = [
     },
 ];
 
-/* ─── Quick Actions ─── */
-const QUICK_ACTIONS = [
-    { label: "New Page", icon: "M12 4v16m8-8H4", page: "ui" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
-    { label: "Write Code", icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4", page: "code" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
-    { label: "New API", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3", page: "apis" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
-    { label: "Add Diagram", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z", page: "diagrams" as FeaturePage, color: "text-white bg-white/5 hover:bg-white/10 border-white/10" },
-];
-
 /* ═══════════════════ Component ═══════════════════ */
 
 const ProjectDashboard: React.FC = () => {
@@ -96,7 +88,7 @@ const ProjectDashboard: React.FC = () => {
     const greeting = getGreeting();
 
     return (
-        <div className="h-full w-full overflow-auto relative" style={{ background: "#0a0a0f" }}>
+        <div className="ide-page h-full w-full overflow-auto relative bg-[var(--ide-bg)]">
 
             {/* ── Animated Background ── */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -129,11 +121,11 @@ const ProjectDashboard: React.FC = () => {
                 {/* ── Header Row ── */}
                 <div className="flex items-start justify-between mb-8" style={{ animation: "fadeSlideUp 0.5s ease-out both" }}>
                     <div>
-                        <p className="text-xs text-white/30 uppercase tracking-[0.2em] mb-1 font-medium">{greeting}</p>
-                        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+                        <p className="text-xs ide-text-muted uppercase tracking-[0.2em] mb-1 font-medium">{greeting}</p>
+                        <h1 className="text-3xl font-extrabold ide-text tracking-tight">
                             {project?.name || "Project"}
                         </h1>
-                        <p className="text-sm text-white/30 mt-2 flex items-center gap-2">
+                        <p className="text-sm ide-text-muted mt-2 flex items-center gap-2">
                             <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -142,7 +134,7 @@ const ProjectDashboard: React.FC = () => {
                     </div>
                     <button
                         onClick={closeProject}
-                        className="px-4 py-2 text-xs font-medium rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300"
+                        className="btn-ghost px-4 py-2 text-xs"
                     >
                         ← Back to Projects
                     </button>
@@ -198,25 +190,6 @@ const ProjectDashboard: React.FC = () => {
                         </div>
                     );
                 })()}
-                {/* ── Quick Actions ── */}
-                <div className="mb-8" style={{ animation: "fadeSlideUp 0.5s ease-out 0.15s both" }}>
-                    <h2 className="text-[10px] font-black text-white/25 uppercase tracking-[0.2em] mb-3">Quick Actions</h2>
-                    <div className="flex gap-2 flex-wrap">
-                        {QUICK_ACTIONS.map((action) => (
-                            <button
-                                key={action.label}
-                                onClick={() => setActivePage(action.page)}
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[11px] font-medium transition-all duration-300 hover:scale-[1.02] ${action.color}`}
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={action.icon} />
-                                </svg>
-                                {action.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
                 {/* ── Feature Cards Grid ── */}
                 <div className="mb-8">
                     <h2 className="text-[10px] font-black text-white/25 uppercase tracking-[0.2em] mb-3">Features</h2>
@@ -257,18 +230,6 @@ const ProjectDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* ── Project Stats ── */}
-                {project && (
-                    <div style={{ animation: "fadeSlideUp 0.5s ease-out 0.8s both" }}>
-                        <h2 className="text-[10px] font-black text-white/25 uppercase tracking-[0.2em] mb-3">Project Overview</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <StatCard label="Pages" value={project.pages?.filter(p => !p.archived).length ?? 0} icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" color="white" />
-                            <StatCard label="APIs" value={project.apis?.filter(a => !a.archived).length ?? 0} icon="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3" color="white" />
-                            <StatCard label="Logic Flows" value={project.logic_flows?.filter(f => !f.archived).length ?? 0} icon="M13 10V3L4 14h7v7l9-11h-7z" color="white" />
-                            <StatCard label="Models" value={project.data_models?.filter(m => !m.archived).length ?? 0} icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7" color="white" />
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* ── Keyframe Animations ── */}
@@ -281,33 +242,6 @@ const ProjectDashboard: React.FC = () => {
                 @keyframes particle { 0%, 100% { transform:translateY(0) scale(1); opacity:.2; } 50% { transform:translateY(-30px) scale(1.5); opacity:.5; } }
                 @keyframes pulse-ring { 0% { transform:scale(.8); opacity:.5; } 50% { transform:scale(1.2); opacity:1; } 100% { transform:scale(.8); opacity:.5; } }
             `}</style>
-        </div>
-    );
-};
-
-/* ─── Stats Card with animated accent ─── */
-const COLOR_MAP: Record<string, { bg: string; text: string; ring: string }> = {
-    white: { bg: "bg-white/5", text: "text-white/60", ring: "ring-white/10" },
-};
-
-const StatCard: React.FC<{ label: string; value: number; icon: string; color: string }> = ({ label, value, icon, color }) => {
-    const c = COLOR_MAP[color] || COLOR_MAP.indigo;
-    return (
-        <div className={`relative bg-white/[0.04] rounded-xl border border-white/[0.06] p-4 flex items-center gap-3 hover:bg-white/[0.07] transition-all duration-300 hover:border-white/[0.12] group overflow-hidden`}>
-            {/* Animated ring behind icon */}
-            <div className="relative">
-                <div className={`absolute inset-0 rounded-lg ${c.bg} ring-2 ${c.ring}`}
-                    style={{ animation: "pulse-ring 3s ease-in-out infinite" }} />
-                <div className={`relative w-9 h-9 rounded-lg ${c.bg} flex items-center justify-center`}>
-                    <svg className={`w-4 h-4 ${c.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" d={icon} />
-                    </svg>
-                </div>
-            </div>
-            <div>
-                <div className="text-xl font-bold text-white tabular-nums">{value}</div>
-                <div className="text-[9px] uppercase tracking-wider text-white/30">{label}</div>
-            </div>
         </div>
     );
 };

@@ -131,6 +131,10 @@ const SourceCodePage: React.FC = () => {
     useEffect(() => {
         const handler = (e: MessageEvent) => {
             if (e.data?.type === "github-oauth-success") {
+                // Save session ID to localStorage for persistence across reloads
+                if (e.data.sessionId) {
+                    localStorage.setItem("gh_session", e.data.sessionId);
+                }
                 setConnecting(false);
                 checkStatus();
             }
@@ -178,11 +182,12 @@ const SourceCodePage: React.FC = () => {
     /* ── OAuth Connect ──────────────────────────────── */
     const handleConnect = () => {
         setConnecting(true);
+        const token = localStorage.getItem("akasha_token") || localStorage.getItem("token") || "";
         const w = 600, h = 700;
         const left = window.screenX + (window.outerWidth - w) / 2;
         const top = window.screenY + (window.outerHeight - h) / 2;
         window.open(
-            "http://localhost:3001/api/github/login",
+            `/api/akasha/github/login?token=${encodeURIComponent(token)}`,
             "github-oauth",
             `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
         );
@@ -191,6 +196,7 @@ const SourceCodePage: React.FC = () => {
     /* ── Disconnect ─────────────────────────────────── */
     const handleDisconnect = async () => {
         await apiRef.current.githubDisconnect();
+        localStorage.removeItem("gh_session");
         setConnected(false);
         setUser(null);
         setRepos([]);

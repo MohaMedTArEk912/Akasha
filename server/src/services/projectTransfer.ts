@@ -329,6 +329,11 @@ export function toProjectSchema(
         id: project.id,
         name: project.name,
         description: project.description || "",
+        userId: project.userId || null,
+        orgId: project.orgId || null,
+        status: project.status || "initializing",
+        checkpoint: typeof project.checkpoint === "number" ? project.checkpoint : 1,
+        pipelineData: typeof project.pipelineData === "string" ? parseJsonValue(project.pipelineData, {}) : (project.pipelineData || {}),
         created_at: (
             project.createdAt instanceof Date
                 ? project.createdAt

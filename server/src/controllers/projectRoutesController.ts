@@ -1,6 +1,17 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
+import path from "node:path";
+import { ObjectId } from "mongodb";
 import prisma from "../lib/prisma.js";
+async function getOrgMemberModel(): Promise<any> {
+  try {
+    const modPath = "../../models/OrgMember.js";
+    const mod = await import(modPath);
+    return mod.default;
+  } catch {
+    return null;
+  }
+}
 import { getLLMProvider, aiConfigStorage } from "../lib/llmProvider.js";
 import {
   buildProjectImportSample,
@@ -11,9 +22,27 @@ import {
   toProjectSchema,
 } from "../services/projectTransfer.js";
 
-export async function listProjects(_req: Request, res: Response) {
+export async function listProjects(req: Request, res: Response) {
   try {
+    const user = (req as any).user;
+    let whereClause: any = undefined;
+    if (user?.id) {
+      const OrgMember = await getOrgMemberModel();
+      if (OrgMember) {
+        const memberships = await OrgMember.find({ userId: user.id, status: 'accepted' });
+        const myOrgIds = memberships.map((m: any) => m.orgId.toString());
+        whereClause = {
+          OR: [
+            { userId: user.id },
+            { orgId: { in: myOrgIds } }
+          ]
+        };
+      } else {
+        whereClause = { userId: user.id };
+      }
+    }
     const projects = await prisma.project.findMany({
+      where: whereClause,
       orderBy: { updatedAt: "desc" },
     });
     res.json(projects);
@@ -32,6 +61,20 @@ export async function getProject(req: Request, res: Response) {
       return res.status(404).json({ error: "Project not found" });
     }
 
+    const user = (req as any).user;
+    if (user?.id) {
+      const OrgMember = await getOrgMemberModel();
+      if (OrgMember) {
+        const memberships = await OrgMember.find({ userId: user.id, status: 'accepted' });
+        const myOrgIds = memberships.map((m: any) => m.orgId.toString());
+        const isOwner = String(project.userId) === String(user.id);
+        const isOrgMember = project.orgId && myOrgIds.includes(project.orgId.toString());
+        if (!isOwner && !isOrgMember) {
+          return res.status(403).json({ error: "Forbidden: Access denied to this project" });
+        }
+      }
+    }
+
     res.json(project);
   } catch (error) {
     console.error("Error getting project:", error);
@@ -41,11 +84,41 @@ export async function getProject(req: Request, res: Response) {
 
 export async function createProject(req: Request, res: Response) {
   try {
-    const { name, description } = req.body;
+    const { name, description, orgId } = req.body;
+    const user = (req as any).user;
+    const userId = user?.id || 'standalone-dev';
+
+    if (orgId) {
+      const OrgMember = await getOrgMemberModel();
+      if (OrgMember) {
+        const member = await OrgMember.findOne({ orgId, userId, status: 'accepted' });
+        if (!member) {
+          return res.status(403).json({ error: "Forbidden: Not an active member of this organization" });
+        }
+      }
+    }
+
+    const projectIdStr = new ObjectId().toHexString();
+
     const project = await prisma.project.create({
       data: {
+        id: projectIdStr,
+        userId,
+        orgId: orgId || null,
         name,
         description,
+        status: 'initializing',
+        checkpoint: 1,
+        rootPath: path.join(process.cwd(), 'projects', projectIdStr),
+        pipelineData: JSON.stringify({
+          questions: [
+            { id: 1, question: "What is the name and tagline of the product?", answer: name, comments: [] },
+            { id: 2, question: "What is the key problem this project solves?", answer: "", comments: [] },
+            { id: 3, question: "Who is the target audience/users?", answer: "", comments: [] },
+            { id: 4, question: "What is the core value proposition?", answer: "", comments: [] },
+            { id: 5, question: "What is the critical MVP scope?", answer: "", comments: [] }
+          ]
+        }),
         settings: JSON.stringify({
           theme: { primary_color: "#3b82f6" },
         }),
@@ -660,5 +733,186 @@ export async function generateStructuredIdea(req: Request, res: Response) {
     res.status(500).json({
       error: "Failed to generate structured idea: " + error.message,
     });
+  }
+}
+
+async function getUserRoleInProjectOrg(projectId: string, userId?: string): Promise<'leader' | 'member' | null> {
+  if (!userId) return 'leader';
+  const project = await prisma.project.findUnique({ where: { id: projectId } });
+  if (!project) return null;
+  if (!project.orgId) {
+    return 'leader';
+  }
+  const OrgMember = await getOrgMemberModel();
+  if (!OrgMember) return 'leader';
+  const member = await OrgMember.findOne({ orgId: project.orgId.toString(), userId, status: 'accepted' });
+  return member ? (member.role as 'leader' | 'member') : 'leader';
+}
+
+export async function getProjectRole(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user; const userId = user?.id || 'standalone-dev';
+    const role = await getUserRoleInProjectOrg(id as string, userId);
+    res.json({ role });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function updateCheckpoint(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { checkpoint, pipelineData, status } = req.body;
+    const user = (req as any).user; const userId = user?.id || 'standalone-dev';
+
+    const role = await getUserRoleInProjectOrg(id as string, userId);
+    if (!role) {
+      return res.status(403).json({ error: "Forbidden: You do not have access to this project" });
+    }
+
+    if (role !== 'leader') {
+      return res.status(403).json({ error: "Forbidden: Only the team leader can update checkpoint or status" });
+    }
+
+    const updateData: any = {};
+    if (checkpoint !== undefined) updateData.checkpoint = Number(checkpoint);
+    if (status !== undefined) updateData.status = status;
+    if (pipelineData !== undefined) {
+      updateData.pipelineData = typeof pipelineData === 'string' ? pipelineData : JSON.stringify(pipelineData);
+    }
+
+    await prisma.project.update({
+      where: { id },
+      data: updateData,
+    });
+
+    const project = await serializeProjectById(id as string);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`project:${id}`).emit('project:updated', project);
+    }
+
+    res.json(project);
+  } catch (error: any) {
+    console.error("Error updating checkpoint:", error);
+    res.status(500).json({ error: error.message || "Failed to update checkpoint" });
+  }
+}
+
+export async function addComment(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { questionId, text } = req.body;
+    const user = (req as any).user; const userId = user?.id || 'standalone-dev';
+    const username = user?.username || 'Developer';
+    const displayName = user?.displayName || username;
+
+    const role = await getUserRoleInProjectOrg(id as string, userId);
+    if (!role) {
+      return res.status(403).json({ error: "Forbidden: Access denied" });
+    }
+
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const pipelineData = typeof project.pipelineData === 'string'
+      ? JSON.parse(project.pipelineData)
+      : (project.pipelineData || {});
+
+    if (!pipelineData.questions) {
+      pipelineData.questions = [];
+    }
+
+    const q = pipelineData.questions.find((question: any) => question.id === Number(questionId));
+    if (!q) {
+      return res.status(400).json({ error: "Question not found" });
+    }
+
+    const newComment = {
+      id: randomUUID(),
+      userId,
+      username,
+      displayName,
+      text,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    if (!q.comments) {
+      q.comments = [];
+    }
+    q.comments.push(newComment);
+
+    await prisma.project.update({
+      where: { id },
+      data: { pipelineData: JSON.stringify(pipelineData) }
+    });
+
+    const updatedProject = await serializeProjectById(id as string);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`project:${id}`).emit('project:updated', updatedProject);
+    }
+
+    res.json(updatedProject);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+export async function handleComment(req: Request, res: Response) {
+  try {
+    const { id, commentId } = req.params;
+    const { action } = req.body; // 'accepted' | 'rejected'
+    const user = (req as any).user; const userId = user?.id || 'standalone-dev';
+
+    const role = await getUserRoleInProjectOrg(id as string, userId);
+    if (role !== 'leader') {
+      return res.status(403).json({ error: "Forbidden: Only the team leader can handle comments" });
+    }
+
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    const pipelineData = typeof project.pipelineData === 'string'
+      ? JSON.parse(project.pipelineData)
+      : (project.pipelineData || {});
+
+    let commentFound = false;
+    if (pipelineData.questions) {
+      for (const q of pipelineData.questions) {
+        if (q.comments) {
+          const c = q.comments.find((comment: any) => comment.id === commentId);
+          if (c) {
+            c.status = action;
+            commentFound = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!commentFound) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    await prisma.project.update({
+      where: { id },
+      data: { pipelineData: JSON.stringify(pipelineData) }
+    });
+
+    const updatedProject = await serializeProjectById(id as string);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`project:${id}`).emit('project:updated', updatedProject);
+    }
+
+    res.json(updatedProject);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 }

@@ -80,7 +80,7 @@ ${idea}`;
 
     const llmProvider = getLLMProvider();
     const response = await llmProvider.chat({
-        model: options?.model || 'google/gemma-3-4b-it:free',
+        model: options?.model || 'openrouter/free',
         temperature: 0.2,
         apiKey: options?.apiKey,
         apiBaseUrl: options?.apiBaseUrl,
@@ -144,7 +144,7 @@ Return ONLY valid JSON:
     let mergedFeatures: any = { core: [], secondary: [], admin: [] };
     try {
         const res = await llmProvider.chat({
-            model: options?.model || 'google/gemini-2.5-flash',
+            model: options?.model || 'openrouter/free',
             temperature: 0.2,
             apiKey: options?.apiKey,
             apiBaseUrl: options?.apiBaseUrl,
@@ -175,7 +175,7 @@ Return ONLY valid JSON:
     let reqsAndCases: any = { requirements: { functional: [], non_functional: [] }, use_cases: [] };
     try {
         const res = await llmProvider.chat({
-            model: options?.model || 'google/gemini-2.5-flash',
+            model: options?.model || 'openrouter/free',
             temperature: 0.2,
             apiKey: options?.apiKey,
             apiBaseUrl: options?.apiBaseUrl,
@@ -215,7 +215,7 @@ ${JSON.stringify(currentSpec)}`;
 
         try {
             const res = await llmProvider.chat({
-                model: options?.model || 'google/gemma-3-4b-it:free',
+                model: options?.model || 'openrouter/free',
                 temperature: 0.1,
                 apiKey: options?.apiKey,
                 apiBaseUrl: options?.apiBaseUrl,

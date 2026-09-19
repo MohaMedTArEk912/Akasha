@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
+import { safeJsonParse } from '../utils/safeJsonParse.js';
 
 export async function listLogicFlows(req: Request, res: Response) {
     try {
@@ -16,9 +17,9 @@ export async function listLogicFlows(req: Request, res: Response) {
 
         const hydrated = flows.map(f => ({
             ...f,
-            trigger: JSON.parse(f.trigger),
-            nodes: JSON.parse(f.nodes),
-            edges: JSON.parse(f.edges)
+            trigger: safeJsonParse(f.trigger, {}),
+            nodes: safeJsonParse(f.nodes, []),
+            edges: safeJsonParse(f.edges, [])
         }));
 
         res.json(hydrated);
@@ -70,9 +71,9 @@ export async function updateLogicFlow(req: Request, res: Response) {
 
         res.json({
             ...flow,
-            trigger: JSON.parse(flow.trigger),
-            nodes: JSON.parse(flow.nodes),
-            edges: JSON.parse(flow.edges)
+            trigger: safeJsonParse(flow.trigger, {}),
+            nodes: safeJsonParse(flow.nodes, []),
+            edges: safeJsonParse(flow.edges, [])
         });
     } catch (error) {
         console.error('Error updating logic flow:', error);

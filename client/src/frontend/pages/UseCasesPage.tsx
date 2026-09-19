@@ -252,7 +252,10 @@ const Modal = ({
 
   const updateStep = (i: number, val: string) => {
     const steps = [...form.steps];
-    steps[i] = { ...steps[i], description: val };
+    const step = steps[i];
+    if (step) {
+      steps[i] = { ...step, description: val };
+    }
     set("steps", steps);
   };
 
@@ -264,7 +267,7 @@ const Modal = ({
     onSave({
       ...form,
       id: initial?.id ?? uid(),
-      createdAt: initial?.createdAt ?? new Date().toISOString().split("T")[0],
+      createdAt: initial?.createdAt ?? new Date().toISOString().substring(0, 10),
     });
   };
 

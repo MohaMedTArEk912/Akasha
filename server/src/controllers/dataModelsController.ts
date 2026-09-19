@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
+import { safeJsonParse } from '../utils/safeJsonParse.js';
 
 export async function listDataModels(req: Request, res: Response) {
     try {
@@ -15,7 +16,7 @@ export async function listDataModels(req: Request, res: Response) {
         });
 
         const hydrated = models.map(m => {
-            const schema = JSON.parse(m.schema);
+            const schema = safeJsonParse(m.schema, { fields: [], relations: [] }) as any;
             return {
                 id: m.id, name: m.name,
                 fields: schema.fields || [], relations: schema.relations || [],
@@ -61,7 +62,7 @@ export async function updateDataModel(req: Request, res: Response) {
         const model = await prisma.dataModel.findUnique({ where: { id: id as string } });
         if (!model) { res.status(404).json({ error: 'Model not found' }); return; }
 
-        const currentSchema = JSON.parse(model.schema);
+        const currentSchema = safeJsonParse(model.schema, { fields: [], relations: [] }) as any;
         const newSchema = {
             fields: fields || currentSchema.fields,
             relations: relations || currentSchema.relations

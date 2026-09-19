@@ -10,16 +10,13 @@ import { useSettings } from "../context/SettingsContext";
 import {
   createProject,
   deleteProject,
-  generateStructuredIdea,
   getProjectImportTemplate,
   importProject,
   openProject,
-  setActivePage,
 } from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
 import { useTheme } from "../context/ThemeContext";
 import SettingsPage from "./SettingsPage";
-import IdeaWorkshop from "./IdeaWorkshop";
 
 interface ProjectSummary {
   id: string;
@@ -32,13 +29,12 @@ type CreateMode = "workshop" | "json";
 const DashboardLanding: React.FC = () => {
   const { projects, workspacePath } = useProjectStore();
   const { theme } = useTheme();
-  const { apiKey, model, apiBaseUrl, noAi } = useSettings();
+  const { apiKey, noAi } = useSettings();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isCreateWorkshopOpen, setIsCreateWorkshopOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [projectJson, setProjectJson] = useState("");
   const [createMode, setCreateMode] = useState<CreateMode>("workshop");
@@ -93,7 +89,6 @@ const DashboardLanding: React.FC = () => {
   }
 
   const openCreateModal = () => {
-    setIsCreateWorkshopOpen(false);
     setIsCreateModalOpen(true);
     setCreateMode("workshop");
     setProjectJson("");
@@ -103,38 +98,11 @@ const DashboardLanding: React.FC = () => {
     event.preventDefault();
     if (!projectName.trim()) return;
 
-    if (noAi) {
-      try {
-        await createProject(projectName.trim(), "Blank project created in offline mode.");
-        setActivePage("idea");
-        setProjectName("");
-        setProjectJson("");
-        setIsCreateModalOpen(false);
-        toast.showToast("Project created successfully (Offline mode).", "success");
-      } catch (error) {
-        toast.showToast(`Failed to create project: ${error}`, "error");
-      }
-      return;
-    }
-
-    setIsCreateModalOpen(false);
-    setIsCreateWorkshopOpen(true);
-  };
-
-  const handleCreateProjectFinal = async (refinedIdea: string) => {
     try {
-      await createProject(projectName.trim(), refinedIdea);
-      try {
-        await generateStructuredIdea(refinedIdea, apiKey, model, apiBaseUrl);
-      } catch (ideaError) {
-        toast.showToast(`Project created, but PRD generation failed: ${ideaError}`, "warning");
-      }
-      setActivePage("idea");
+      await createProject(projectName.trim(), "");
       setProjectName("");
       setProjectJson("");
       setIsCreateModalOpen(false);
-      setIsCreateWorkshopOpen(false);
-      setCreateMode("workshop");
       toast.showToast("Project created successfully.", "success");
     } catch (error) {
       toast.showToast(`Failed to create project: ${error}`, "error");
@@ -207,7 +175,6 @@ const DashboardLanding: React.FC = () => {
 
   const handleCancelCreate = () => {
     setIsCreateModalOpen(false);
-    setIsCreateWorkshopOpen(false);
     setProjectName("");
     setProjectJson("");
     setCreateMode("workshop");
@@ -803,22 +770,6 @@ const DashboardLanding: React.FC = () => {
           </div>
         )}
 
-        {isCreateWorkshopOpen && (
-          <div className="fixed inset-0 z-[10010] bg-[#050508] animate-fade-in">
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{ background: "linear-gradient(135deg, #0a0a0a, #1a1a1a)" }}
-            />
-            <div className="relative h-full w-full">
-              <IdeaWorkshop
-                projectName={projectName || "New Project"}
-                fullScreen
-                onRefined={handleCreateProjectFinal}
-                onCancel={handleCancelCreate}
-              />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

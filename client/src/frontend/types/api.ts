@@ -6,6 +6,8 @@ export interface ProjectSchema {
     id: string;
     name: string;
     description?: string;
+    status?: string;
+    orgId?: string;
     created_at: string;
     updated_at: string;
     blocks: BlockSchema[];
@@ -174,6 +176,9 @@ export interface PageMeta {
     title?: string;
     description?: string;
     og_image?: string;
+    root_block_id?: string;
+    custom_html?: string;
+    custom_css?: string;
 }
 
 export interface ApiSchema {
@@ -340,6 +345,19 @@ export interface UiArchitectSavedPlan {
     export_payload?: Record<string, unknown>;
 }
 
+export interface TeamTask {
+    id: string;
+    title: string;
+    description: string;
+    assignedTo: string;
+    status: 'todo' | 'in_progress' | 'done';
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    dueDate?: string;
+    labels?: string[];
+    storyPoints?: number;
+    createdAt: string;
+}
+
 export interface ProjectSettings {
     default_locale: string;
     locales: string[];
@@ -376,6 +394,9 @@ export interface ProjectSettings {
         default_branch: string;
         is_default?: boolean;
     }[];
+    teamTasks?: TeamTask[];
+    teamRoles?: Record<string, string>;
+    customMembers?: string[];
 }
 
 export interface FileEntry {

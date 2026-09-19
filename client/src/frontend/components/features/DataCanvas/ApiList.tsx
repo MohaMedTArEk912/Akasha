@@ -451,6 +451,7 @@ const ApiList: React.FC = () => {
     const [search, setSearch] = useState("");
     const [methodFilter, setMethodFilter] = useState("ALL");
     const [selectedApi, setSelectedApi] = useState<any>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
     const apis = project?.apis.filter(a => !a.archived) || [];
 
@@ -480,11 +481,16 @@ const ApiList: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm("Are you sure you want to delete this endpoint?")) return;
+        setDeleteConfirmId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteConfirmId) return;
         try {
-            await archiveApi(id);
+            await archiveApi(deleteConfirmId);
             toast.success("Endpoint deleted");
             setSelectedApi(null);
+            setDeleteConfirmId(null);
         } catch (err) { toast.error("Failed to delete endpoint"); }
     };
 
@@ -562,6 +568,44 @@ const ApiList: React.FC = () => {
                     onDelete={handleDelete}
                     onClose={() => setSelectedApi(null)}
                 />
+            )}
+
+            {deleteConfirmId && (
+                <div style={{
+                    position: "fixed", inset: 0, zIndex: 9999,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={() => setDeleteConfirmId(null)} />
+                    <div style={{
+                        position: "relative", background: "#1a1028", border: "1px solid rgba(239,68,68,0.3)",
+                        borderRadius: 16, padding: 28, maxWidth: 400, width: "90%",
+                        boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#ef4444" }}>!</div>
+                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#f3e8ff" }}>Delete Endpoint</h3>
+                        </div>
+                        <p style={{ margin: "0 0 24px", fontSize: 13.5, color: "rgba(243,232,255,0.6)", lineHeight: 1.6 }}>
+                            Are you sure you want to delete this endpoint? This action cannot be undone.
+                        </p>
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                            <button
+                                onClick={() => setDeleteConfirmId(null)}
+                                style={{
+                                    padding: "8px 18px", borderRadius: 10, border: "1px solid rgba(168,85,247,0.2)",
+                                    background: "transparent", color: "rgba(243,232,255,0.6)", fontSize: 13, cursor: "pointer",
+                                }}
+                            >Cancel</button>
+                            <button
+                                onClick={confirmDelete}
+                                style={{
+                                    padding: "8px 18px", borderRadius: 10, border: "none",
+                                    background: "#ef4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                                }}
+                            >Delete</button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

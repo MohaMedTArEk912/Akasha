@@ -13,12 +13,13 @@
  * └──────────────────────────────────────────────┘
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { setActivePage, installProjectDependencies, clearInstallStatus, toggleTerminal, goBackPage } from "../../stores/projectStore";
+import { setActivePage, toggleTerminal, goBackPage } from "../../stores/projectStore";
 import type { FeaturePage } from "../../stores/projectStore";
 
 import { Logo } from "../ui/Logo";
+import ThemeToggle from "../ui/ThemeToggle";
 
 // Feature Pages
 import UIIdeationPage from "../../pages/UIIdeationPage";
@@ -29,7 +30,9 @@ import DiagramsPage from "../../pages/DiagramsPage";
 import SourceCodePage from "../../pages/SourceCodePage";
 import IdeaPage from "../../pages/IdeaPage";
 import SettingsPage from "../../pages/SettingsPage";
+import TeamSpacePage from "../../pages/TeamSpacePage";
 
+import InitiationWizard from "../project/InitiationWizard";
 import ProjectDashboard from "../../pages/ProjectDashboard";
 
 /* ───── Feature Page Definitions ───── */
@@ -50,14 +53,16 @@ const FEATURE_PAGES: FeaturePageDef[] = [
     { id: "diagrams", label: "Diagrams", icon: "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" },
     { id: "code", label: "Source Code", icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" },
     { id: "settings", label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
+    { id: "team", label: "Team Space", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
 ];
 
 /**
  * Main IDE Layout — Feature Page Architecture
  */
 const IDELayout: React.FC = () => {
-    const { project, activePage, loading, loadingMessage, installLog, installError, terminalOpen, builderActive, pageHistory } = useProjectStore();
-    
+    const { project, activePage, loading, terminalOpen, builderActive, pageHistory } = useProjectStore();
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+
     const canGoBack = pageHistory && pageHistory.length > 0;
 
     // Global keyboard shortcut: toggle terminal
@@ -69,6 +74,9 @@ const IDELayout: React.FC = () => {
 
     /* ─── Render active page ─── */
     const renderPage = () => {
+        if (project?.status === "initializing") {
+            return <InitiationWizard project={project} projectId={project.id} />;
+        }
         switch (activePage) {
             case "dashboard": return <ProjectDashboard />;
             case "idea": return <IdeaPage />;
@@ -78,6 +86,7 @@ const IDELayout: React.FC = () => {
             case "database": return <DatabasePage />;
             case "diagrams": return <DiagramsPage />;
             case "settings": return <SettingsPage />;
+            case "team": return <TeamSpacePage />;
             case "code":
             case "git": return <SourceCodePage />;
             default: return <UIIdeationPage />;
@@ -85,116 +94,146 @@ const IDELayout: React.FC = () => {
     };
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
+        <div className="akasha-ide-root h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
 
             {/* ===== TOP: Title Bar ===== */}
             {!builderActive && (
-            <header
-                className="h-10 bg-[#050508] border-b border-white/[0.04] flex items-center justify-between px-4 select-none flex-shrink-0 relative overflow-hidden"
-            >
-                {/* Background glow effects */}
-                <div className="absolute top-0 left-1/4 w-1/4 h-full bg-white/[0.02] blur-xl pointer-events-none" />
-                <div className="absolute top-0 right-1/3 w-1/6 h-full bg-white/[0.01] blur-xl pointer-events-none" />
+                <header className="ide-shell-header h-10 flex items-center justify-between px-4 select-none flex-shrink-0 relative overflow-hidden">
+                    <div className="absolute top-0 left-1/4 w-1/4 h-full bg-[var(--ide-accent-subtle)] blur-xl pointer-events-none opacity-50" />
+                    <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-[var(--ide-border)]" />
 
-                {/* Subtle line at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 h-[1px]" style={{
-                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)"
-                }} />
-
-                {/* Left: App name */}
-                <div className="flex items-center gap-3 relative z-10">
-                    {canGoBack && (
-                        <button 
-                            onClick={goBackPage}
-                            className="bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors w-6 h-6 flex items-center justify-center rounded-md border border-white/5 hover:border-white/20 press-effect"
-                            title="Go Back"
+                    {/* Left: App name */}
+                    <div className="flex items-center gap-3 relative z-10">
+                        {(canGoBack || project?.status === "initializing") && (
+                            <button
+                                onClick={project?.status === "initializing" ? () => window.location.href = '/dashboard' : goBackPage}
+                                className="bg-[var(--ide-accent-subtle)] hover:bg-[var(--ide-bg-elevated)] text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors w-6 h-6 flex items-center justify-center rounded-md border border-[var(--ide-border)] hover:border-[var(--ide-border-strong)] press-effect"
+                                title="Go Back"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setActivePage("dashboard")}
+                            className="flex items-center gap-3 relative group text-left hover:opacity-80 transition-opacity press-effect bg-transparent border-0 p-0 focus:outline-none"
+                            title="Go to Project Tools"
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                            </svg>
+                            <div className="relative flex items-center justify-center">
+                                <div className="absolute inset-0 bg-white/10 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />
+                            </div>
+                            <span className="text-[11px] font-black tracking-[0.2em] text-[var(--ide-text)]">
+                                AKASHA
+                            </span>
                         </button>
-                    )}
-                    <div className="relative group flex items-center justify-center">
-                        <div className="absolute inset-0 bg-white/10 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />
+                        <div className="w-[1px] h-3.5 bg-[var(--ide-border)]" />
+                        <div className="px-2 py-0.5 rounded-md bg-[var(--ide-accent-subtle)] border border-[var(--ide-border)] flex items-center">
+                            <span className="text-[9px] font-semibold text-[var(--ide-text-secondary)] tracking-wider uppercase">
+                                {project?.name || ""}
+                            </span>
+                        </div>
                     </div>
-                    <span className="text-[11px] font-black tracking-[0.2em] text-white/90 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
-                        AKASHA
-                    </span>
-                    <div className="w-[1px] h-3.5 bg-white/[0.08]" />
-                    <div className="px-2 py-0.5 rounded-md bg-white/[0.02] border border-white/[0.04] flex items-center">
-                        <span className="text-[9px] font-semibold text-white/50 tracking-wider uppercase">
-                            {project?.name || ""}
-                        </span>
-                    </div>
-                </div>
 
-                {/* Center: Feature Page Name */}
-                <div className="flex-1 flex justify-center items-center relative z-10">
-                    <div className="px-4 py-1 rounded-full bg-white/[0.02] border border-white/[0.03] flex items-center gap-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.3)]" />
-                        <span
-                            key={activePage}
-                            className="text-[9px] font-bold uppercase tracking-[0.25em] text-white/60 page-shell-enter"
-                        >
-                            {FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard"}
-                        </span>
+                    {/* Center: Feature Page Name */}
+                    <div className="flex-1 flex justify-center items-center relative z-10">
+                        <div className="px-4 py-1 rounded-full bg-[var(--ide-accent-subtle)] border border-[var(--ide-border)] flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--ide-primary)] shadow-[0_0_8px_rgba(37,99,235,0.3)]" />
+                            <span
+                                key={activePage}
+                                className="text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--ide-text-secondary)] page-shell-enter"
+                            >
+                                {project?.status === "initializing" ? "Project Initiation Wizard" : (FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard")}
+                            </span>
+                        </div>
                     </div>
-                </div>
 
-                {/* Right: Empty space for balance */}
-                <div className="flex items-center gap-3 opacity-0 pointer-events-none" aria-hidden="true">
-                    {/* Mirroring left side width roughly for true center alignment */}
-                    <div className="w-20"></div>
-                </div>
-            </header>
+                    <div className="flex items-center gap-3 relative z-10">
+                        <ThemeToggle size="sm" />
+                    </div>
+                </header>
             )}
 
             {/* ===== MAIN CONTENT AREA ===== */}
-            <div className="flex-1 flex overflow-hidden p-4 gap-4 bg-[var(--ide-bg)]">
+            <div className="flex-1 flex overflow-hidden p-0 gap-0 bg-[var(--ide-bg)]">
 
                 {/* ===== LEFT: Feature Navigation Rail ===== */}
-                {!builderActive && (
-                <aside className="w-14 bg-[#0c0c14] flex flex-col items-center py-3 flex-shrink-0 border border-white/[0.06] rounded-2xl relative overflow-hidden">
-                    {/* Subtle gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
+                {!builderActive && project?.status !== "initializing" && (
+                    <aside className={`ide-shell-sidebar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isSidebarExpanded ? 'w-48 items-start px-2' : 'w-14 items-center'} flex flex-col py-3 flex-shrink-0 border-y-0 border-l-0 border-r border-[var(--ide-border)] relative overflow-hidden`}>
+                        <div className="absolute inset-0 bg-gradient-to-b from-[var(--ide-accent-subtle)] to-transparent pointer-events-none opacity-60" />
 
-                    {/* Home (Dashboard) */}
-                    <NavRailIcon
-                        icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                        label="Dashboard"
-                        active={activePage === "dashboard"}
-                        onClick={() => setActivePage("dashboard")}
-                    />
-                    <NavRailIcon
-                        icon="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                        label="Project Idea"
-                        active={activePage === "idea"}
-                        onClick={() => setActivePage("idea")}
-                    />
+                        {/* Project Tools */}
+                        <NavRailIcon
+                            icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                            label="Project Tools"
+                            active={activePage === "dashboard"}
+                            onClick={() => setActivePage("dashboard")}
+                            expanded={isSidebarExpanded}
+                        />
+                        {/* Workshop */}
+                        <NavRailIcon
+                            icon="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                            label="AI Workshop"
+                            active={activePage === "idea"}
+                            onClick={() => setActivePage("idea")}
+                            expanded={isSidebarExpanded}
+                        />
+                        {/* Team Space */}
+                        <NavRailIcon
+                            icon="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                            label="Team Space"
+                            active={activePage === "team"}
+                            onClick={() => setActivePage("team")}
+                            expanded={isSidebarExpanded}
+                        />
 
-                    {/* Spacer */}
-                    <div className="flex-1" />
+                        {/* Spacer */}
+                        <div className="flex-1" />
 
-                    {/* Settings */}
-                    <NavRailIcon
-                        icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                        label="Settings"
-                        active={activePage === "settings"}
-                        onClick={() => setActivePage("settings")}
-                    />
-                </aside>
+                        {/* Settings */}
+                        <NavRailIcon
+                            icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                            label="Settings"
+                            active={activePage === "settings"}
+                            onClick={() => setActivePage("settings")}
+                            expanded={isSidebarExpanded}
+                        />
+
+                        {/* Back to Website */}
+                        <NavRailIcon
+                            icon="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                            label="Back to Website"
+                            active={false}
+                            onClick={() => window.location.href = '/dashboard'}
+                            expanded={isSidebarExpanded}
+                        />
+
+                        {/* Expand/Collapse Toggle */}
+                        <div className="mt-2 pt-2 border-t border-[var(--ide-border)] w-full">
+                            <button
+                                className={`h-10 mx-auto flex items-center ${isSidebarExpanded ? 'w-full justify-start px-3' : 'w-10 justify-center'} rounded-xl transition-all duration-300 text-[var(--ide-nav-text)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)]`}
+                                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                                title={isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+                            >
+                                <svg className={`w-4 h-4 transition-transform duration-300 ${isSidebarExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                </svg>
+                                {isSidebarExpanded && <span className="ml-3 text-xs font-semibold uppercase tracking-wider">Collapse</span>}
+                            </button>
+                        </div>
+                    </aside>
                 )}
 
                 {/* ===== CENTER: Page Content + Terminal ===== */}
-                <div className="flex-1 flex flex-col overflow-hidden min-w-0 rounded-3xl border border-white/[0.06] bg-[var(--ide-bg)] shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+                <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[var(--ide-bg)]">
                     {/* Page Content */}
                     <div
                         key={activePage}
-                        className={`flex-1 relative overflow-hidden page-shell-enter-strong ${terminalOpen ? "h-[60%]" : ""}`}
+                        className={`ide-page flex-1 relative overflow-hidden page-shell-enter-strong ${terminalOpen ? "h-[60%]" : ""}`}
                     >
                         {loading && (
-                            <div className="absolute inset-0 bg-black/25 backdrop-blur-sm z-50 flex items-center justify-center">
+                            <div className="absolute inset-0 bg-[var(--bg-overlay,rgba(0,0,0,0.25))] backdrop-blur-sm z-50 flex items-center justify-center">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--ide-primary)]"></div>
                             </div>
                         )}
@@ -212,53 +251,6 @@ const IDELayout: React.FC = () => {
                 </div>
             </div>
 
-            {/* NPM Install Loading Overlay */}
-            {loadingMessage && (
-                <div className="fixed inset-0 bg-black/55 z-[100] flex items-center justify-center">
-                    <div className="bg-[var(--ide-bg-panel)] p-8 rounded-xl shadow-2xl border border-[var(--ide-border-strong)] max-w-2xl w-[90%]">
-                        <div className="flex items-center gap-4 mb-4">
-                            {!installError && (
-                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-[var(--ide-primary)] border-t-transparent"></div>
-                            )}
-                            {installError && (
-                                <div className="h-10 w-10 rounded-full border-4 border-red-500 flex items-center justify-center text-red-500 font-bold">!</div>
-                            )}
-                            <div>
-                                <h3 className="text-[var(--ide-text)] text-lg font-semibold">Setting up project...</h3>
-                                <p className="text-[var(--ide-text-secondary)] text-sm">{loadingMessage}</p>
-                            </div>
-                        </div>
-                        {!installError && (
-                            <div className="w-full bg-[var(--ide-bg-elevated)] rounded-full h-1.5 overflow-hidden">
-                                <div className="h-full bg-[var(--ide-primary)] animate-pulse" style={{ width: '70%' }}></div>
-                            </div>
-                        )}
-                        {installLog && (
-                            <pre className="mt-4 max-h-64 overflow-auto text-xs bg-[var(--ide-bg-elevated)] text-[var(--ide-text-secondary)] p-3 rounded border border-[var(--ide-border)] whitespace-pre-wrap">
-                                {installLog}
-                            </pre>
-                        )}
-                        {installError && (
-                            <div className="mt-4 flex items-center justify-end gap-3">
-                                <button
-                                    onClick={() => clearInstallStatus()}
-                                    className="px-3 py-1.5 text-sm rounded bg-[var(--ide-bg-elevated)] hover:bg-[var(--ide-bg-sidebar)] text-[var(--ide-text)]"
-                                >
-                                    Close
-                                </button>
-                                <button
-                                    onClick={() => installProjectDependencies()}
-                                    className="px-3 py-1.5 text-sm rounded bg-[var(--ide-primary)] hover:bg-[var(--ide-primary-hover)] text-white"
-                                >
-                                    Retry
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-
         </div>
     );
 };
@@ -269,28 +261,36 @@ interface NavRailIconProps {
     label: string;
     active: boolean;
     onClick: () => void;
+    expanded?: boolean;
 }
 
-const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick }) => (
+const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick, expanded }) => (
     <button
-        className={`w-10 h-10 mx-auto my-0.5 flex items-center justify-center relative group rounded-xl transition-all duration-300 press-effect ${active
-            ? "text-white bg-white/10"
-            : "text-white/20 hover:text-white/60 hover:bg-white/[0.04]"
+        className={`h-10 mx-auto my-0.5 flex items-center relative group rounded-xl transition-all duration-300 press-effect overflow-hidden ${expanded ? "w-full justify-start px-3" : "w-10 justify-center"
+            } ${active
+                ? "text-[var(--ide-nav-active)] bg-[var(--ide-accent-muted)] border border-[var(--ide-border)]"
+                : "text-[var(--ide-nav-text)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)]"
             }`}
         onClick={onClick}
-        title={label}
+        title={!expanded ? label : undefined}
         aria-label={label}
     >
         {/* Active glow */}
-        {active && (
+        {active && !expanded && (
             <>
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-4 bg-white/40 rounded-r-full" />
-                <div className="absolute inset-0 rounded-xl bg-white/5 blur-sm" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-4 bg-[var(--ide-primary)] rounded-r-full" />
+                <div className="absolute inset-0 rounded-xl bg-[var(--ide-accent-muted)] blur-sm" />
             </>
         )}
-        <svg className="w-[18px] h-[18px] relative z-10 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-[18px] h-[18px] shrink-0 relative z-10 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={icon} />
         </svg>
+
+        {expanded && (
+            <span className="ml-3 text-[11px] font-semibold tracking-wider whitespace-nowrap overflow-hidden text-ellipsis relative z-10">
+                {label}
+            </span>
+        )}
     </button>
 );
 

@@ -71,8 +71,9 @@ export function useKeyboardShortcuts() {
             if (ctrl && e.key >= "1" && e.key <= "7") {
                 e.preventDefault();
                 const idx = parseInt(e.key) - 1;
-                if (idx < PAGES.length) {
-                    setActivePage(PAGES[idx]);
+                const page = PAGES[idx];
+                if (page) {
+                    setActivePage(page);
                 }
                 return;
             }

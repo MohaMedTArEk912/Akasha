@@ -139,10 +139,14 @@ export async function archivePage(req: Request, res: Response) {
 export async function updatePage(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { name, path } = req.body;
+    const { name, path, meta } = req.body;
+    const data: any = { name, path };
+    if (meta !== undefined) {
+      data.meta = typeof meta === "string" ? meta : JSON.stringify(meta);
+    }
     const page = await prisma.page.update({
       where: { id: id as string },
-      data: { name, path },
+      data,
     });
     res.json(toPageSchema(page));
   } catch (error) {
