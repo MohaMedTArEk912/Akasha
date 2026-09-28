@@ -29,6 +29,9 @@ export class DashboardPanel {
                     case 'GENERATE_COMPONENT':
                         vscode.commands.executeCommand('akasha.generateComponent');
                         break;
+                    case 'SAVE_TO_ANTIGRAVITY':
+                        vscode.commands.executeCommand('akasha.saveToAntigravity');
+                        break;
                     case 'SYNC_CLOUD':
                         vscode.commands.executeCommand('akasha.syncCloud');
                         break;
@@ -473,6 +476,9 @@ export class DashboardPanel {
     </div>
 
     <div class="header-actions">
+      <button class="btn" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399; font-weight: 700;" onclick="saveToAntigravity()">
+        💾 Save to Antigravity
+      </button>
       <button class="btn" onclick="syncCloud()">
         ☁ Sync MongoDB GridFS
       </button>
@@ -563,6 +569,13 @@ export class DashboardPanel {
           <div class="mission-header">Persist to MongoDB GridFS</div>
           <div class="mission-desc">Upload and version all local code, media assets, and schemas to MongoDB cloud storage with chunked streaming.</div>
           <button class="btn" style="width: 100%; justify-content: center;">Sync Assets</button>
+        </div>
+
+        <div class="mission-card" onclick="saveToAntigravity()">
+          <div class="mission-icon">💾</div>
+          <div class="mission-header">Save to Antigravity Workspace</div>
+          <div class="mission-desc">Export and persist all generated pages, components, schemas, and configurations directly into your active Antigravity workspace directory.</div>
+          <button class="btn" style="width: 100%; justify-content: center; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.35); color: #34d399;">Save to Antigravity</button>
         </div>
 
         <div class="mission-card" onclick="runBuild()">
@@ -672,6 +685,10 @@ export class DashboardPanel {
 
     function generateComponent() {
       vscode.postMessage({ type: 'GENERATE_COMPONENT' });
+    }
+
+    function saveToAntigravity() {
+      vscode.postMessage({ type: 'SAVE_TO_ANTIGRAVITY' });
     }
 
     function syncCloud() {

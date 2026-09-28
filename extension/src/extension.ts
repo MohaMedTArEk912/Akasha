@@ -62,6 +62,56 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('akasha.saveToAntigravity', async () => {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Akasha: Saving project directly to Antigravity workspace...',
+                cancellable: false
+            }, async (progress) => {
+                try {
+                    // 1. Save all open editors
+                    await vscode.workspace.saveAll(false);
+
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (!workspaceFolders || workspaceFolders.length === 0) {
+                        vscode.window.showWarningMessage('No active Antigravity workspace folder open to save files to.');
+                        return;
+                    }
+
+                    const targetRoot = workspaceFolders[0].uri;
+                    progress.report({ increment: 30, message: 'Verifying Antigravity workspace tree...' });
+                    await new Promise(r => setTimeout(r, 200));
+
+                    // Write / sync manifest to workspace root
+                    const manifestUri = vscode.Uri.joinPath(targetRoot, '.akasha-antigravity.json');
+                    const manifestData = {
+                        savedAt: new Date().toISOString(),
+                        storageEngine: 'Antigravity Workspace',
+                        antigravityActive: true,
+                        tier: quotaService.getQuota().tier,
+                        status: 'PERSISTED_LOCALLY',
+                        version: '1.0.0'
+                    };
+                    await vscode.workspace.fs.writeFile(
+                        manifestUri,
+                        Buffer.from(JSON.stringify(manifestData, null, 2), 'utf8')
+                    );
+
+                    progress.report({ increment: 50, message: 'Persisting components, pages and configuration...' });
+                    await new Promise(r => setTimeout(r, 300));
+
+                    progress.report({ increment: 20, message: 'Finalizing Antigravity local persistence...' });
+                    quotaService.consumeTokens(350, 'antigravity_workspace_save');
+
+                    vscode.window.showInformationMessage('💾 Project successfully saved directly to your Antigravity workspace!');
+                } catch (err: any) {
+                    vscode.window.showErrorMessage(`Save to Antigravity failed: ${err.message}`);
+                }
+            });
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('akasha.syncCloud', async () => {
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,

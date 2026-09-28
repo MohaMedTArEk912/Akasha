@@ -43,6 +43,10 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand('akasha.generateComponent');
                     break;
                 }
+                case 'SAVE_TO_ANTIGRAVITY': {
+                    vscode.commands.executeCommand('akasha.saveToAntigravity');
+                    break;
+                }
                 case 'SYNC_CLOUD': {
                     vscode.commands.executeCommand('akasha.syncCloud');
                     break;
@@ -340,6 +344,9 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
         🌐 Live Preview
       </button>
     </div>
+    <button class="action-btn primary" style="background: linear-gradient(135deg, #059669, #0284c7); margin-top: 6px;" onclick="saveToAntigravity()">
+      💾 Save to Antigravity
+    </button>
     <button class="action-btn secondary" style="margin-top: 4px;" onclick="syncCloud()">
       ☁ Sync to MongoDB GridFS
     </button>
@@ -366,6 +373,10 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
 
     function generateComponent() {
       vscode.postMessage({ type: 'GENERATE_COMPONENT' });
+    }
+
+    function saveToAntigravity() {
+      vscode.postMessage({ type: 'SAVE_TO_ANTIGRAVITY' });
     }
 
     function syncCloud() {

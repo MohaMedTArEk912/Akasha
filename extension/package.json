@@ -81,6 +81,11 @@
         "command": "akasha.verifyBuild",
         "title": "Akasha: Run Self-Healing Build Test",
         "icon": "$(shield)"
+      },
+      {
+        "command": "akasha.saveToAntigravity",
+        "title": "Akasha: Save Project to Antigravity Workspace",
+        "icon": "$(save)"
       }
     ],
     "menus": {
@@ -106,9 +111,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "akasha.syncCloud",
+          "command": "akasha.saveToAntigravity",
           "when": "view == akasha.studioView",
           "group": "navigation@3"
+        },
+        {
+          "command": "akasha.syncCloud",
+          "when": "view == akasha.studioView",
+          "group": "navigation@4"
         }
       ]
     }

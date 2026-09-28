@@ -49,6 +49,13 @@ export class QuotaTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
         usageItem.iconPath = new vscode.ThemeIcon('dashboard');
         usageItem.description = `${percent}% used`;
 
+        const antigravityStorageItem = new vscode.TreeItem(
+            'Workspace: Antigravity IDE',
+            vscode.TreeItemCollapsibleState.None
+        );
+        antigravityStorageItem.iconPath = new vscode.ThemeIcon('save');
+        antigravityStorageItem.description = 'Local Persistence';
+
         const cloudItem = new vscode.TreeItem(
             'Storage: MongoDB GridFS',
             vscode.TreeItemCollapsibleState.None
@@ -63,6 +70,6 @@ export class QuotaTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
         skillItem.iconPath = new vscode.ThemeIcon('tools');
         skillItem.description = 'Self-Healing Loop';
 
-        return Promise.resolve([brainItem, tierItem, usageItem, cloudItem, skillItem]);
+        return Promise.resolve([brainItem, tierItem, usageItem, antigravityStorageItem, cloudItem, skillItem]);
     }
 }
