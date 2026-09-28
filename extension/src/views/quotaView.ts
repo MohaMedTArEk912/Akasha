@@ -28,12 +28,19 @@ export class QuotaTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
         const remaining = Math.max(0, quota.totalTokens - quota.usedTokens);
         const percent = Math.min(100, Math.round((quota.usedTokens / quota.totalTokens) * 100));
 
+        const brainItem = new vscode.TreeItem(
+            'Brain: Antigravity AI Engine',
+            vscode.TreeItemCollapsibleState.None
+        );
+        brainItem.iconPath = new vscode.ThemeIcon('sparkle');
+        brainItem.description = 'Zero-Key Active';
+
         const tierItem = new vscode.TreeItem(
             `Tier: ${quota.tier.toUpperCase()}`,
             vscode.TreeItemCollapsibleState.None
         );
         tierItem.iconPath = new vscode.ThemeIcon('verified');
-        tierItem.description = 'Active Plan';
+        tierItem.description = 'Autonomous Plan';
 
         const usageItem = new vscode.TreeItem(
             `Token Budget: ${remaining.toLocaleString()} / ${quota.totalTokens.toLocaleString()}`,
@@ -43,18 +50,19 @@ export class QuotaTreeDataProvider implements vscode.TreeDataProvider<vscode.Tre
         usageItem.description = `${percent}% used`;
 
         const cloudItem = new vscode.TreeItem(
-            'Cloud Storage: MongoDB GridFS',
+            'Storage: MongoDB GridFS',
             vscode.TreeItemCollapsibleState.None
         );
         cloudItem.iconPath = new vscode.ThemeIcon('cloud');
-        cloudItem.description = 'Online & Synced';
+        cloudItem.description = 'Persistent Cloud';
 
-        const resetItem = new vscode.TreeItem(
-            `Resets: ${new Date(quota.resetsAt).toLocaleTimeString()}`,
+        const skillItem = new vscode.TreeItem(
+            'Active Skill: akasha-builder',
             vscode.TreeItemCollapsibleState.None
         );
-        resetItem.iconPath = new vscode.ThemeIcon('clock');
+        skillItem.iconPath = new vscode.ThemeIcon('tools');
+        skillItem.description = 'Self-Healing Loop';
 
-        return Promise.resolve([tierItem, usageItem, cloudItem, resetItem]);
+        return Promise.resolve([brainItem, tierItem, usageItem, cloudItem, skillItem]);
     }
 }

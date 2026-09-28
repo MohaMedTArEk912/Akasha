@@ -56,6 +56,26 @@
         "command": "akasha.askAgent",
         "title": "Akasha: Ask Antigravity with Context",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "akasha.synthesizeProject",
+        "title": "Akasha: Synthesize Full Project Architecture",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "akasha.generateComponent",
+        "title": "Akasha: Generate Reactive UI Component",
+        "icon": "$(symbol-class)"
+      },
+      {
+        "command": "akasha.openPreview",
+        "title": "Akasha: Open Live App Preview",
+        "icon": "$(browser)"
+      },
+      {
+        "command": "akasha.verifyBuild",
+        "title": "Akasha: Run Self-Healing Build Test",
+        "icon": "$(shield)"
       }
     ],
     "menus": {
@@ -63,9 +83,18 @@
         {
           "command": "akasha.askAgent",
           "group": "akasha@1"
+        },
+        {
+          "command": "akasha.generateComponent",
+          "group": "akasha@2"
         }
       ],
       "view/title": [
+        {
+          "command": "akasha.openPreview",
+          "when": "view == akasha.studioView",
+          "group": "navigation"
+        },
         {
           "command": "akasha.syncCloud",
           "when": "view == akasha.studioView",

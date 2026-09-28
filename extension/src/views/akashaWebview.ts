@@ -25,11 +25,18 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
         // Listen for messages from the Webview
-        webviewView.webview.onDidReceiveMessage(async (data) => {
+        webviewView.webview.onDidReceiveMessage(async (data: any) => {
             switch (data.type) {
                 case 'ASK_ANTIGRAVITY': {
-                    const prompt = data.prompt;
-                    vscode.commands.executeCommand('akasha.askAgent', prompt);
+                    vscode.commands.executeCommand('akasha.askAgent', data.prompt);
+                    break;
+                }
+                case 'SYNTHESIZE_PROJECT': {
+                    vscode.commands.executeCommand('akasha.synthesizeProject');
+                    break;
+                }
+                case 'GENERATE_COMPONENT': {
+                    vscode.commands.executeCommand('akasha.generateComponent');
                     break;
                 }
                 case 'SYNC_CLOUD': {
@@ -37,9 +44,11 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                 }
                 case 'RUN_VERIFY': {
-                    const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Akasha Build');
-                    terminal.show();
-                    terminal.sendText('npm run build');
+                    vscode.commands.executeCommand('akasha.verifyBuild');
+                    break;
+                }
+                case 'OPEN_PREVIEW': {
+                    vscode.commands.executeCommand('akasha.openPreview');
                     break;
                 }
                 case 'GET_STATUS': {
@@ -76,10 +85,11 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
   <title>Akasha Studio with Antigravity</title>
   <style>
     :root {
-      --bg-dark: #0f172a;
-      --card-bg: rgba(30, 41, 59, 0.7);
+      --bg-dark: #090d16;
+      --card-bg: rgba(17, 24, 39, 0.75);
       --accent: #6366f1;
-      --accent-glow: rgba(99, 102, 241, 0.3);
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --cyan-accent: #06b6d4;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --border-color: rgba(255, 255, 255, 0.08);
@@ -99,7 +109,7 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border-color);
     }
@@ -108,19 +118,20 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-weight: 700;
+      font-weight: 800;
       font-size: 15px;
       letter-spacing: -0.02em;
     }
 
     .badge {
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: linear-gradient(135deg, #6366f1, #06b6d4);
       color: white;
-      font-size: 10px;
+      font-size: 9.5px;
       padding: 2px 7px;
       border-radius: 9999px;
       text-transform: uppercase;
       font-weight: 800;
+      letter-spacing: 0.04em;
     }
 
     .card {
@@ -128,14 +139,14 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       border: 1px solid var(--border-color);
       border-radius: 12px;
       padding: 12px;
-      margin-bottom: 14px;
-      backdrop-filter: blur(12px);
+      margin-bottom: 12px;
+      backdrop-filter: blur(14px);
     }
 
     .quota-header {
       display: flex;
       justify-content: space-between;
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-muted);
       margin-bottom: 6px;
     }
@@ -143,14 +154,14 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     .progress-bar-bg {
       background: rgba(255, 255, 255, 0.06);
       border-radius: 999px;
-      height: 8px;
+      height: 7px;
       overflow: hidden;
       margin-bottom: 8px;
     }
 
     .progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, #6366f1, #10b981);
+      background: linear-gradient(90deg, #6366f1, #06b6d4, #10b981);
       border-radius: 999px;
       transition: width 0.4s ease;
       width: ${percent}%;
@@ -159,8 +170,20 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     .quota-stats {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 600;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10.5px;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 3px 8px;
+      border-radius: 6px;
     }
 
     .action-btn {
@@ -168,16 +191,16 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 7px;
       background: #1e293b;
       border: 1px solid var(--border-color);
       color: var(--text-main);
-      padding: 9px 12px;
+      padding: 8px 12px;
       border-radius: 8px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
       cursor: pointer;
-      margin-bottom: 8px;
+      margin-bottom: 7px;
       transition: all 0.2s ease;
     }
 
@@ -188,20 +211,27 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     .action-btn.primary {
-      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      background: linear-gradient(135deg, #4f46e5, #0891b2);
       border: none;
       color: white;
+      font-weight: 700;
     }
 
     .action-btn.primary:hover {
-      filter: brightness(1.1);
-      box-shadow: 0 0 16px rgba(124, 58, 237, 0.4);
+      filter: brightness(1.12);
+      box-shadow: 0 0 16px rgba(8, 145, 178, 0.45);
+    }
+
+    .action-btn.secondary {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11px;
     }
 
     .input-box {
       width: 100%;
       box-sizing: border-box;
-      background: rgba(15, 23, 42, 0.8);
+      background: rgba(10, 15, 29, 0.9);
       border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 9px;
@@ -210,6 +240,7 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       margin-bottom: 8px;
       resize: vertical;
       min-height: 55px;
+      font-family: inherit;
     }
 
     .input-box:focus {
@@ -217,13 +248,10 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       border-color: var(--accent);
     }
 
-    .cloud-pill {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      color: #38bdf8;
-      margin-top: 4px;
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
     }
   </style>
 </head>
@@ -231,13 +259,14 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
   <div class="header">
     <div class="brand">
       <span>Akasha</span>
-      <span class="badge">Antigravity</span>
+      <span class="badge">Antigravity Brain</span>
     </div>
-    <div class="cloud-pill">
-      <span>●</span> MongoDB GridFS
+    <div class="status-pill">
+      <span>●</span> Zero-Key Active
     </div>
   </div>
 
+  <!-- Quota Meter Card -->
   <div class="card">
     <div class="quota-header">
       <span>Token Budget (${quota.tier.toUpperCase()})</span>
@@ -248,29 +277,44 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     </div>
     <div class="quota-stats">
       <span id="used-label">${quota.usedTokens.toLocaleString()} used</span>
-      <span id="total-label">${quota.totalTokens.toLocaleString()} total</span>
+      <span id="total-label">${quota.totalTokens.toLocaleString()} budget</span>
     </div>
   </div>
 
+  <!-- Direct Agent Instruction Card -->
   <div class="card">
-    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">
-      Instruct Antigravity Agent
+    <div style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.04em;">
+      Direct Antigravity Mission
     </div>
-    <textarea id="prompt-input" class="input-box" placeholder="e.g. Build an analytics chart or refactor storage to GridFS..."></textarea>
+    <textarea id="prompt-input" class="input-box" placeholder="Ask Antigravity to build, refactor, generate, or explain anything..."></textarea>
     <button class="action-btn primary" onclick="sendPrompt()">
-      ✨ Direct to Antigravity
+      ✨ Execute via Antigravity Brain
     </button>
   </div>
 
+  <!-- Autonomous Missions Card -->
   <div class="card">
-    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">
-      Cloud Operations
+    <div style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.04em;">
+      Autonomous Workflows
     </div>
-    <button class="action-btn" onclick="syncCloud()">
+    <div class="grid-2">
+      <button class="action-btn secondary" onclick="synthesizeProject()">
+        🚀 Synthesize App
+      </button>
+      <button class="action-btn secondary" onclick="generateComponent()">
+        🧩 New Component
+      </button>
+    </div>
+    <div class="grid-2">
+      <button class="action-btn secondary" onclick="verifyBuild()">
+        🛡 Self-Healing Build
+      </button>
+      <button class="action-btn secondary" onclick="openPreview()">
+        🌐 Live Preview
+      </button>
+    </div>
+    <button class="action-btn secondary" style="margin-top: 4px;" onclick="syncCloud()">
       ☁ Sync to MongoDB GridFS
-    </button>
-    <button class="action-btn" onclick="verifyBuild()">
-      🛡 Self-Healing Build Test
     </button>
   </div>
 
@@ -285,12 +329,24 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       input.value = '';
     }
 
+    function synthesizeProject() {
+      vscode.postMessage({ type: 'SYNTHESIZE_PROJECT' });
+    }
+
+    function generateComponent() {
+      vscode.postMessage({ type: 'GENERATE_COMPONENT' });
+    }
+
     function syncCloud() {
       vscode.postMessage({ type: 'SYNC_CLOUD' });
     }
 
     function verifyBuild() {
       vscode.postMessage({ type: 'RUN_VERIFY' });
+    }
+
+    function openPreview() {
+      vscode.postMessage({ type: 'OPEN_PREVIEW' });
     }
 
     window.addEventListener('message', event => {
@@ -301,7 +357,7 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
         document.getElementById('percent-label').textContent = pct + '%';
         document.getElementById('progress-fill').style.width = pct + '%';
         document.getElementById('used-label').textContent = q.usedTokens.toLocaleString() + ' used';
-        document.getElementById('total-label').textContent = q.totalTokens.toLocaleString() + ' total';
+        document.getElementById('total-label').textContent = q.totalTokens.toLocaleString() + ' budget';
       }
     });
   </script>
