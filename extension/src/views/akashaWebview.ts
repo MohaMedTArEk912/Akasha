@@ -27,6 +27,10 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
         // Listen for messages from the Webview
         webviewView.webview.onDidReceiveMessage(async (data: any) => {
             switch (data.type) {
+                case 'OPEN_FULL_DASHBOARD': {
+                    vscode.commands.executeCommand('akasha.openDashboard');
+                    break;
+                }
                 case 'ASK_ANTIGRAVITY': {
                     vscode.commands.executeCommand('akasha.askAgent', data.prompt);
                     break;
@@ -253,6 +257,24 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       grid-template-columns: 1fr 1fr;
       gap: 7px;
     }
+
+    .dashboard-banner-btn {
+      background: linear-gradient(135deg, #4f46e5, #06b6d4) !important;
+      color: white !important;
+      font-weight: 700 !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      margin-bottom: 12px !important;
+      border: 1px solid rgba(255, 255, 255, 0.25) !important;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4) !important;
+      cursor: pointer;
+    }
+
+    .dashboard-banner-btn:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+      box-shadow: 0 0 22px rgba(6, 182, 212, 0.6) !important;
+    }
   </style>
 </head>
 <body>
@@ -265,6 +287,11 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       <span>●</span> Zero-Key Active
     </div>
   </div>
+
+  <!-- Primary Dashboard Trigger Button -->
+  <button class="action-btn dashboard-banner-btn" onclick="openFullDashboard()">
+    🚀 Open Full Antigravity Dashboard ↗
+  </button>
 
   <!-- Quota Meter Card -->
   <div class="card">
@@ -320,6 +347,10 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
 
   <script>
     const vscode = acquireVsCodeApi();
+
+    function openFullDashboard() {
+      vscode.postMessage({ type: 'OPEN_FULL_DASHBOARD' });
+    }
 
     function sendPrompt() {
       const input = document.getElementById('prompt-input');

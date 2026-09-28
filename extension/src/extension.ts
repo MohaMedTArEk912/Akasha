@@ -3,6 +3,8 @@ import { QuotaService } from './services/quotaService';
 import { QuotaTreeDataProvider } from './views/quotaView';
 import { AkashaWebviewProvider } from './views/akashaWebview';
 
+import { DashboardPanel } from './views/dashboardPanel';
+
 let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -26,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 4. Status Bar Item
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.command = 'akasha.checkQuota';
+    statusBarItem.command = 'akasha.openDashboard';
     context.subscriptions.push(statusBarItem);
     updateStatusBar(quotaService);
 
@@ -35,6 +37,18 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // 5. Register Commands
+    context.subscriptions.push(
+        vscode.commands.registerCommand('akasha.openDashboard', () => {
+            DashboardPanel.render(context.extensionUri, quotaService);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('akasha.openStudio', () => {
+            DashboardPanel.render(context.extensionUri, quotaService);
+        })
+    );
+
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.checkQuota', () => {
             const quota = quotaService.getQuota();
@@ -67,38 +81,6 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.window.showErrorMessage(`Sync failed: ${err.message}`);
                 }
             });
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('akasha.openStudio', () => {
-            const panel = vscode.window.createWebviewPanel(
-                'akashaFullStudio',
-                'Akasha Studio Canvas',
-                vscode.ViewColumn.One,
-                { enableScripts: true }
-            );
-
-            panel.webview.html = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <style>
-                body { margin: 0; background: #090d16; color: white; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-                .center { text-align: center; }
-                h1 { font-size: 26px; margin-bottom: 8px; background: linear-gradient(135deg, #6366f1, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
-                p { color: #94a3b8; font-size: 14px; line-height: 1.6; }
-                .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); color: #818cf8; font-size: 12px; font-weight: bold; margin-bottom: 12px; }
-              </style>
-            </head>
-            <body>
-              <div class="center">
-                <div class="badge">ANTIGRAVITY AI ENGINE</div>
-                <h1>Akasha Studio Canvas Active</h1>
-                <p>Autonomous Coding • Zero-Key Operation • MongoDB GridFS Cloud Persistence</p>
-              </div>
-            </body>
-            </html>`;
         })
     );
 

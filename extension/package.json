@@ -38,6 +38,11 @@
     },
     "commands": [
       {
+        "command": "akasha.openDashboard",
+        "title": "Akasha: Open Full Antigravity Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "akasha.openStudio",
         "title": "Akasha: Open Full Studio Canvas",
         "icon": "$(layout)"
@@ -91,19 +96,19 @@
       ],
       "view/title": [
         {
+          "command": "akasha.openDashboard",
+          "when": "view == akasha.studioView",
+          "group": "navigation@1"
+        },
+        {
           "command": "akasha.openPreview",
           "when": "view == akasha.studioView",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "akasha.syncCloud",
           "when": "view == akasha.studioView",
-          "group": "navigation"
-        },
-        {
-          "command": "akasha.openStudio",
-          "when": "view == akasha.studioView",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ]
     }
