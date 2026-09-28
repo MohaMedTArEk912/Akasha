@@ -63,12 +63,12 @@ export class SyncService {
   }
 
   /**
-   * Generate a React component template for the given block type
+   * Synthesize clean React component code for the given block type
    */
-  private getComponentTemplate(blockType: string, name: string): string {
+  private generateComponentCode(blockType: string, name: string): string {
     const lowerName = name.toLowerCase();
 
-    // Basic templates based on type
+    // Default component structure based on block category
     if (['Container', 'Section', 'Card', 'PageWrapper'].includes(name)) { // Group container-likes
       let defaultCls = "w-full";
       if (name === 'Card') defaultCls = "bg-white rounded-xl shadow-md p-6";
@@ -202,8 +202,8 @@ export default function ${name}({ children, className = '', ...props }: ${name}P
 
     const filePath = path.join(compDir, `${compName}.tsx`);
     if (!await fs.pathExists(filePath)) {
-      const template = this.getComponentTemplate(blockType, compName);
-      await fs.writeFile(filePath, template);
+      const code = this.generateComponentCode(blockType, compName);
+      await fs.writeFile(filePath, code);
     }
     return compName;
   }

@@ -4,7 +4,7 @@ export const InspectorSection: React.FC<{ title: string; children: React.ReactNo
     <div className="pt-5 first:pt-2 border-t border-[var(--ide-border)] mt-5 first:mt-0 first:border-0">
         <h4 className="flex items-center justify-between text-[11px] font-semibold text-[var(--ide-text-secondary)] mb-3 px-1 hover:text-white cursor-pointer transition-colors group">
             {title}
-            <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+            <span className="font-bold text-xs opacity-0 group-hover:opacity-100 transition-opacity text-[var(--ide-text-muted)]">+</span>
         </h4>
         <div className="space-y-2.5 px-1">{children}</div>
     </div>
@@ -32,8 +32,6 @@ export const CompactSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElemen
         >
             {props.children}
         </select>
-        <svg className="absolute right-2 top-1.5 w-3 h-3 text-[var(--ide-text-muted)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg>
+        <span className="absolute right-2 top-1 text-[9px] font-bold text-[var(--ide-text-muted)] pointer-events-none select-none">▼</span>
     </div>
 );

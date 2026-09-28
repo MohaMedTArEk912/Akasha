@@ -22,9 +22,7 @@ const RightInspectorRail: React.FC<RightInspectorRailProps> = ({ open, onOpen, o
                     className="fixed right-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-lg bg-[var(--ide-bg-sidebar)] border border-[var(--ide-border)] shadow-lg hover:bg-[var(--ide-bg-elevated)] transition-colors"
                     title="Open right panel"
                 >
-                    <svg className="w-4 h-4 text-[var(--ide-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                    </svg>
+                    <span className="font-mono text-[11px] font-black text-[var(--ide-text-muted)] px-1">«</span>
                 </button>
             )}
         </>

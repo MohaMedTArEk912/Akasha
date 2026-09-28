@@ -19,26 +19,26 @@ const getMethodStyle = (method: string) => {
 const SHAPE_TYPES = ['string', 'number', 'boolean', 'object', 'array', 'model'] as const;
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-const IconSearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>;
-const IconPlus = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>;
-const IconClose = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
-const IconTrash = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>;
-const IconLock = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
-const IconLink = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+// ─── Icons (Typography) ──────────────────────────────────────────────────────
+const IconSearch = () => <span className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400">FIND</span>;
+const IconPlus = () => <span className="text-[12px] font-bold">+</span>;
+const IconClose = () => <span className="text-[12px] font-bold">✕</span>;
+const IconTrash = () => <span className="text-[10px] font-bold text-red-500">DEL</span>;
+const IconLock = () => <span className="text-[9px] font-bold text-amber-500 font-mono">AUTH</span>;
+const IconLink = () => <span className="text-[10px] font-bold text-blue-500 font-mono">URL</span>;
 
 // ─── Common Styles ────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
-    width: "100%", background: "rgba(168,85,247,0.04)",
-    border: "1px solid rgba(168,85,247,0.15)", borderRadius: 8,
-    color: "#f3e8ff", fontSize: 13, padding: "9px 12px",
+    width: "100%", background: "var(--ide-bg-elevated, rgba(255,255,255,0.05))",
+    border: "1px solid var(--ide-border, rgba(255,255,255,0.15))", borderRadius: 8,
+    color: "var(--ide-text)", fontSize: 13, padding: "9px 12px",
     outline: "none", fontFamily: "inherit", boxSizing: "border-box",
     transition: "border-color 0.2s",
 };
 
 const labelStyle: React.CSSProperties = {
     fontSize: 10.5, fontFamily: "'Space Mono', monospace",
-    letterSpacing: "0.08em", color: "rgba(168,85,247,0.55)",
+    letterSpacing: "0.08em", color: "var(--ide-text-secondary)",
     textTransform: "uppercase", display: "block", marginBottom: 6,
 };
 

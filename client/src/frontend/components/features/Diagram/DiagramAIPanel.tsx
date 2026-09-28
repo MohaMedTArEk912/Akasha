@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Trash2 } from "lucide-react";
 
 interface DiagramAIPanelProps {
     projectId: string | null;
@@ -240,7 +241,7 @@ const DiagramAIPanel: React.FC<DiagramAIPanelProps> = ({
                         title="Clear chat"
                         style={{ background: "none", border: "none", cursor: "pointer", color: textSec, fontSize: 14, padding: "4px 6px", borderRadius: 6, lineHeight: 1 }}
                     >
-                        🗑
+                        <Trash2 size={14} aria-hidden="true" />
                     </button>
                     {onClose && (
                         <button
@@ -384,23 +385,24 @@ const DiagramAIPanel: React.FC<DiagramAIPanelProps> = ({
                         onClick={() => handleSend()}
                         disabled={!input.trim() || isTyping || !projectId}
                         style={{
-                            width: 34,
+                            padding: "0 14px",
                             height: 34,
                             borderRadius: 9,
-                            background: !input.trim() || isTyping || !projectId ? "rgba(255,255,255,0.06)" : "white",
+                            background: !input.trim() || isTyping || !projectId ? "rgba(255,255,255,0.06)" : "var(--ide-accent, #2563eb)",
+                            color: !input.trim() || isTyping || !projectId ? "rgba(255,255,255,0.3)" : "white",
                             border: "none",
                             cursor: !input.trim() || isTyping || !projectId ? "not-allowed" : "pointer",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             flexShrink: 0,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: "0.05em",
                             transition: "all 0.15s",
                         }}
                     >
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={!input.trim() || isTyping || !projectId ? "rgba(255,255,255,0.2)" : "black"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="22" y1="2" x2="11" y2="13" />
-                            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                        </svg>
+                        SEND
                     </button>
                 </div>
             </div>

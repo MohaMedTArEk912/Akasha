@@ -356,6 +356,15 @@ export interface TeamTask {
     labels?: string[];
     storyPoints?: number;
     createdAt: string;
+
+    // GitHub & AI Agent Extensions
+    category?: 'bug' | 'security' | 'feature' | 'refactor' | 'optimization' | 'roadmap';
+    affectedFiles?: string[];
+    agentPrompt?: string;
+    githubCommitSha?: string;
+    githubCommitMessage?: string;
+    githubCommitUrl?: string;
+    completedAt?: string;
 }
 
 export interface ProjectSettings {

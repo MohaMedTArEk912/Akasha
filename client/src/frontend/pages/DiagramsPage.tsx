@@ -1,9 +1,13 @@
 import React, { useRef, useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import useApi, { DiagramEntry } from "../hooks/useApi";
-import { useProjectStore } from "../hooks/useProjectStore";
 import { useTheme } from "../context/ThemeContext";
 import "@excalidraw/excalidraw/index.css";
-import DiagramAIPanel from "../components/features/Diagram/DiagramAIPanel";
+import {
+  loadGlobalLibraryItems,
+  subscribeToLibrarySync,
+  handleAddLibraryFromUrlIfPresent,
+} from "../utils/excalidrawLibrarySync";
+import GlassSelect from "../components/ui/GlassSelect";
 
 type AppState = any;
 type ExcalidrawImperativeAPI = any;
@@ -13,7 +17,6 @@ type DiagramMode = "ERD" | "UseCase" | "Architecture";
 const Excalidraw = React.lazy(() =>
   import("@excalidraw/excalidraw").then((m) => ({ default: m.Excalidraw }))
 );
-import { serializeAsJSON } from "@excalidraw/excalidraw";
 
 // ─── Error Boundary ──────────────────────────────────
 class ErrorBoundary extends React.Component<
@@ -99,11 +102,14 @@ const getLibraryKey = (diagramName: string) => `${LIBRARY_STORAGE_PREFIX}${diagr
 
 const loadUserLibrary = (diagramName: string): any[] => {
   try {
+    const globalItems = loadGlobalLibraryItems();
     const raw = localStorage.getItem(getLibraryKey(diagramName));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
+    const diagramItems = raw ? JSON.parse(raw) : [];
+    const existingIds = new Set((Array.isArray(diagramItems) ? diagramItems : []).map((i: any) => i.id));
+    return [...globalItems.filter((g: any) => !existingIds.has(g.id)), ...(Array.isArray(diagramItems) ? diagramItems : [])];
+  } catch {
+    return loadGlobalLibraryItems();
+  }
 };
 
 const saveUserLibrary = (diagramName: string, items: any[]) => {
@@ -271,12 +277,10 @@ const MetadataSidebar: React.FC<{
         {onClose && (
           <button
             onClick={onClose}
-            style={{ background: "none", border: "none", color: "var(--ide-text-secondary)", cursor: "pointer", padding: 4, borderRadius: 6, lineHeight: 1 }}
+            style={{ background: "none", border: "none", color: "var(--ide-text-secondary)", cursor: "pointer", padding: "4px 8px", borderRadius: 6, lineHeight: 1, fontWeight: "bold" }}
             title="Close metadata panel"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            ✕
           </button>
         )}
       </div>
@@ -304,15 +308,17 @@ const MetadataSidebar: React.FC<{
           {/* Layer */}
           <div>
             <label className={labelCls}>Architectural Layer</label>
-            <select
-              className={inputCls}
-              value={meta.layer}
-              onChange={(e) => commit({ layer: e.target.value as any })}
-            >
-              {["", "UI", "API", "DB", "Actor"].map((l) => (
-                <option key={l} value={l}>{l || "— Select Layer —"}</option>
-              ))}
-            </select>
+            <GlassSelect
+              value={meta.layer || ""}
+              onChange={(val) => commit({ layer: val as any })}
+              options={[
+                { value: "", label: "— Select Layer —" },
+                { value: "UI", label: "UI" },
+                { value: "API", label: "API" },
+                { value: "DB", label: "DB" },
+                { value: "Actor", label: "Actor" },
+              ]}
+            />
           </div>
 
           {/* API Method */}
@@ -402,12 +408,8 @@ const DiagramsPage: React.FC = () => {
     ERD: { elements: [] },
     UseCase: { elements: [] }
   });
-  const [autoPrompt, setAutoPrompt] = useState<{ text: string; timestamp: number } | null>(null);
-
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [showAIPanel, setShowAIPanel] = useState(false);
   const [showMetadataPanel, setShowMetadataPanel] = useState(false);
-  const { project } = useProjectStore();
 
   // Modals / Toast
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -425,6 +427,7 @@ const DiagramsPage: React.FC = () => {
   const apiReadyRef      = useRef(false);
   // Always-current ref to selectedDiagram so the API callback reads the latest value
   const selectedDiagramRef = useRef<string | null>(null);
+  const libFileInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = useCallback((msg: string, type: "error" | "success" | "warn" = "error") => {
     setToastMessage(msg);
@@ -444,11 +447,47 @@ const DiagramsPage: React.FC = () => {
   }, [presetLibrary, currentMode, userLibraryItems]);
 
 
-  // ── Load diagrams ────────────────────────────────────
+  // ── Load diagrams and listen for library sync ──────────────
   useEffect(() => {
     loadDiagrams();
-    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, []);
+
+    // Check if this window was opened with #addLibrary=<url>
+    void handleAddLibraryFromUrlIfPresent();
+
+    // Subscribe to library synchronization events from cross-tab or opener
+    const unsubscribe = subscribeToLibrarySync((newItems) => {
+      setUserLibraryItems((prev) => {
+        const existingIds = new Set(prev.map((i: any) => i.id));
+        return [...prev, ...newItems.filter((i: any) => !existingIds.has(i.id))];
+      });
+
+      if (selectedDiagramRef.current) {
+        saveUserLibrary(selectedDiagramRef.current, newItems);
+      }
+
+      if (excalidrawAPI?.updateLibrary) {
+        excalidrawAPI.updateLibrary({
+          libraryItems: newItems,
+          merge: true,
+          prompt: false,
+        });
+
+        // Automatically open the library sidebar so the user can immediately see the new items!
+        try {
+          excalidrawAPI.updateScene({
+            appState: { openSidebar: { name: "library" } },
+          });
+        } catch {}
+      }
+
+      showToast("Library successfully added to Excalidraw!", "success");
+    });
+
+    return () => {
+      unsubscribe();
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [excalidrawAPI, showToast]);
 
   // ── Auto-select first diagram if none selected ───────
   useEffect(() => {
@@ -521,47 +560,44 @@ const DiagramsPage: React.FC = () => {
     // Load user-saved library items for this diagram
     setUserLibraryItems(loadUserLibrary(name));
 
-    if (activeAPI) activeAPI.updateScene({ elements: [] });
+    let loadedModesData: Record<DiagramMode, { elements: any[]; appState?: any }> = {
+      Architecture: { elements: [] },
+      ERD: { elements: [] },
+      UseCase: { elements: [] },
+    };
+
     try {
       const content = await api.readDiagram(name);
-      let loadedModesData: Record<DiagramMode, { elements: any[]; appState?: any }> = {
-        Architecture: { elements: [] },
-        ERD: { elements: [] },
-        UseCase: { elements: [] }
-      };
-
       if (content) {
-        const data = typeof content === "string" ? JSON.parse(content) : content;
-        if (data.modes) {
-          loadedModesData = data.modes;
-        } else if (data.elements) {
-          loadedModesData.Architecture = {
-            elements: data.elements || [],
-            appState: data.appState || {}
-          };
+        let data: any = null;
+        try {
+          data = typeof content === "string" ? JSON.parse(content) : content;
+        } catch {
+          data = null;
+        }
+        if (data) {
+          if (data.modes) {
+            loadedModesData = data.modes;
+          } else if (data.elements) {
+            loadedModesData.Architecture = {
+              elements: data.elements || [],
+              appState: data.appState || {},
+            };
+          }
         }
       }
-
-      setDiagramModesData(loadedModesData);
-
-      if (activeAPI) {
-        const activeScene = loadedModesData[currentMode] || { elements: [] };
-        activeAPI.updateScene({
-          elements: activeScene.elements,
-          appState: activeScene.appState
-        });
-      }
-
-      const promptMessage = currentMode === "ERD"
-        ? "What are the steps to create an ERD diagram based on the project context?"
-        : currentMode === "Architecture"
-        ? "What are the steps to create an Architecture diagram based on the project context?"
-        : "What are the steps to create a Use Case diagram based on the project context?";
-      setAutoPrompt({ text: promptMessage, timestamp: Date.now() });
-      setShowAIPanel(true);
     } catch (e) {
-      console.error("Error loading diagram", e);
-      showToast("Failed to load diagram data");
+      console.warn("Diagram not yet initialized on server, starting empty:", e);
+    }
+
+    setDiagramModesData(loadedModesData);
+
+    if (activeAPI) {
+      const activeScene = loadedModesData[currentMode] || { elements: [] };
+      activeAPI.updateScene({
+        elements: activeScene.elements,
+        appState: activeScene.appState,
+      });
     }
   };
 
@@ -601,15 +637,6 @@ const DiagramsPage: React.FC = () => {
 
     setCurrentMode(newMode);
     setIsDirty(true);
-
-    const promptMessage = newMode === "ERD"
-      ? "What are the steps to create an ERD diagram based on the project context?"
-      : newMode === "Architecture"
-      ? "What are the steps to create an Architecture diagram based on the project context?"
-      : "What are the steps to create a Use Case diagram based on the project context?";
-
-    setAutoPrompt({ text: promptMessage, timestamp: Date.now() });
-    setShowAIPanel(true);
   };
 
   // ── Save ─────────────────────────────────────────────
@@ -728,13 +755,81 @@ const DiagramsPage: React.FC = () => {
   }, [lintConnections]);
 
   // ── Library change handler — persist user-added items ─
-  const onLibraryChange = useCallback((items: any) => {
+  const onLibraryChange = useCallback(async (itemsOrPromise: any) => {
     if (!selectedDiagram) return;
-    // items is the full library array from Excalidraw (LibraryItems type)
-    const libraryArray = Array.isArray(items) ? items : [];
-    setUserLibraryItems(libraryArray);
-    saveUserLibrary(selectedDiagram, libraryArray);
+    try {
+      const items = await Promise.resolve(itemsOrPromise);
+      const libraryArray = Array.isArray(items) ? items : [];
+      // Only keep user items that are not our hardcoded preset IDs
+      const userItems = libraryArray.filter((item: any) => {
+        const id = item?.id || "";
+        return !id.startsWith("erd-") && !id.startsWith("arch-") && !id.startsWith("uc-");
+      });
+      setUserLibraryItems(userItems);
+      saveUserLibrary(selectedDiagram, libraryArray);
+    } catch (err) {
+      console.warn("[Excalidraw] onLibraryChange error:", err);
+    }
   }, [selectedDiagram]);
+
+  // ── Library import handler (.excalidrawlib or JSON) ────
+  const handleImportLibraryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedDiagram) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      let itemsToImport: any[] = [];
+
+      if (Array.isArray(data)) {
+        itemsToImport = data;
+      } else if (Array.isArray(data.libraryItems)) {
+        itemsToImport = data.libraryItems;
+      } else if (Array.isArray(data.library)) {
+        itemsToImport = data.library;
+      } else {
+        throw new Error("Unrecognized library format. Expected libraryItems array.");
+      }
+
+      // Normalize items
+      const normalizedItems = itemsToImport.map((item: any, idx: number) => {
+        if (Array.isArray(item)) {
+          return {
+            id: `custom-lib-${Date.now()}-${idx}`,
+            status: "published" as const,
+            elements: item,
+          };
+        }
+        return {
+          id: item.id || `custom-lib-${Date.now()}-${idx}`,
+          status: item.status || "published",
+          elements: item.elements || [],
+        };
+      });
+
+      const existing = loadUserLibrary(selectedDiagram);
+      const existingIds = new Set(existing.map((it: any) => it.id));
+      const merged = [...existing, ...normalizedItems.filter((it: any) => !existingIds.has(it.id))];
+
+      saveUserLibrary(selectedDiagram, merged);
+      setUserLibraryItems(merged);
+
+      if (excalidrawAPI?.updateLibrary) {
+        excalidrawAPI.updateLibrary({
+          libraryItems: merged,
+          merge: true,
+          prompt: false,
+        });
+      }
+
+      showToast(`Imported ${normalizedItems.length} library items`, "success");
+    } catch (err: any) {
+      showToast(`Library import failed: ${err?.message || "Invalid JSON"}`, "error");
+    } finally {
+      if (libFileInputRef.current) libFileInputRef.current.value = "";
+    }
+  };
 
   // ── Pointer → selection tracking ─────────────────────
   const onPointerUpdate = useCallback((_payload: any) => {
@@ -788,20 +883,18 @@ const DiagramsPage: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────
   return (
-    <div className="flex flex-1 overflow-hidden h-full bg-[var(--ide-bg)]">
+    <div className="flex flex-1 overflow-hidden h-full bg-transparent">
 
       {/* ── Left Sidebar: Diagram List ── */}
-      <div className="w-60 bg-[var(--ide-sidebar-bg)] border-r border-[var(--ide-border)] flex flex-col shrink-0">
-        <div className="h-9 flex items-center px-4 font-bold text-xs text-[var(--ide-text-secondary)] uppercase tracking-widest bg-[var(--ide-chrome)] border-b border-[var(--ide-border)]">
+      <div className="w-60 bg-white/60 dark:bg-black/30 backdrop-blur-xl border-r border-black/[0.08] dark:border-white/10 flex flex-col shrink-0">
+        <div className="h-10 flex items-center px-4 font-bold text-xs text-[var(--ide-text-secondary)] uppercase tracking-widest bg-transparent border-b border-black/[0.06] dark:border-white/10">
           <span className="flex-1">Diagrams</span>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="p-1 rounded hover:bg-[var(--ide-border)] text-[var(--ide-text-secondary)] hover:text-[var(--ide-primary)] transition-colors"
+            className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wider hover:bg-[var(--ide-border)] text-[var(--ide-text-secondary)] hover:text-[var(--ide-primary)] transition-colors uppercase"
             title="New Diagram"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-            </svg>
+            + NEW
           </button>
         </div>
 
@@ -809,7 +902,7 @@ const DiagramsPage: React.FC = () => {
           {diagrams.length === 0 && (
             <div className="text-center text-xs text-[var(--ide-text-muted)] py-8 px-4">
               <div style={{ fontSize: 10, fontWeight: "black", opacity: 0.2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Empty</div>
-              No diagrams.<br />Use <strong>+</strong> to start.
+              No diagrams.<br />Use <strong>+ NEW</strong> to start.
             </div>
           )}
           {diagrams.map((d) => (
@@ -835,12 +928,10 @@ const DiagramsPage: React.FC = () => {
               })()}
                <button
                 onClick={(e) => { e.stopPropagation(); setDeleteTarget(d.name); }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:text-white transition-all"
+                className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-[10px] font-bold text-red-500 rounded hover:bg-red-500/10 transition-all uppercase"
                 title="Delete"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1" />
-                </svg>
+                DEL
               </button>
             </div>
           ))}
@@ -914,6 +1005,24 @@ const DiagramsPage: React.FC = () => {
               >
                 Export
               </button>
+              <button
+                onClick={() => libFileInputRef.current?.click()}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 8,
+                  background: "rgba(255,255,255,0.05)", border: "1.5px solid rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.8)", cursor: "pointer",
+                }}
+                title="Import .excalidrawlib or JSON library file"
+              >
+                Import Lib
+              </button>
+              <input
+                ref={libFileInputRef}
+                type="file"
+                accept=".excalidrawlib,.json,application/json"
+                onChange={handleImportLibraryFile}
+                style={{ display: "none" }}
+              />
               {userLibraryItems.length > 0 && (
                 <span
                   style={{
@@ -953,25 +1062,7 @@ const DiagramsPage: React.FC = () => {
                 transition: "all 0.2s",
               }}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              {showMetadataPanel ? "Close Metadata" : "Metadata"}
-            </button>
-
-            <button
-              onClick={() => setShowAIPanel(!showAIPanel)}
-              style={{
-                fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 8,
-                background: showAIPanel ? "white" : "rgba(255,255,255,0.05)",
-                border: "1.5px solid rgba(255,255,255,0.1)",
-                color: showAIPanel ? "black" : "white", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6,
-                transition: "all 0.2s",
-              }}
-            >
-              <span style={{ fontSize: 14 }}>🤖</span>
-              {showAIPanel ? "Close AI" : "AI Assistant"}
+              {showMetadataPanel ? "CLOSE METADATA" : "METADATA"}
             </button>
           </div>
           </div>
@@ -1011,6 +1102,17 @@ const DiagramsPage: React.FC = () => {
                     <Excalidraw
                       excalidrawAPI={(apiRef: any) => {
                         setExcalidrawAPI(apiRef);
+
+                        // Ensure all global and user library items are loaded into the Excalidraw instance
+                        const allLibs = [...loadGlobalLibraryItems(), ...userLibraryItems];
+                        if (allLibs.length > 0 && apiRef?.updateLibrary) {
+                          apiRef.updateLibrary({
+                            libraryItems: allLibs,
+                            merge: true,
+                            prompt: false,
+                          });
+                        }
+
                         // Only load diagram content the first time the API is set for this
                         // diagram. Subsequent calls happen when libraryItems/mode changes —
                         // we must NOT reload or it clears the user's drawings.
@@ -1040,7 +1142,7 @@ const DiagramsPage: React.FC = () => {
                           currentItemFillStyle: "solid",
                           currentItemStrokeWidth: 2,
                           gridSize: 20,
-                          viewBackgroundColor: theme === "dark" ? "#0f172a" : "#f8fafc",
+                          viewBackgroundColor: "transparent",
                         },
                       }}
                     />
@@ -1054,23 +1156,6 @@ const DiagramsPage: React.FC = () => {
               <MetadataSidebar elementId={selectedElementId} excalidrawAPI={excalidrawAPI} onClose={() => setShowMetadataPanel(false)} />
             )}
 
-            {/* AI Assistant Panel */}
-            {showAIPanel && (
-              <DiagramAIPanel
-                projectId={project?.id || null}
-                currentDiagramName={selectedDiagram}
-                currentDiagramContent={(() => {
-                  if (!excalidrawAPI) return null;
-                  try {
-                    const els = excalidrawAPI.getSceneElements();
-                    return serializeAsJSON(els, excalidrawAPI.getAppState(), excalidrawAPI.getFiles(), "local");
-                  } catch { return null; }
-                })()}
-                onClose={() => setShowAIPanel(false)}
-                autoPrompt={autoPrompt}
-                currentMode={currentMode}
-              />
-            )}
           </div>
         )}
       </div>

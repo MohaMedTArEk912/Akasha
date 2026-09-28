@@ -241,196 +241,24 @@ export function toProjectSchema(
   };
 }
 
-export function buildProjectImportTemplate(
-  projectName = "Sample Project",
+export function buildProjectSpecificationSkeleton(
+  projectName = "",
 ): ProjectImportPayload {
   return {
     version: "1.0.0",
     project: {
       name: projectName,
-      description:
-        "Describe the project goals, users, and scope here. You can edit pages, blocks, models, and logic before importing.",
-      settings: {
-        theme: {
-          primary_color: "#3b82f6",
-        },
-      },
+      description: "",
+      settings: {},
     },
-    pages: [
-      {
-        id: "home",
-        name: "Home",
-        path: "/",
-        is_dynamic: false,
-        meta: {
-          title: `${projectName} Home`,
-          description: "Landing page for the imported project.",
-          root_block_id: "home-root",
-        },
-      },
-      {
-        id: "about",
-        name: "About",
-        path: "/about",
-        is_dynamic: false,
-        meta: {
-          title: `${projectName} About`,
-          description: "Secondary page example.",
-          root_block_id: "about-root",
-        },
-      },
-    ],
-    blocks: [
-      {
-        id: "home-root",
-        block_type: "canvas",
-        name: "Home Root",
-        page_id: "home",
-        parent_id: null,
-        order: 0,
-        children: ["hero-section"],
-      },
-      {
-        id: "hero-section",
-        block_type: "section",
-        name: "Hero Section",
-        page_id: "home",
-        parent_id: "home-root",
-        order: 0,
-        styles: {
-          padding: "48px",
-          backgroundColor: "#0f172a",
-          color: "#ffffff",
-        },
-        children: ["hero-title", "hero-copy", "hero-cta"],
-      },
-      {
-        id: "hero-title",
-        block_type: "heading",
-        name: "Hero Title",
-        page_id: "home",
-        parent_id: "hero-section",
-        order: 0,
-        properties: {
-          text: `${projectName}`,
-          level: 1,
-        },
-        styles: {
-          fontSize: "42px",
-          fontWeight: "700",
-          color: "#ffffff",
-        },
-      },
-      {
-        id: "hero-copy",
-        block_type: "paragraph",
-        name: "Hero Copy",
-        page_id: "home",
-        parent_id: "hero-section",
-        order: 1,
-        properties: {
-          text: "Replace this with the value proposition for your project.",
-        },
-        styles: {
-          fontSize: "16px",
-          color: "#cbd5e1",
-        },
-      },
-      {
-        id: "hero-cta",
-        block_type: "button",
-        name: "Hero CTA",
-        page_id: "home",
-        parent_id: "hero-section",
-        order: 2,
-        properties: {
-          text: "Get Started",
-        },
-        styles: {
-          backgroundColor: "#38bdf8",
-          color: "#082f49",
-          fontWeight: "700",
-        },
-      },
-      {
-        id: "about-root",
-        block_type: "canvas",
-        name: "About Root",
-        page_id: "about",
-        parent_id: null,
-        order: 0,
-        children: ["about-section"],
-      },
-      {
-        id: "about-section",
-        block_type: "section",
-        name: "About Section",
-        page_id: "about",
-        parent_id: "about-root",
-        order: 0,
-        children: ["about-title", "about-copy"],
-      },
-      {
-        id: "about-title",
-        block_type: "heading",
-        name: "About Title",
-        page_id: "about",
-        parent_id: "about-section",
-        order: 0,
-        properties: {
-          text: "About This Project",
-          level: 2,
-        },
-      },
-      {
-        id: "about-copy",
-        block_type: "paragraph",
-        name: "About Copy",
-        page_id: "about",
-        parent_id: "about-section",
-        order: 1,
-        properties: {
-          text: "Use this page to explain the product, team, or roadmap.",
-        },
-      },
-    ],
-
-    data_models: [
-      {
-        id: "user-model",
-        name: "User",
-        fields: [
-          {
-            id: "id",
-            name: "id",
-            field_type: "uuid",
-            required: true,
-            unique: true,
-            primary_key: true,
-          },
-          {
-            id: "email",
-            name: "email",
-            field_type: "string",
-            required: true,
-            unique: true,
-            primary_key: false,
-          },
-        ],
-        relations: [],
-      },
-    ],
-    logic_flows: [
-      {
-        name: "App bootstrap",
-        context: "frontend",
-        trigger: { type: "manual" },
-        nodes: [],
-        edges: [],
-      },
-    ],
+    pages: [],
+    blocks: [],
+    data_models: [],
+    logic_flows: [],
   };
 }
+
+export const buildProjectImportTemplate = buildProjectSpecificationSkeleton;
 
 function normalizePayload(input: unknown): ProjectImportPayload {
   const source = typeof input === "string" ? (JSON.parse(input) as unknown) : input;

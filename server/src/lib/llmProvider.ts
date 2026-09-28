@@ -33,6 +33,31 @@ export interface LLMProvider {
     getName(): string;
 }
 
+function normalizeBaseUrl(rawUrl: string): string {
+    let url = (rawUrl || '').trim();
+    if (!url) return url;
+
+    while (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
+
+    // AgentRouter handling: strip console paths and ensure /v1
+    if (url.includes('agentrouter.org')) {
+        url = url.replace(/\/console(?:\/.*)?$/, '');
+        if (!url.endsWith('/v1')) {
+            url = `${url}/v1`;
+        }
+    } else if (url === 'https://openrouter.ai' || url === 'https://openrouter.ai/api') {
+        url = 'https://openrouter.ai/api/v1';
+    } else if (url === 'https://api.openai.com') {
+        url = 'https://api.openai.com/v1';
+    } else if (url === 'https://api.groq.com' || url === 'https://api.groq.com/openai') {
+        url = 'https://api.groq.com/openai/v1';
+    }
+
+    return url;
+}
+
 class OpenAICompatibleProvider implements LLMProvider {
     private defaultApiKey: string;
     private defaultBaseUrl: string;
@@ -47,7 +72,7 @@ class OpenAICompatibleProvider implements LLMProvider {
             // Use Google's OpenAI-compatible Gemini endpoint
             this.defaultApiKey = geminiKey;
             this.defaultBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
-            this.defaultModel = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+            this.defaultModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
         } else {
             this.defaultApiKey = openrouterKey || openaiKey || '';
             this.defaultBaseUrl =
@@ -60,7 +85,7 @@ class OpenAICompatibleProvider implements LLMProvider {
 
     private getClient(apiKey?: string, apiBaseUrl?: string, bypassStore?: boolean): OpenAI {
         const store = bypassStore ? undefined : aiConfigStorage.getStore();
-        let baseURL = apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl;
+        let baseURL = normalizeBaseUrl(apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl);
         
         let key = apiKey || store?.apiKey;
         if (!key && baseURL === this.defaultBaseUrl) {
@@ -72,21 +97,27 @@ class OpenAICompatibleProvider implements LLMProvider {
             key = key.slice(7).trim();
         }
 
-        if (baseURL.endsWith('/')) {
-            baseURL = baseURL.slice(0, -1);
-        }
         if (!key) {
             throw new Error('Missing API key. Set one in Settings or environment.');
         }
+
+        const defaultHeaders: Record<string, string> = {};
+        if (baseURL.includes('agentrouter.org')) {
+            defaultHeaders['User-Agent'] = 'claude-code/0.2.29';
+            defaultHeaders['anthropic-version'] = '2023-06-01';
+            defaultHeaders['x-app'] = 'claude-code';
+        }
+
         return new OpenAI({
             baseURL,
             apiKey: key,
+            defaultHeaders: Object.keys(defaultHeaders).length > 0 ? defaultHeaders : undefined,
         });
     }
 
     async chat(options: LLMCompletionOptions): Promise<string> {
         const store = options.bypassStore ? undefined : aiConfigStorage.getStore();
-        let baseURL = options.apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl;
+        let baseURL = normalizeBaseUrl(options.apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl);
         let apiKey = options.apiKey || store?.apiKey;
         if (!apiKey && baseURL === this.defaultBaseUrl) {
             apiKey = this.defaultApiKey;
@@ -95,10 +126,6 @@ class OpenAICompatibleProvider implements LLMProvider {
         // Clean up API key Bearer prefix
         if (apiKey && apiKey.toLowerCase().startsWith('bearer ')) {
             apiKey = apiKey.slice(7).trim();
-        }
-
-        if (baseURL.endsWith('/')) {
-            baseURL = baseURL.slice(0, -1);
         }
 
         const activeModel = options.model || (options.bypassStore ? undefined : store?.model) || this.defaultModel;
@@ -143,40 +170,83 @@ class OpenAICompatibleProvider implements LLMProvider {
                 config.systemInstruction = systemMessage.content;
             }
 
-            const response = await ai.models.generateContent({
-                model: cleanedModel,
-                contents,
-                config
-            });
+            let lastGeminiErr: any = null;
+            const maxRetries = 2;
 
-            if (!response.text) {
-                throw new Error('No response text received from Google AI SDK');
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
+                    const response = await ai.models.generateContent({
+                        model: cleanedModel,
+                        contents,
+                        config
+                    });
+
+                    if (response.text) {
+                        return response.text;
+                    }
+                    throw new Error('No response text received from Google AI SDK');
+                } catch (geminiErr: any) {
+                    lastGeminiErr = geminiErr;
+                    const is503 = geminiErr.status === 503 ||
+                        String(geminiErr.message).includes('503') ||
+                        String(geminiErr.message).includes('high demand') ||
+                        String(geminiErr.message).includes('UNAVAILABLE');
+
+                    if (is503 && attempt < maxRetries) {
+                        const delayMs = (attempt + 1) * 2000;
+                        console.warn(`[LLM] Model "${cleanedModel}" is experiencing high demand (503). Retrying attempt ${attempt + 1}/${maxRetries} in ${delayMs / 1000}s...`);
+                        await new Promise((resolve) => setTimeout(resolve, delayMs));
+                        continue;
+                    }
+
+                    break;
+                }
             }
-            return response.text;
+
+            throw lastGeminiErr;
         }
 
-        try {
-            const client = this.getClient(apiKey || options.apiKey, baseURL || options.apiBaseUrl, options.bypassStore);
-            const completion = await client.chat.completions.create({
-                model: activeModel,
-                messages: options.messages as any,
-                temperature: options.temperature ?? 0.3,
-                max_tokens: options.max_tokens ?? 2048,
-                top_p: options.top_p,
-            });
+        let lastErr: any = null;
+        const maxRetries = 2;
 
-            if (!completion.choices || completion.choices.length === 0) {
-                throw new Error(`Invalid response schema. Raw response: ${JSON.stringify(completion)}`);
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const client = this.getClient(apiKey || options.apiKey, baseURL || options.apiBaseUrl, options.bypassStore);
+                const completion = await client.chat.completions.create({
+                    model: activeModel,
+                    messages: options.messages as any,
+                    temperature: options.temperature ?? 0.3,
+                    max_tokens: options.max_tokens ?? 2048,
+                    top_p: options.top_p,
+                });
+
+                if (!completion.choices || completion.choices.length === 0) {
+                    throw new Error(`Invalid response schema. Raw response: ${JSON.stringify(completion)}`);
+                }
+                return completion.choices[0]?.message?.content || '';
+            } catch (error: any) {
+                lastErr = error;
+                const is503 = error.status === 503 ||
+                    String(error.message).includes('503') ||
+                    String(error.message).includes('high demand');
+
+                if (is503 && attempt < maxRetries) {
+                    const delayMs = (attempt + 1) * 2000;
+                    console.warn(`[LLM] 503 high demand on "${activeModel}". Retrying attempt ${attempt + 1}/${maxRetries} in ${delayMs / 1000}s...`);
+                    await new Promise((r) => setTimeout(r, delayMs));
+                    continue;
+                }
+
+                break;
             }
-            return completion.choices[0]?.message?.content || '';
-        } catch (error: any) {
-            throw new Error(`LLM API error: ${error.message}`);
         }
+
+        throw new Error(`LLM API error: ${lastErr?.message || 'Unknown error'}`);
     }
 
     async *chatStream(options: LLMCompletionOptions): AsyncGenerator<string, void, undefined> {
         const store = options.bypassStore ? undefined : aiConfigStorage.getStore();
-        let baseURL = options.apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl;
+        let baseURL = normalizeBaseUrl(options.apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl);
         let apiKey = options.apiKey || store?.apiKey;
         if (!apiKey && baseURL === this.defaultBaseUrl) {
             apiKey = this.defaultApiKey;
@@ -185,10 +255,6 @@ class OpenAICompatibleProvider implements LLMProvider {
         // Clean up API key Bearer prefix
         if (apiKey && apiKey.toLowerCase().startsWith('bearer ')) {
             apiKey = apiKey.slice(7).trim();
-        }
-
-        if (baseURL.endsWith('/')) {
-            baseURL = baseURL.slice(0, -1);
         }
 
         const activeModel = options.model || (options.bypassStore ? undefined : store?.model) || this.defaultModel;

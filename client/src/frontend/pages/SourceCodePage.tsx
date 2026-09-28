@@ -59,9 +59,24 @@ const SourceCodePage: React.FC = () => {
     const { project } = useProjectStore();
     const savedRepo = project?.settings?.github_repo;
 
-    // Auth state
-    const [connected, setConnected] = useState(false);
-    const [user, setUser] = useState<GitHubUser | null>(null);
+    // Auth state - initialize from localStorage to avoid flash and persist login
+    const [connected, setConnected] = useState(() => {
+        if (typeof window !== "undefined") {
+            return Boolean(localStorage.getItem("gh_session") || localStorage.getItem("gh_token") || localStorage.getItem("gh_pat_token"));
+        }
+        return false;
+    });
+    const [user, setUser] = useState<GitHubUser | null>(() => {
+        if (typeof window !== "undefined") {
+            try {
+                const saved = localStorage.getItem("gh_user");
+                return saved ? JSON.parse(saved) : null;
+            } catch {
+                return null;
+            }
+        }
+        return null;
+    });
     const [checkingStatus, setCheckingStatus] = useState(true);
     const [connecting, setConnecting] = useState(false);
 
@@ -85,6 +100,9 @@ const SourceCodePage: React.FC = () => {
             setConnected(data.connected);
             setUser(data.user);
             if (data.connected) {
+                if (data.user) {
+                    localStorage.setItem("gh_user", JSON.stringify(data.user));
+                }
                 // Background load so the list is ready if they click "Connect New"
                 loadRepos(1, true);
                 
@@ -114,10 +132,15 @@ const SourceCodePage: React.FC = () => {
                         default_branch: defaultRepo.default_branch || "main"
                     });
                 }
+            } else {
+                if (!localStorage.getItem("gh_pat_token") && !localStorage.getItem("gh_token") && !localStorage.getItem("gh_session")) {
+                    localStorage.removeItem("gh_user");
+                }
             }
         } catch {
-            setConnected(false);
-            setUser(null);
+            if (!localStorage.getItem("gh_pat_token") && !localStorage.getItem("gh_token")) {
+                setConnected(false);
+            }
         } finally {
             setCheckingStatus(false);
         }
@@ -131,9 +154,12 @@ const SourceCodePage: React.FC = () => {
     useEffect(() => {
         const handler = (e: MessageEvent) => {
             if (e.data?.type === "github-oauth-success") {
-                // Save session ID to localStorage for persistence across reloads
+                // Save session ID and token to localStorage for persistence across reloads
                 if (e.data.sessionId) {
                     localStorage.setItem("gh_session", e.data.sessionId);
+                }
+                if (e.data.token) {
+                    localStorage.setItem("gh_token", e.data.token);
                 }
                 setConnecting(false);
                 checkStatus();
@@ -195,12 +221,44 @@ const SourceCodePage: React.FC = () => {
 
     /* ── Disconnect ─────────────────────────────────── */
     const handleDisconnect = async () => {
-        await apiRef.current.githubDisconnect();
+        try {
+            await apiRef.current.githubDisconnect();
+        } catch {
+            // ignore network/server errors during disconnect
+        }
         localStorage.removeItem("gh_session");
+        localStorage.removeItem("gh_token");
+        localStorage.removeItem("gh_pat_token");
+        localStorage.removeItem("gh_user");
         setConnected(false);
         setUser(null);
         setRepos([]);
         setSelectedRepo(null);
+    };
+
+    /* ── PAT Connect ─────────────────────────────────── */
+    const handlePatConnect = async (pat: string) => {
+        localStorage.setItem("gh_pat_token", pat.trim());
+        setCheckingStatus(true);
+        try {
+            const data = await apiRef.current.githubStatus();
+            if (data.connected) {
+                setConnected(true);
+                setUser(data.user);
+                if (data.user) {
+                    localStorage.setItem("gh_user", JSON.stringify(data.user));
+                }
+                loadRepos(1, true);
+            } else {
+                localStorage.removeItem("gh_pat_token");
+                alert("Could not authenticate with provided token. Please verify permissions (repo, user).");
+            }
+        } catch (err: any) {
+            localStorage.removeItem("gh_pat_token");
+            alert(`Authentication failed: ${err.message || "Unknown error"}`);
+        } finally {
+            setCheckingStatus(false);
+        }
     };
 
     /* ── Repo Actions ───────────────────────────── */
@@ -285,7 +343,7 @@ const SourceCodePage: React.FC = () => {
 
     /* ── Not connected ──────────────────────────────── */
     if (!connected) {
-        return <GitHubConnectCard onConnect={handleConnect} loading={connecting} />;
+        return <GitHubConnectCard onConnect={handleConnect} onPatConnect={handlePatConnect} loading={connecting} />;
     }
 
     /* ── Repo selected → browse ─────────────────────── */
@@ -333,7 +391,7 @@ const SourceCodePage: React.FC = () => {
 
     /* ── Connected → repo list ──────────────────────── */
     return (
-        <div className="h-full w-full flex flex-col overflow-hidden" style={{ background: "var(--ide-bg)", color: "var(--ide-text)" }}>
+        <div className="h-full w-full flex flex-col overflow-hidden bg-transparent" style={{ color: "var(--ide-text)" }}>
             {/* User profile bar */}
             <div className="px-6 py-3 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0 bg-white/[0.02] backdrop-blur-sm">
                 <div className="flex items-center gap-3">

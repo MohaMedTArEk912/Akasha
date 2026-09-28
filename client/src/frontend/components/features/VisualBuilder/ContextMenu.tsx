@@ -232,10 +232,8 @@ const ContextMenu: React.FC = () => {
         </button>
     );
 
-    const SvgIcon: React.FC<{ d: string }> = ({ d }) => (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={d} />
-        </svg>
+    const TextBadge: React.FC<{ text: string }> = ({ text }) => (
+        <span className="font-mono text-[8px] font-bold tracking-wider text-white/50">{text}</span>
     );
 
     return (
@@ -255,17 +253,14 @@ const ContextMenu: React.FC = () => {
             <MenuItem
                 label="Duplicate"
                 shortcut="Ctrl+D"
-                icon={<SvgIcon d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />}
+                icon={<TextBadge text="DUP" />}
                 onClick={handleDuplicate}
                 disabled={isRoot}
             />
             <MenuItem
                 label={isLocked ? "Unlock" : "Lock"}
                 shortcut="Ctrl+L"
-                icon={<SvgIcon d={isLocked
-                    ? "M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"
-                    : "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                } />}
+                icon={<TextBadge text={isLocked ? "UNL" : "LCK"} />}
                 onClick={handleToggleLock}
             />
 
@@ -274,25 +269,25 @@ const ContextMenu: React.FC = () => {
             {/* Z-order */}
             <MenuItem
                 label="Bring Forward"
-                icon={<SvgIcon d="M5 15l7-7 7 7" />}
+                icon={<TextBadge text="FWD" />}
                 onClick={() => handleMoveIndex("up")}
                 disabled={isRoot || myIndex >= siblingIds.length - 1}
             />
             <MenuItem
                 label="Send Backward"
-                icon={<SvgIcon d="M19 9l-7 7-7-7" />}
+                icon={<TextBadge text="BWD" />}
                 onClick={() => handleMoveIndex("down")}
                 disabled={isRoot || myIndex <= 0}
             />
             <MenuItem
                 label="Bring to Front"
-                icon={<SvgIcon d="M5 11l7-7 7 7M5 19l7-7 7 7" />}
+                icon={<TextBadge text="TOP" />}
                 onClick={() => handleMoveIndex("top")}
                 disabled={isRoot || myIndex >= siblingIds.length - 1}
             />
             <MenuItem
                 label="Send to Back"
-                icon={<SvgIcon d="M19 13l-7 7-7-7M19 5l-7 7-7-7" />}
+                icon={<TextBadge text="BOT" />}
                 onClick={() => handleMoveIndex("bottom")}
                 disabled={isRoot || myIndex <= 0}
             />
@@ -302,12 +297,12 @@ const ContextMenu: React.FC = () => {
             {/* Copy/Paste Styles */}
             <MenuItem
                 label="Copy Styles"
-                icon={<SvgIcon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />}
+                icon={<TextBadge text="CPY" />}
                 onClick={handleCopyStyles}
             />
             <MenuItem
                 label="Paste Styles"
-                icon={<SvgIcon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />}
+                icon={<TextBadge text="PST" />}
                 onClick={handlePasteStyles}
                 disabled={!copiedStyles}
             />
@@ -316,7 +311,7 @@ const ContextMenu: React.FC = () => {
 
             <MenuItem
                 label="Wrap in Container"
-                icon={<SvgIcon d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />}
+                icon={<TextBadge text="WRP" />}
                 onClick={handleWrapInContainer}
                 disabled={isRoot}
             />
@@ -326,7 +321,7 @@ const ContextMenu: React.FC = () => {
             <MenuItem
                 label="Delete"
                 shortcut="Del"
-                icon={<SvgIcon d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />}
+                icon={<TextBadge text="DEL" />}
                 onClick={handleDelete}
                 danger
                 disabled={isRoot}

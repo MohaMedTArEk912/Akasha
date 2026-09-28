@@ -78,36 +78,30 @@ const RepoSelector: React.FC<RepoSelectorProps> = ({ repos, loading, linkedRepoF
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="px-6 py-5 border-b border-white/[0.06] flex items-center justify-between gap-4 flex-shrink-0">
+            <div className="px-6 py-5 border-b border-black/[0.08] dark:border-white/[0.08] flex items-center justify-between gap-4 flex-shrink-0">
                 <div>
-                    <h2 className="text-lg font-black text-white tracking-tight">Your Repositories</h2>
-                    <p className="text-[11px] text-white/40 mt-0.5">{repos.length} repos found</p>
+                    <h2 className="text-lg font-black text-neutral-950 dark:text-white tracking-tight">Your Repositories</h2>
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 font-mono mt-0.5">{repos.length} repos found</p>
                 </div>
 
                 <div className="flex items-center gap-3">
                     {/* Search */}
-                    <div className="relative">
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                    <div>
                         <input
                             type="text"
                             placeholder="Search repos..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="h-9 w-56 pl-9 pr-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-white/20 transition-colors"
+                            className="h-9 w-56 px-3 rounded-xl bg-neutral-100/80 dark:bg-white/[0.04] border border-black/10 dark:border-white/10 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/25 focus:outline-none focus:border-indigo-500 transition-colors"
                         />
                     </div>
 
                     {/* Create New */}
                     <button
                         onClick={onCreateNew}
-                        className="h-9 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-500/25 transition-all flex items-center gap-2"
+                        className="h-9 px-4 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold font-mono uppercase tracking-wider hover:bg-emerald-500/25 transition-all flex items-center gap-2"
                     >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                        New Repo
+                        + NEW REPO
                     </button>
                 </div>
             </div>
@@ -116,11 +110,11 @@ const RepoSelector: React.FC<RepoSelectorProps> = ({ repos, loading, linkedRepoF
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 {loading && repos.length === 0 ? (
                     <div className="flex items-center justify-center h-40">
-                        <div className="w-6 h-6 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" />
+                        <span className="font-mono text-xs text-neutral-500 dark:text-neutral-400 tracking-widest uppercase">LOADING...</span>
                     </div>
                 ) : filtered.length === 0 ? (
                     <div className="text-center py-16">
-                        <p className="text-sm text-white/40">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 font-mono">
                             {search ? "No repositories match your search." : "No repositories found."}
                         </p>
                     </div>
@@ -130,37 +124,34 @@ const RepoSelector: React.FC<RepoSelectorProps> = ({ repos, loading, linkedRepoF
                             {filtered.map(repo => (
                                 <div
                                     key={repo.id}
-                                    className="group text-left flex flex-col h-full rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 hover:border-white/[0.15] hover:bg-white/[0.04] transition-all duration-200 relative overflow-hidden"
+                                    className="group text-left flex flex-col h-full rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-neutral-100/50 dark:bg-white/[0.02] p-5 hover:border-black/10 dark:hover:border-white/[0.15] hover:bg-neutral-100 dark:hover:bg-white/[0.04] transition-all duration-200 relative overflow-hidden"
                                 >
-                                    {/* Ambient glow */}
-                                    <div className="absolute -top-10 -right-10 w-24 h-24 rounded-full bg-indigo-500/5 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
                                     <div className="relative z-10">
                                         {/* Repo name + visibility */}
                                         <div className="flex items-center gap-2 mb-2">
-                                            <span className="text-sm font-bold text-white truncate">{repo.name}</span>
-                                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
+                                            <span className="text-sm font-bold text-neutral-950 dark:text-white truncate">{repo.name}</span>
+                                            <span className={`text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
                                                 repo.private
-                                                    ? "text-amber-400/80 bg-amber-500/10 border-amber-500/20"
-                                                    : "text-white/30 bg-white/[0.03] border-white/[0.06]"
+                                                    ? "text-amber-600 dark:text-amber-400/80 bg-amber-500/10 border-amber-500/20"
+                                                    : "text-neutral-500 dark:text-white/40 bg-neutral-200/60 dark:bg-white/[0.03] border-neutral-300 dark:border-white/[0.06]"
                                             }`}>
                                                 {repo.private ? "Private" : "Public"}
                                             </span>
                                             {linkedRepoFullName === repo.full_name && (
-                                                <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border text-indigo-400/80 bg-indigo-500/10 border-indigo-500/20">
+                                                <span className="ml-auto text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-md border text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20">
                                                     Linked
                                                 </span>
                                             )}
                                         </div>
 
                                         {/* Description */}
-                                        <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2 min-h-[2.5em] mb-4">
+                                        <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed line-clamp-2 min-h-[2.5em] mb-4 font-mono">
                                             {repo.description || "No description"}
                                         </p>
 
                                         {/* Bottom Action Row */}
-                                        <div className="mt-auto pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                                            <div className="flex items-center gap-3 text-[10px] text-white/30">
+                                        <div className="mt-auto pt-4 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between">
+                                            <div className="flex items-center gap-3 text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
                                                 {repo.language && (
                                                     <span className="flex items-center gap-1.5">
                                                         <span
@@ -176,17 +167,17 @@ const RepoSelector: React.FC<RepoSelectorProps> = ({ repos, loading, linkedRepoF
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     onClick={() => onView(repo)}
-                                                    className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-bold text-white/70 hover:bg-white/[0.1] transition-all press-effect flex items-center gap-1.5"
+                                                    className="px-3 py-1.5 rounded-lg bg-neutral-200/60 dark:bg-white/[0.04] border border-black/10 dark:border-white/[0.08] text-[10px] font-mono font-bold uppercase text-neutral-700 dark:text-white/70 hover:bg-neutral-300 dark:hover:bg-white/[0.1] hover:text-neutral-950 dark:hover:text-white transition-all"
                                                 >
-                                                    View
+                                                    VIEW
                                                 </button>
 
                                                 {linkedRepoFullName !== repo.full_name && (
                                                     <button
                                                         onClick={() => onLink(repo)}
-                                                        className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-bold text-white/70 hover:bg-indigo-500 hover:border-indigo-400 hover:text-white transition-all shadow-[0_0_15px_rgba(0,0,0,0)] hover:shadow-[0_0_15px_rgba(99,102,241,0.4)] press-effect flex items-center gap-1.5"
+                                                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[10px] font-mono font-bold uppercase text-white transition-all shadow-sm"
                                                     >
-                                                        Link to Project
+                                                        LINK TO PROJECT
                                                     </button>
                                                 )}
                                             </div>
@@ -201,9 +192,9 @@ const RepoSelector: React.FC<RepoSelectorProps> = ({ repos, loading, linkedRepoF
                                 <button
                                     onClick={onLoadMore}
                                     disabled={loading}
-                                    className="h-9 px-6 rounded-xl border border-white/[0.08] text-[11px] font-bold text-white/50 hover:text-white hover:bg-white/[0.04] transition-all disabled:opacity-40"
+                                    className="h-9 px-6 rounded-xl border border-black/10 dark:border-white/[0.08] text-[11px] font-mono font-bold uppercase text-neutral-600 dark:text-white/50 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/[0.04] transition-all disabled:opacity-40"
                                 >
-                                    {loading ? "Loading..." : "Load More"}
+                                    {loading ? "LOADING..." : "LOAD MORE"}
                                 </button>
                             </div>
                         )}

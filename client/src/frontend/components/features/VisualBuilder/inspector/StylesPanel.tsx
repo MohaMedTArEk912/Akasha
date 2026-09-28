@@ -24,29 +24,29 @@ const StylesPanel: React.FC<StylesPanelProps> = ({ styles, onChange }) => {
     return (
         <div className="p-4 space-y-2">
             <div className="flex items-center justify-between bg-white/5 rounded-lg p-1 mb-4 mx-1">
-                <div className="flex items-center gap-0.5 border-r border-white/10 pr-1.5 hidden md:flex">
-                    <button onClick={() => setAlignment("flex-start", styles.justifyContent as string)} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Align Top">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4h16M12 8v12M8 12h8" /></svg>
+                <div className="flex items-center gap-1 border-r border-white/10 pr-1.5 hidden md:flex">
+                    <button onClick={() => setAlignment("flex-start", styles.justifyContent as string)} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Align Top">
+                        TOP
                     </button>
-                    <button onClick={() => setAlignment("center", styles.justifyContent as string)} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Align Middle">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 12h16M12 4v16M8 8h8M8 16h8" /></svg>
+                    <button onClick={() => setAlignment("center", styles.justifyContent as string)} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Align Middle">
+                        MID
                     </button>
-                    <button onClick={() => setAlignment("flex-end", styles.justifyContent as string)} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Align Bottom">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 20h16M12 4v12M8 12h8" /></svg>
+                    <button onClick={() => setAlignment("flex-end", styles.justifyContent as string)} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Align Bottom">
+                        BOT
                     </button>
-                    <button onClick={() => setAlignment("stretch", "space-between")} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Distribute">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>
+                    <button onClick={() => setAlignment("stretch", "space-between")} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Distribute">
+                        DST
                     </button>
                 </div>
-                <div className="flex items-center gap-0.5 pl-1.5">
-                    <button onClick={() => setAlignment(styles.alignItems as string, "flex-start")} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Align Left">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v16M8 12h12M12 8v8" /></svg>
+                <div className="flex items-center gap-1 pl-1.5">
+                    <button onClick={() => setAlignment(styles.alignItems as string, "flex-start")} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Align Left">
+                        LFT
                     </button>
-                    <button onClick={() => setAlignment(styles.alignItems as string, "center")} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Align Center">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16M4 12h16M8 8v8M16 8v8" /></svg>
+                    <button onClick={() => setAlignment(styles.alignItems as string, "center")} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Align Center">
+                        CTR
                     </button>
-                    <button onClick={() => setAlignment(styles.alignItems as string, "flex-end")} className="p-1.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors" title="Align Right">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 4v16M16 12H4M12 8v8" /></svg>
+                    <button onClick={() => setAlignment(styles.alignItems as string, "flex-end")} className="px-1.5 py-0.5 rounded hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-colors font-mono text-[9px] font-bold" title="Align Right">
+                        RGT
                     </button>
                 </div>
             </div>
@@ -71,7 +71,7 @@ const StylesPanel: React.FC<StylesPanelProps> = ({ styles, onChange }) => {
                         <div className="absolute z-50 right-6 mt-1 p-3 bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-fade-in">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-[11px] font-bold text-[var(--ide-text-secondary)] uppercase">Fill</span>
-                                <button onClick={() => setShowBgPicker(false)} className="text-[var(--ide-text-muted)] hover:text-white bg-white/5 rounded-full p-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                <button onClick={() => setShowBgPicker(false)} className="text-[var(--ide-text-muted)] hover:text-white bg-white/5 rounded-full p-1 text-xs font-bold leading-none">✕</button>
                             </div>
                             <HexColorPicker
                                 color={bgColor === "transparent" ? "#ffffff" : bgColor}
@@ -101,7 +101,7 @@ const StylesPanel: React.FC<StylesPanelProps> = ({ styles, onChange }) => {
                         <div className="absolute z-50 right-6 mt-1 p-3 bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-fade-in">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-[11px] font-bold text-[var(--ide-text-secondary)] uppercase">Text</span>
-                                <button onClick={() => setShowColorPicker(false)} className="text-[var(--ide-text-muted)] hover:text-white bg-white/5 rounded-full p-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                <button onClick={() => setShowColorPicker(false)} className="text-[var(--ide-text-muted)] hover:text-white bg-white/5 rounded-full p-1 text-xs font-bold leading-none">✕</button>
                             </div>
                             <HexColorPicker
                                 color={textColor}
@@ -119,14 +119,14 @@ const StylesPanel: React.FC<StylesPanelProps> = ({ styles, onChange }) => {
                         onClick={() => { onChange("display", "flex"); if (!styles.flexDirection) onChange("flexDirection", "column"); }}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded transition-colors ${styles.display === "flex" ? "bg-white/10 text-white shadow-sm" : "text-[var(--ide-text-muted)] hover:text-white"}`}
                     >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        <span className="font-mono text-[9px] font-bold">STK</span>
                         Stack
                     </button>
                     <button
                         onClick={() => onChange("display", "grid")}
                         className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded transition-colors ${styles.display === "grid" ? "bg-white/10 text-white shadow-sm" : "text-[var(--ide-text-muted)] hover:text-white"}`}
                     >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                        <span className="font-mono text-[9px] font-bold">GRD</span>
                         Grid
                     </button>
                 </div>
@@ -135,8 +135,8 @@ const StylesPanel: React.FC<StylesPanelProps> = ({ styles, onChange }) => {
                     <div className="flex items-center justify-between pb-1">
                         <span className="text-[11px] text-[var(--ide-text-muted)] font-medium">Direction</span>
                         <div className="flex bg-white/5 rounded p-0.5">
-                            <button onClick={() => onChange("flexDirection", "row")} className={`p-1 rounded ${styles.flexDirection === "row" ? "bg-white/10 text-white" : "text-[var(--ide-text-muted)] hover:text-white"}`} title="Row"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></button>
-                            <button onClick={() => onChange("flexDirection", "column")} className={`p-1 rounded ${styles.flexDirection !== "row" ? "bg-white/10 text-white" : "text-[var(--ide-text-muted)] hover:text-white"}`} title="Column"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg></button>
+                            <button onClick={() => onChange("flexDirection", "row")} className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-bold ${styles.flexDirection === "row" ? "bg-white/10 text-white" : "text-[var(--ide-text-muted)] hover:text-white"}`} title="Row">ROW</button>
+                            <button onClick={() => onChange("flexDirection", "column")} className={`px-1.5 py-0.5 rounded font-mono text-[9px] font-bold ${styles.flexDirection !== "row" ? "bg-white/10 text-white" : "text-[var(--ide-text-muted)] hover:text-white"}`} title="Column">COL</button>
                         </div>
                     </div>
                     <PropertyRow label="Wrap">

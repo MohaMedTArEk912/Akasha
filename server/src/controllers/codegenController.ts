@@ -30,13 +30,26 @@ export async function syncProject(req: Request, res: Response) {
             }
         }
 
-        const syncService = new SyncService(rootPath);
-        const pages = await prisma.page.findMany({ where: { projectId: projectId as string } });
-        for (const page of pages) {
-            await syncService.syncPageToDisk(page.id, projectId);
+        // 1. Sync directly to MongoDB Cloud Storage
+        try {
+            const { storageService } = await import('../services/storageService.js');
+            await storageService.syncProjectToCloud(projectId);
+        } catch (cloudErr) {
+            console.error('Failed to sync project to MongoDB Cloud Storage:', cloudErr);
         }
 
-        res.json({ success: true, message: 'Project synced to disk' });
+        // 2. Mirror to local disk if available
+        try {
+            const syncService = new SyncService(rootPath);
+            const pages = await prisma.page.findMany({ where: { projectId: projectId as string } });
+            for (const page of pages) {
+                await syncService.syncPageToDisk(page.id, projectId);
+            }
+        } catch (diskErr) {
+            console.warn('Optional disk mirror sync skipped:', diskErr);
+        }
+
+        res.json({ success: true, message: 'Project synced to MongoDB Cloud Storage and local cache' });
     } catch (error) {
         console.error('Sync error:', error);
         res.status(500).json({ error: 'Failed to sync project' });

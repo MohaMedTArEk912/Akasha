@@ -104,11 +104,27 @@ export function getSnapshot() {
     return state;
 }
 
+function normalizeProject(project: ProjectSchema | null | undefined): ProjectSchema | null {
+    if (!project) return null;
+    if (typeof project.settings === "string") {
+        try {
+            project.settings = JSON.parse(project.settings);
+        } catch {
+            project.settings = {} as any;
+        }
+    }
+    return project;
+}
+
 /**
  * Update state
  */
 function updateState(updater: (prev: ProjectState) => Partial<ProjectState>) {
-    state = { ...state, ...updater(state) };
+    const next = updater(state);
+    if ("project" in next) {
+        next.project = normalizeProject(next.project);
+    }
+    state = { ...state, ...next };
     listeners.forEach(l => l());
 }
 
@@ -221,10 +237,10 @@ export async function initWorkspace(): Promise<void> {
             isDashboardActive: !!workspace_path && !state.project
         }));
 
-        // ── Restore previously open project from sessionStorage ──
+        // ── Restore previously open project from sessionStorage or localStorage ──
         if (workspace_path && !state.project) {
-            const savedProjectId = sessionStorage.getItem(SESSION_PROJECT_ID_KEY);
-            const savedActivePage = sessionStorage.getItem(SESSION_ACTIVE_PAGE_KEY);
+            const savedProjectId = sessionStorage.getItem(SESSION_PROJECT_ID_KEY) || localStorage.getItem(SESSION_PROJECT_ID_KEY);
+            const savedActivePage = sessionStorage.getItem(SESSION_ACTIVE_PAGE_KEY) || localStorage.getItem(SESSION_ACTIVE_PAGE_KEY);
             if (savedProjectId && projects.some((p: ProjectSchema) => p.id === savedProjectId)) {
                 try {
                     await openProject(savedProjectId);
@@ -648,13 +664,14 @@ export async function openProject(id: string): Promise<void> {
             project,
             selectedPageId: getFirstActivePageId(project),
             isDashboardActive: false,
-            activePage: isInitializing ? "idea" : (project.orgId ? "team" : "ui"),
+            activePage: isInitializing ? "idea" : "dashboard",
             openPageIds: allActivePageIds(project),
             pageHistory: [],
         }));
 
-        // ── Persist to sessionStorage so refresh re-opens this project ──
+        // ── Persist to sessionStorage and localStorage so refresh and external redirects re-open this project ──
         sessionStorage.setItem(SESSION_PROJECT_ID_KEY, id);
+        localStorage.setItem(SESSION_PROJECT_ID_KEY, id);
 
         // CHECK IF node_modules EXISTS (non-blocking, runs in background)
         if (project.root_path) {
@@ -704,6 +721,7 @@ export async function openProject(id: string): Promise<void> {
 
 /**
  * Delete a project
+
  * @param deleteFromDisk - If true, also deletes the project folder from disk
  */
 export async function deleteProject(id: string, deleteFromDisk?: boolean): Promise<void> {
@@ -728,16 +746,24 @@ export function closeProject(): void {
     // ── Clear session so refresh goes to dashboard ──
     sessionStorage.removeItem(SESSION_PROJECT_ID_KEY);
     sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+    localStorage.removeItem(SESSION_PROJECT_ID_KEY);
+    localStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
 
     updateState(() => ({ isDashboardActive: true }));
 }
 
 /**
- * Refresh the current project from backend (useful after setting root_path)
+ * Refresh the current project from backend (useful after setting root_path or on page navigation)
  */
-export async function refreshCurrentProject(): Promise<void> {
+export async function refreshCurrentProject(id?: string): Promise<void> {
     try {
-        const project = await api.getProject();
+        const targetId = id || state.project?.id;
+        let project: ProjectSchema | null = null;
+        if (targetId) {
+            project = await api.loadProjectById(targetId);
+        } else {
+            project = await api.getProject();
+        }
         if (project) {
             const activeIds = new Set(allActivePageIds(project));
             const open = state.openPageIds.filter(id => activeIds.has(id));
@@ -825,6 +851,107 @@ export async function importProject(json: string, name?: string): Promise<void> 
             loading: false,
             loadingMessage: prev.installError ? prev.loadingMessage : null
         }));
+    }
+}
+
+/**
+ * Ingest an existing GitHub repository, reading files & synthesizing complete project
+ */
+export async function ingestGitHubProject(payload: {
+    owner?: string;
+    repo?: string;
+    branch?: string;
+    url?: string;
+    apiKey?: string;
+    model?: string;
+    apiBaseUrl?: string;
+}): Promise<any> {
+    updateState(() => ({ loading: true, error: null, loadingMessage: "AI is reading repository & synthesizing architecture..." }));
+
+    try {
+        const res = await api.githubIngest(payload);
+        if (!res?.project) throw new Error("Failed to synthesize project from repository");
+
+        let project = res.project;
+
+        if (state.workspacePath && !project.root_path) {
+            try {
+                const projectPath = `${state.workspacePath}/${project.name}`.replace(/\\/g, '/');
+                await api.setProjectRoot(projectPath);
+                const refreshed = await api.loadProjectById(project.id);
+                if (refreshed) project = refreshed;
+            } catch (syncError) {
+                console.warn('Workspace sync failed for ingested project:', syncError);
+            }
+        }
+
+        updateState(() => ({
+            project,
+            selectedPageId: getFirstActivePageId(project),
+            isDashboardActive: false,
+            activePage: "dashboard",
+            loadingMessage: null,
+            openPageIds: allActivePageIds(project),
+            pageHistory: [],
+        }));
+        sessionStorage.setItem(SESSION_PROJECT_ID_KEY, project.id);
+        sessionStorage.removeItem(SESSION_ACTIVE_PAGE_KEY);
+        await initWorkspace();
+        return res;
+    } catch (err) {
+        updateState(() => ({ error: String(err) }));
+        throw err;
+    } finally {
+        updateState(() => ({
+            loading: false,
+            loadingMessage: null
+        }));
+    }
+}
+
+/**
+ * Sync GitHub commits with project tasks, auto-completing resolved issues
+ */
+export async function syncGitHubTasksForCurrentProject(branch?: string): Promise<any> {
+    const currentProject = state.project;
+    if (!currentProject) throw new Error("No active project");
+
+    try {
+        const res = await api.githubSyncProjectTasks(currentProject.id, branch);
+        if (res?.success && res?.tasks) {
+            const updatedSettings = {
+                ...currentProject.settings,
+                teamTasks: res.tasks
+            };
+            const updatedProject = {
+                ...currentProject,
+                settings: updatedSettings
+            };
+            updateState(() => ({ project: updatedProject }));
+        }
+        return res;
+    } catch (err) {
+        console.error("Failed to sync GitHub tasks:", err);
+        throw err;
+    }
+}
+
+/**
+ * Check GitHub repository for new commits and auto-sync project specifications & code
+ */
+export async function checkGitHubAutoSync(branch?: string): Promise<any> {
+    const currentProject = state.project;
+    if (!currentProject) return { autoSynced: false };
+
+    try {
+        const res = await api.githubCheckProjectAutoSync(currentProject.id, branch);
+        if (res?.autoSynced) {
+            await refreshCurrentProject();
+        }
+        return res;
+    } catch (err) {
+        console.warn("Failed to check GitHub auto-sync:", err);
+        return { autoSynced: false };
     }
 }
 
@@ -1468,7 +1595,7 @@ export function setProject(project: any): void {
 /**
  * Switch the active feature page
  */
-export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings" | "team";
+export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings" | "team" | "source";
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";
@@ -1482,8 +1609,9 @@ export function setActivePage(page: FeaturePage): void {
         return { activePage: page, editMode, pageHistory: newHistory };
     });
 
-    // ── Persist active page to sessionStorage ──
+    // ── Persist active page to sessionStorage & localStorage ──
     sessionStorage.setItem(SESSION_ACTIVE_PAGE_KEY, page);
+    localStorage.setItem(SESSION_ACTIVE_PAGE_KEY, page);
 }
 
 /**

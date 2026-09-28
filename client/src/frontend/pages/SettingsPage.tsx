@@ -1,332 +1,528 @@
 import React, { useState, useEffect } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
 import { useSettings } from "../context/SettingsContext";
-import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
-import { renameProject, resetProject, deleteProject, closeProject } from "../stores/projectStore";
+import { renameProject, resetProject, deleteProject, closeProject, setActivePage } from "../stores/projectStore";
 import ConfirmModal from "../components/Modals/ConfirmModal";
 
 interface SettingsPageProps {
-    onBack?: () => void;
+  onBack?: () => void;
 }
 
 const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
-    const { theme, toggleTheme } = useTheme();
-    const { project } = useProjectStore();
-    const { apiKey } = useSettings();
-    const toast = useToast();
+  const { project } = useProjectStore();
+  const { apiKey, model, apiBaseUrl, provider, setApiKey, setModel, setApiBaseUrl, setProvider } = useSettings();
+  const toast = useToast();
 
-    // Local states for Project Administration
-    const [projectName, setProjectName] = useState(project?.name || "");
-    const [isSavingProject, setIsSavingProject] = useState(false);
-    const [isDestructiveAction, setIsDestructiveAction] = useState(false);
-    const [deleteFromDisk, setDeleteFromDisk] = useState(false);
-    const [clearDiskOnReset, setClearDiskOnReset] = useState(true);
-    const [confirmModal, setConfirmModal] = useState<{
-        isOpen: boolean;
-        type: "reset" | "delete" | null;
-    }>({ isOpen: false, type: null });
+  // Local states for AI Configuration
+  const [inputApiKey, setInputApiKey] = useState(apiKey || "");
+  const [inputModel, setInputModel] = useState(model || "gemini-2.0-flash");
+  const [inputBaseUrl, setInputBaseUrl] = useState(apiBaseUrl || "https://generativelanguage.googleapis.com/v1beta");
+  const [selectedProvider, setSelectedProvider] = useState(provider || "gemini");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isTestingAi, setIsTestingAi] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ status: "idle" | "success" | "error"; message: string }>({
+    status: "idle",
+    message: "",
+  });
 
-    // Sync state on load
-    useEffect(() => {
-        if (project) {
-            setProjectName(project.name);
-        }
-    }, [project]);
+  useEffect(() => {
+    if (apiKey) setInputApiKey(apiKey);
+    if (model) setInputModel(model);
+    if (apiBaseUrl) setInputBaseUrl(apiBaseUrl);
+    if (provider) setSelectedProvider(provider);
+  }, [apiKey, model, apiBaseUrl, provider]);
 
-    const handleSaveProjectName = async () => {
-        if (!projectName.trim()) {
-            toast.showToast("Project name cannot be empty", "error");
-            return;
-        }
+  const handleProviderSelect = (p: string) => {
+    setSelectedProvider(p);
+    if (p === "gemini") {
+      setInputBaseUrl("https://generativelanguage.googleapis.com/v1beta");
+      setInputModel("gemini-3.6-flash");
+    } else if (p === "openrouter") {
+      setInputBaseUrl("https://openrouter.ai/api/v1");
+      setInputModel("openrouter/free");
+    } else if (p === "openai") {
+      setInputBaseUrl("https://api.openai.com/v1");
+      setInputModel("gpt-4o-mini");
+    }
+  };
 
-        setIsSavingProject(true);
-        try {
-            if (projectName !== project?.name) {
-                await renameProject(projectName.trim());
-                toast.showToast("Project renamed successfully", "success");
-            } else {
-                toast.showToast("No changes to save", "info");
-            }
-        } catch (err) {
-            toast.showToast(`Failed to save: ${err}`, "error");
-        } finally {
-            setIsSavingProject(false);
-        }
-    };
+  const handleSaveAiSettings = () => {
+    setApiKey(inputApiKey.trim());
+    setModel(inputModel.trim());
+    setApiBaseUrl(inputBaseUrl.trim());
+    setProvider(selectedProvider);
+    toast.showToast("AI configuration saved", "success");
+  };
 
-    const handleResetConfirm = async () => {
-        setIsDestructiveAction(true);
-        try {
-            await resetProject(clearDiskOnReset);
-            toast.showToast("Project reset to initial state", "success");
-            setConfirmModal({ isOpen: false, type: null });
-            setClearDiskOnReset(true);
-        } catch (err) {
-            toast.showToast(`Failed to reset project: ${err}`, "error");
-        } finally {
-            setIsDestructiveAction(false);
-        }
-    };
+  const handleTestAiConnection = async () => {
+    if (!inputApiKey.trim()) {
+      setAiTestResult({ status: "error", message: "API key is empty. Please enter a valid key." });
+      toast.showToast("Please enter an API key", "error");
+      return;
+    }
 
-    const handleDeleteConfirm = async () => {
-        if (!project) return;
-        setIsDestructiveAction(true);
-        try {
-            await deleteProject(project.id, deleteFromDisk);
-            toast.showToast(deleteFromDisk
-                ? "Project and files deleted successfully"
-                : "Project deleted from database (files kept on disk)", "success");
-            closeProject();
-            setConfirmModal({ isOpen: false, type: null });
-            setDeleteFromDisk(false);
-        } catch (err) {
-            toast.showToast(`Failed to delete project: ${err}`, "error");
-        } finally {
-            setIsDestructiveAction(false);
-        }
-    };
+    setIsTestingAi(true);
+    setAiTestResult({ status: "idle", message: "Testing connection..." });
 
-    return (
-        <div className="ide-page h-full w-full overflow-auto relative page-enter p-8 select-none bg-[var(--ide-bg)] text-[var(--ide-text)]">
-            {/* Visual Background Glow */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute w-[500px] h-[500px] rounded-full opacity-[0.03] blur-[120px] bg-indigo-500 top-[-10%] right-[10%]" />
-                <div className="absolute w-[400px] h-[400px] rounded-full opacity-[0.02] blur-[100px] bg-cyan-500 bottom-[10%] left-[5%]" />
-            </div>
+    try {
+      setApiKey(inputApiKey.trim());
+      setModel(inputModel.trim());
+      setApiBaseUrl(inputBaseUrl.trim());
+      setProvider(selectedProvider);
 
-            <div className="relative z-10 max-w-5xl mx-auto space-y-8">
-                
-                {/* Header Title Section */}
-                <div className="flex justify-between items-end border-b border-[var(--ide-border)] pb-6">
-                    <div className="flex items-center gap-4">
-                        {onBack && (
-                            <button
-                                onClick={onBack}
-                                className="btn-ghost h-10 px-4 text-xs gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                                </svg>
-                                Back
-                            </button>
-                        )}
-                        <div>
-                            <h1 className="text-2xl font-black text-[var(--ide-text)] tracking-tight uppercase">Settings</h1>
-                            <p className="text-xs text-[var(--ide-text-muted)] mt-1">Configure workspace integrations, system theme, and project data.</p>
-                        </div>
-                    </div>
-                </div>
+      const res = await fetch("/api/akasha/ai/test-connection", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-ai-api-key": inputApiKey.trim(),
+          "x-ai-model": inputModel.trim(),
+          "x-ai-api-base-url": inputBaseUrl.trim(),
+        },
+        body: JSON.stringify({
+          apiKey: inputApiKey.trim(),
+          model: inputModel.trim(),
+          apiBaseUrl: inputBaseUrl.trim(),
+        }),
+      });
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start animate-fade-in">
-                    
-                    {/* Left Column: top cards aligned, note below */}
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="ide-settings-card p-5 flex flex-col justify-between min-h-[168px]">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-[var(--ide-accent-subtle)] border border-[var(--ide-border)] flex items-center justify-center shrink-0">
-                                        {theme === "dark" ? (
-                                            <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                                            </svg>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xs font-bold text-[var(--ide-text)] uppercase tracking-widest">Interface Theme</h3>
-                                        <p className="text-[10px] text-[var(--ide-text-muted)] italic mt-0.5">
-                                            Currently: {theme === "dark" ? "Dark" : "Light"} — synced across Community & IDE
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center bg-[var(--ide-accent-subtle)] p-2.5 rounded-xl border border-[var(--ide-border)]">
-                                    <span className="text-[10px] font-bold text-[var(--ide-text-secondary)] tracking-wider">DARK MODE</span>
-                                    <button
-                                        onClick={toggleTheme}
-                                        className={`relative w-11 h-6 rounded-full transition-all duration-300 p-0.5 flex items-center ${
-                                            theme === "dark" ? "bg-[var(--ide-primary)]" : "bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)]"
-                                        }`}
-                                        aria-label="Toggle theme"
-                                    >
-                                        <span
-                                            className={`block w-5 h-5 rounded-full bg-white transition-transform duration-300 shadow-md ${
-                                                theme === "dark" ? "translate-x-5" : "translate-x-0"
-                                            }`}
-                                        />
-                                    </button>
-                                </div>
-                            </div>
+      if (res.ok) {
+        setAiTestResult({ status: "success", message: "Connected successfully (200 OK)" });
+        toast.showToast("AI Connection Verified", "success");
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.error || `HTTP ${res.status}: ${res.statusText}`;
+        setAiTestResult({ status: "error", message: msg });
+        toast.showToast(`Connection failed: ${msg}`, "error");
+      }
+    } catch (err: any) {
+      setAiTestResult({ status: "error", message: err?.message || "Failed to reach AI endpoint" });
+      toast.showToast("Connection failed", "error");
+    } finally {
+      setIsTestingAi(false);
+    }
+  };
 
-                            <div className="ide-settings-card p-5 space-y-4 min-h-[168px]">
-                                <h3 className="text-xs font-bold text-[var(--ide-text-muted)] uppercase tracking-widest">SYSTEM STATUS</h3>
-                                <div className="space-y-3.5">
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-[var(--ide-text-muted)] text-[10px]">Backend Server</span>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                            <span className="font-semibold text-[var(--ide-text)] text-[10px]">Online</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-[var(--ide-text-muted)] text-[10px]">Active Project</span>
-                                        <span className="font-bold text-[10px] text-[var(--ide-text-secondary)] tracking-wide uppercase truncate max-w-[170px]">
-                                            {project?.name || "None"}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs">
-                                        <span className="text-[var(--ide-text-muted)] text-[10px]">AI Integration</span>
-                                        <span className={`text-[10px] font-semibold ${apiKey ? "text-cyan-400" : "text-amber-500"}`}>
-                                            {apiKey ? "Provisioned (via Profile)" : "API Key Needed"}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+  // Local states for Project Administration
+  const [projectName, setProjectName] = useState(project?.name || "");
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isDestructiveAction, setIsDestructiveAction] = useState(false);
+  const [deleteFromDisk, setDeleteFromDisk] = useState(false);
+  const [clearDiskOnReset, setClearDiskOnReset] = useState(true);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: "reset" | "delete" | null;
+  }>({ isOpen: false, type: null });
 
-                        <div className="ide-settings-card border-[var(--ide-primary)]/20 p-5 space-y-3 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-[var(--ide-primary)]/5 rounded-full blur-xl pointer-events-none" />
-                            <h3 className="text-xs font-bold text-[var(--ide-primary)] uppercase tracking-widest flex items-center gap-2">
-                                🤖 AI Configuration
-                            </h3>
-                            <p className="text-[11px] text-[var(--ide-text-secondary)] leading-relaxed">
-                                To centralize account security, API keys and model configurations are managed exclusively within the <strong>Profile Page</strong>.
-                            </p>
-                            <div className="text-[10px] text-[var(--ide-text-muted)]">
-                                Navigate to: <strong>User Dashboard &rarr; Profile</strong> to configure OpenRouter, OpenAI, or Gemini credentials.
-                            </div>
-                        </div>
+  // Sync state on load
+  useEffect(() => {
+    if (project) {
+      setProjectName(project.name);
+    }
+  }, [project]);
 
-                    </div>
+  const handleSaveProjectName = async () => {
+    if (!projectName.trim()) {
+      toast.showToast("Project name cannot be empty", "error");
+      return;
+    }
 
-                    {/* Right Column: Project Preferences & Danger Zone */}
-                    <div className="space-y-6">
-                        
-                        {/* Project Preferences */}
-                        {project && (
-                            <div className="ide-settings-card p-6 space-y-6">
-                                <div>
-                                    <h2 className="text-sm font-black text-[var(--ide-text)] tracking-widest uppercase mb-1">Project Preferences</h2>
-                                    <p className="text-[10px] text-[var(--ide-text-muted)]">Rename the project schema representation.</p>
-                                </div>
+    setIsSavingProject(true);
+    try {
+      if (projectName !== project?.name) {
+        await renameProject(projectName.trim());
+        toast.showToast("Project renamed", "success");
+      } else {
+        toast.showToast("No changes to save", "info");
+      }
+    } catch (err) {
+      toast.showToast(`Failed: ${err}`, "error");
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
 
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-[var(--ide-text-secondary)] uppercase tracking-widest">Project Name</label>
-                                    <input
-                                        type="text"
-                                        value={projectName}
-                                        onChange={(e) => setProjectName(e.target.value)}
-                                        placeholder="Enter project name..."
-                                        className="input-modern w-full text-xs font-semibold"
-                                    />
-                                </div>
+  const handleResetConfirm = async () => {
+    setIsDestructiveAction(true);
+    try {
+      await resetProject(clearDiskOnReset);
+      toast.showToast("Project reset to initial state", "success");
+      setConfirmModal({ isOpen: false, type: null });
+      setClearDiskOnReset(true);
+    } catch (err) {
+      toast.showToast(`Reset failed: ${err}`, "error");
+    } finally {
+      setIsDestructiveAction(false);
+    }
+  };
 
-                                <div className="pt-4 flex justify-end border-t border-[var(--ide-border)]">
-                                    <button
-                                        onClick={handleSaveProjectName}
-                                        disabled={isSavingProject}
-                                        className="btn-primary px-6 py-2.5 text-[11px] disabled:opacity-50 flex items-center gap-2"
-                                    >
-                                        {isSavingProject ? "Saving..." : "Save Project Settings"}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+  const handleDeleteConfirm = async () => {
+    if (!project) return;
+    setIsDestructiveAction(true);
+    try {
+      await deleteProject(project.id, deleteFromDisk);
+      toast.showToast("Project deleted", "success");
+      closeProject();
+      setConfirmModal({ isOpen: false, type: null });
+      setDeleteFromDisk(false);
+    } catch (err) {
+      toast.showToast(`Delete failed: ${err}`, "error");
+    } finally {
+      setIsDestructiveAction(false);
+    }
+  };
 
-                        {/* Danger Zone Section */}
-                        {project && (
-                            <div className="bg-red-500/[0.02] border border-red-500/10 rounded-2xl p-6 space-y-6">
-                                <div className="flex items-center gap-2">
-                                    <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    <div>
-                                        <h2 className="text-sm font-black text-[var(--ide-text)] tracking-widest uppercase mb-1">Danger Zone</h2>
-                                        <p className="text-[10px] text-red-500/50">These actions are destructive and cannot be undone.</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-red-500/10 items-start">
-                                    
-                                    {/* Reset card */}
-                                    <div className="border border-[var(--ide-border)] rounded-xl p-4 flex flex-col justify-between gap-4 bg-[var(--ide-accent-subtle)] min-h-[150px]">
-                                        <div>
-                                            <h4 className="text-[11px] font-bold text-[var(--ide-text)]">Reset Project Content</h4>
-                                            <p className="text-[9px] text-[var(--ide-text-muted)] mt-1 leading-relaxed">
-                                                Resets all database entries (pages, blocks, logic flows) back to the original starter template.
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setConfirmModal({ isOpen: true, type: "reset" })}
-                                            disabled={isDestructiveAction}
-                                            className="w-full py-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 transition-colors text-amber-500 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-                                        >
-                                            Reset Project
-                                        </button>
-                                    </div>
-
-                                    {/* Delete card */}
-                                    <div className="border border-[var(--ide-border)] rounded-xl p-4 flex flex-col justify-between gap-4 bg-[var(--ide-accent-subtle)] min-h-[150px]">
-                                        <div>
-                                            <h4 className="text-[11px] font-bold text-[var(--ide-text)]">Delete Project</h4>
-                                            <p className="text-[9px] text-[var(--ide-text-muted)] mt-1 leading-relaxed">
-                                                Removes this project registration. You can choose to optionally delete files on disk or keep them.
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => setConfirmModal({ isOpen: true, type: "delete" })}
-                                            disabled={isDestructiveAction}
-                                            className="w-full py-2.5 rounded-lg border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 transition-colors text-red-500 text-[10px] font-bold uppercase tracking-wider disabled:opacity-50"
-                                        >
-                                            Delete Project
-                                        </button>
-                                    </div>
-
-                                </div>
-                            </div>
-                        )}
-
-                    </div>
-
-                </div>
-
-            </div>
-
-            {/* Confirmation Dialogs */}
-            <ConfirmModal
-                isOpen={confirmModal.isOpen && confirmModal.type === "reset"}
-                title="Reset Project Content"
-                message="This will permanently delete ALL content (pages, blocks, logic) in this project. The project folder will be reset to a fresh starter template. This cannot be undone."
-                confirmText="Reset Everything"
-                variant="warning"
-                onConfirm={handleResetConfirm}
-                onCancel={() => setConfirmModal({ isOpen: false, type: null })}
-                isLoading={isDestructiveAction}
-            />
-
-            <ConfirmModal
-                isOpen={confirmModal.isOpen && confirmModal.type === "delete"}
-                title={`Delete "${project?.name}"?`}
-                message="This will permanently remove the project from the database and close the editor."
-                confirmText="Delete Project"
-                variant="danger"
-                onConfirm={handleDeleteConfirm}
-                onCancel={() => {
-                    setConfirmModal({ isOpen: false, type: null });
-                    setDeleteFromDisk(false);
-                }}
-                isLoading={isDestructiveAction}
-                checkboxConfig={{
-                    label: "Also delete project folder from disk",
-                    checked: deleteFromDisk,
-                    onChange: setDeleteFromDisk,
-                }}
-            />
-        </div>
+  const handleOpenBotConfig = () => {
+    window.dispatchEvent(
+      new CustomEvent("akasha:open-chat", {
+        detail: { openSettings: true },
+      })
     );
+  };
+
+  const inputCls =
+    "w-full h-8 px-3 rounded-lg bg-white/90 dark:bg-[#0c0d16]/80 border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all";
+
+  return (
+    <div className="h-full w-full overflow-auto relative p-4 sm:p-6 select-none flex flex-col justify-between">
+      <div className="relative z-10 max-w-3xl w-full mx-auto space-y-4">
+        {/* Compact Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/8">
+          <div>
+            <h1 className="text-base font-bold tracking-tight text-neutral-950 dark:text-white">
+              Settings
+            </h1>
+            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+              Project administration and workspace preferences
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onBack || (() => setActivePage("dashboard"))}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/10 transition-all cursor-pointer"
+          >
+            Back
+          </button>
+        </div>
+
+        {/* ── AI Model & Credentials Section (Icon-Free, Same-Line Inputs) ── */}
+        <div className="p-5 rounded-2xl bg-white/80 dark:bg-[#0c0d16]/75 border border-black/[0.06] dark:border-white/10 backdrop-blur-md shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-black/[0.05] dark:border-white/8">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wider">
+                AI Model & Credentials
+              </span>
+              <span className={`text-[8.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                inputApiKey
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+              }`}>
+                {inputApiKey ? "Configured" : "Missing Key"}
+              </span>
+            </div>
+            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+              powers copilot & ideation
+            </span>
+          </div>
+
+          {/* Provider Selection */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+              Provider
+            </label>
+            <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] p-1 border border-black/[0.05] dark:border-white/6">
+              {[
+                { id: "gemini", label: "Gemini" },
+                { id: "openrouter", label: "OpenRouter" },
+                { id: "openai", label: "OpenAI" },
+                { id: "custom", label: "Custom" },
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleProviderSelect(p.id)}
+                  className={`py-1.5 rounded-lg text-[10px] font-semibold text-center transition-all cursor-pointer ${
+                    selectedProvider === p.id
+                      ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/35 shadow-xs font-bold"
+                      : "bg-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-transparent"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* API Key & Model — On the Exact Same Line */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            {/* API Key Column */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between h-4">
+                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                  API Key
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="text-[9px] font-bold uppercase text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer"
+                >
+                  {showApiKey ? "HIDE" : "SHOW"}
+                </button>
+              </div>
+              <input
+                type={showApiKey ? "text" : "password"}
+                value={inputApiKey}
+                onChange={(e) => setInputApiKey(e.target.value)}
+                placeholder={
+                  selectedProvider === "gemini"
+                    ? "AIzaSy..."
+                    : selectedProvider === "openrouter"
+                    ? "sk-or-v1-..."
+                    : "sk-..."
+                }
+                className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
+              />
+            </div>
+
+            {/* Model Column */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between h-4">
+                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                  Model
+                </label>
+                <div className="flex items-center gap-1">
+                  {[
+                    { label: "Gemini 3.6", model: "gemini-3.6-flash" },
+                    { label: "Gemini 2.5", model: "gemini-2.5-flash" },
+                    { label: "GPT-4o Mini", model: "gpt-4o-mini" },
+                    { label: "Free", model: "openrouter/free" },
+                  ].map((item) => (
+                    <button
+                      key={item.model}
+                      type="button"
+                      onClick={() => setInputModel(item.model)}
+                      className={`px-1.5 py-0.2 rounded text-[7.5px] font-semibold transition-colors cursor-pointer ${
+                        inputModel === item.model
+                          ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/35 font-bold"
+                          : "bg-black/[0.03] dark:bg-white/[0.04] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-transparent"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <input
+                type="text"
+                value={inputModel}
+                onChange={(e) => setInputModel(e.target.value)}
+                placeholder="e.g. gemini-2.0-flash"
+                className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* API Base URL */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+              API Base URL
+            </label>
+            <input
+              type="text"
+              value={inputBaseUrl}
+              onChange={(e) => setInputBaseUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
+            />
+          </div>
+
+          {/* Test Status feedback */}
+          {aiTestResult.status !== "idle" && (
+            <div
+              className={`p-2.5 rounded-xl text-[11px] font-medium border ${
+                aiTestResult.status === "success"
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25"
+                  : "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/25"
+              }`}
+            >
+              {aiTestResult.message}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={handleSaveAiSettings}
+              className="px-4 py-2 rounded-xl text-[11px] font-bold text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:brightness-110 active:scale-[0.97] transition-all cursor-pointer shadow-sm"
+            >
+              Save AI Configuration
+            </button>
+            <button
+              type="button"
+              onClick={handleTestAiConnection}
+              disabled={isTestingAi}
+              className="px-4 py-2 rounded-xl text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/10 disabled:opacity-40 transition-all cursor-pointer"
+            >
+              {isTestingAi ? "Testing..." : "Test Connection"}
+            </button>
+          </div>
+        </div>
+
+        {/* 2-Column Grid: Project & Danger Zone */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Project Preferences */}
+          {project && (
+            <div className="p-4 rounded-xl bg-white/80 dark:bg-[#0c0d16]/70 border border-black/[0.06] dark:border-white/10 backdrop-blur-md space-y-3">
+              <div className="pb-2 border-b border-black/[0.05] dark:border-white/8">
+                <span className="text-[11px] font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wider">
+                  Project Preferences
+                </span>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Update active workspace identity
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                  Project Name
+                </label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="Project name..."
+                    className={`flex-1 ${inputCls}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveProjectName}
+                    disabled={isSavingProject}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-gradient-to-r from-blue-600 to-cyan-500 hover:brightness-110 active:scale-[0.97] disabled:opacity-40 transition-all cursor-pointer shadow-sm flex-shrink-0"
+                  >
+                    {isSavingProject ? "..." : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Danger Zone */}
+          {project && (
+            <div className="p-4 rounded-xl bg-white/80 dark:bg-[#0c0d16]/70 border border-rose-500/20 dark:border-rose-500/15 backdrop-blur-md space-y-3">
+              <div className="pb-2 border-b border-rose-500/10 dark:border-rose-500/10">
+                <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
+                  Danger Zone
+                </span>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Irreversible destructive operations
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal({ isOpen: true, type: "reset" })}
+                  disabled={isDestructiveAction}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/8 hover:bg-rose-500/15 border border-rose-500/20 disabled:opacity-40 transition-all cursor-pointer text-center"
+                >
+                  Reset Project
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal({ isOpen: true, type: "delete" })}
+                  disabled={isDestructiveAction}
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/8 hover:bg-rose-500/15 border border-rose-500/20 disabled:opacity-40 transition-all cursor-pointer text-center"
+                >
+                  Delete Project
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Keyboard Shortcuts */}
+        <div className="p-4 rounded-xl bg-white/80 dark:bg-[#0c0d16]/70 border border-black/[0.06] dark:border-white/10 backdrop-blur-md space-y-2">
+          <span className="text-[11px] font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wider">
+            Shortcuts
+          </span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px] pt-1">
+            {[
+              ["⌘ K", "Command Search"],
+              ["⌘ I", "Import Project"],
+              ["⌘ ,", "Open Settings"],
+              ["Esc", "Close Modal"],
+            ].map(([key, desc]) => (
+              <div key={key} className="flex items-center justify-between p-2 rounded-lg bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.04] dark:border-white/6">
+                <span className="text-neutral-500 dark:text-neutral-400">{desc}</span>
+                <kbd className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/[0.04] dark:bg-white/[0.06] text-neutral-600 dark:text-neutral-300 border border-black/[0.06] dark:border-white/10">
+                  {key}
+                </kbd>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Bar — System Status & AI Copilot Integration */}
+      <div className="relative z-10 max-w-3xl w-full mx-auto mt-6 pt-3 border-t border-black/[0.06] dark:border-white/8">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl bg-white/80 dark:bg-[#0c0d16]/70 border border-black/[0.06] dark:border-white/10 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+            <div className="flex items-center gap-3 text-[10px] font-mono">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Backend: ONLINE</span>
+              <span className="text-neutral-500 dark:text-neutral-400">
+                Project: <strong className="text-neutral-800 dark:text-white">{project?.name || "—"}</strong>
+              </span>
+              <span className={`font-bold ${apiKey ? "text-cyan-600 dark:text-cyan-400" : "text-amber-600 dark:text-amber-400"}`}>
+                AI: {apiKey ? (model?.split("/").pop() || "Active") : "No Key"}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleOpenBotConfig}
+            className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 transition-all cursor-pointer whitespace-nowrap active:scale-[0.97]"
+          >
+            Configure in Copilot Bot
+          </button>
+        </div>
+      </div>
+
+      {/* Confirmation Dialogs */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen && confirmModal.type === "reset"}
+        title="Reset Project Content"
+        message="This will permanently delete all content (pages, blocks, data models, logic) in this project and reset it to a clean slate. Cannot be undone."
+        confirmText="Reset Everything"
+        variant="warning"
+        onConfirm={handleResetConfirm}
+        onCancel={() => setConfirmModal({ isOpen: false, type: null })}
+        isLoading={isDestructiveAction}
+      />
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen && confirmModal.type === "delete"}
+        title={`Delete "${project?.name}"?`}
+        message="This will permanently delete this project from the database."
+        confirmText="Delete Project"
+        variant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => {
+          setConfirmModal({ isOpen: false, type: null });
+          setDeleteFromDisk(false);
+        }}
+        isLoading={isDestructiveAction}
+        checkboxConfig={{
+          label: "Also delete project folder from disk",
+          checked: deleteFromDisk,
+          onChange: setDeleteFromDisk,
+        }}
+      />
+    </div>
+  );
 };
 
 export default SettingsPage;

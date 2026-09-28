@@ -5,18 +5,23 @@
  * - OAuth login redirect & callback (token exchange)
  * - GitHub API proxy calls: user, repos, contents, commits, branches
  * - File-backed token store keyed by session cookie (persists across restarts)
+ * - Direct personal access token support via x-github-token header
  */
 
 import type { Request, Response } from 'express';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'akasha-standalone-jwt-secret';
+
 let UserModel: any = null;
 async function getUserModel() {
     if (UserModel !== null) return UserModel;
     try {
-        const userMod = '../../models/User.js'; const mod = await import(userMod);
+        const userMod = '../../models/User.js';
+        const mod = await import(userMod);
         UserModel = mod.default;
     } catch {
         UserModel = false;
@@ -40,20 +45,18 @@ function loadTokenStore(): Map<string, string> {
     return new Map();
 }
 
+const tokenStore = loadTokenStore();
+
 function saveTokenStore(): void {
     try {
         const dir = dirname(SESSION_FILE);
         if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
         const entries = Array.from(tokenStore.entries());
-        writeFileSync(SESSION_FILE, JSON.stringify(entries), 'utf-8');
+        writeFileSync(SESSION_FILE, JSON.stringify(entries, null, 2), 'utf-8');
     } catch (err) {
-        console.error('[GitHub] Failed to persist session store:', err);
+        console.error('[GitHub] Failed to save session store:', err);
     }
 }
-
-const tokenStore = loadTokenStore();
-
-// ── Helpers ──────────────────────────────────────────────────────
 
 function getClientId(): string {
     return process.env.GITHUB_CLIENT_ID || '';
@@ -64,74 +67,91 @@ function getClientSecret(): string {
 }
 
 function generateSessionId(): string {
-    return crypto.randomUUID();
+    return randomUUID();
 }
 
 function getSessionId(req: Request): string | null {
-    // 1. Check x-gh-session header (localStorage-based, most reliable)
-    const headerSession = req.headers['x-gh-session'] as string | undefined;
-    if (headerSession) return headerSession;
+    // 1. Check custom header x-github-session
+    const headerSid = req.headers['x-github-session'];
+    if (typeof headerSid === 'string' && headerSid) return headerSid;
 
-    // 2. Fallback to cookie header (legacy)
-    const cookies = req.headers.cookie || '';
-    const match = cookies.match(/gh_session=([^;]+)/);
-    return match?.[1] ?? null;
+    // 2. Check query param sessionId
+    const querySid = req.query.sessionId;
+    if (typeof querySid === 'string' && querySid) return querySid;
+
+    // 3. Parse cookies
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+        const match = cookieHeader.match(/gh_session=([^;]+)/);
+        if (match && match[1]) return decodeURIComponent(match[1]);
+    }
+
+    return null;
 }
 
-function setSessionCookie(res: Response, sessionId: string): void {
-    res.setHeader('Set-Cookie', `gh_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`);
+function setSessionCookie(res: Response, sid: string): void {
+    res.setHeader('Set-Cookie', `gh_session=${encodeURIComponent(sid)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
 }
 
 async function getToken(req: Request): Promise<string | null> {
-    // 1. Try to get token from authenticated user from DB
+    // 1. Direct token header (from localStorage PAT or stored token)
+    const directToken = req.headers['x-github-token'];
+    if (typeof directToken === 'string' && directToken.trim()) {
+        return directToken.trim();
+    }
+
+    // 2. Check session store
+    const sid = getSessionId(req);
+    if (sid && tokenStore.has(sid)) {
+        return tokenStore.get(sid)!;
+    }
+
+    // 3. Check DB if authenticated
     if ((req as any).user?.id) {
         try {
-            const user = (await getUserModel()) && await (await getUserModel()).findById((req as any).user.id);
-            if (user && user.githubAccessToken) {
-                return user.githubAccessToken;
+            const User = await getUserModel();
+            if (User) {
+                const doc = await User.findById((req as any).user.id);
+                if (doc && doc.githubAccessToken) {
+                    return doc.githubAccessToken;
+                }
             }
-        } catch (err) {
-            console.error('[GitHub] Error fetching user github token from DB:', err);
-        }
-    }
-    // 2. Fallback to session cookie
-    const sid = getSessionId(req);
-    if (!sid) return null;
-    const sessionToken = tokenStore.get(sid) || null;
-
-    // 3. Auto-save session token to user DB if logged in
-    if (sessionToken && (req as any).user?.id) {
-        try {
-            (await getUserModel()) && await (await getUserModel()).findByIdAndUpdate((req as any).user.id, { githubAccessToken: sessionToken });
-            console.log(`[GitHub] Auto-saved session token to database for user ${(req as any).user.id}`);
         } catch (dbErr) {
-            console.error('[GitHub] Failed to auto-save session token to DB:', dbErr);
+            console.error('[GitHub] Error fetching token from DB:', dbErr);
         }
     }
 
-    return sessionToken;
+    return null;
 }
 
-async function githubFetch(path: string, token: string, options: RequestInit = {}): Promise<any> {
-    const url = path.startsWith('http') ? path : `https://api.github.com${path}`;
+async function githubFetch(endpoint: string, token: string, options: RequestInit = {}): Promise<any> {
+    const url = endpoint.startsWith('http') ? endpoint : `https://api.github.com${endpoint}`;
+    const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Akasha-Platform',
+        ...(options.headers as Record<string, string> || {}),
+    };
+
     const res = await fetch(url, {
         ...options,
-        headers: {
-            'Accept': 'application/vnd.github+json',
-            'Authorization': `Bearer ${token}`,
-            'X-GitHub-Api-Version': '2022-11-28',
-            'User-Agent': 'Akasha-IDE/1.0',
-            ...(options.headers || {}),
-        },
+        headers,
     });
+
     if (!res.ok) {
-        const body = await res.text();
-        throw new Error(`GitHub API ${res.status}: ${body}`);
+        let errMessage = `GitHub API error ${res.status}: ${res.statusText}`;
+        try {
+            const errData = await res.json();
+            if (errData.message) errMessage = errData.message;
+        } catch {
+            // ignore
+        }
+        throw new Error(errMessage);
     }
+
+    if (res.status === 204) return null;
     return res.json();
 }
-
-// ── OAuth Flow ───────────────────────────────────────────────────
 
 /**
  * GET /api/github/login
@@ -242,8 +262,7 @@ export async function callback(req: Request, res: Response): Promise<void> {
         }
 
         // Redirect back to the frontend with a success indicator
-        // The frontend polls /api/github/status after the popup closes
-        // Pass the sessionId via postMessage so the frontend can save it in localStorage
+        // Pass the sessionId and token via postMessage so the frontend can save it in localStorage
         res.send(`
             <!DOCTYPE html>
             <html><head><title>GitHub Connected</title></head>
@@ -257,7 +276,8 @@ export async function callback(req: Request, res: Response): Promise<void> {
                     if (window.opener) {
                         window.opener.postMessage({
                             type: 'github-oauth-success',
-                            sessionId: '${sessionId}'
+                            sessionId: '${sessionId}',
+                            token: '${tokenData.access_token}'
                         }, '*');
                     }
                     setTimeout(() => window.close(), 1500);
@@ -324,10 +344,17 @@ export async function listRepos(req: Request, res: Response): Promise<void> {
         if (!token) { res.status(401).json({ error: 'Not authenticated' }); return; }
 
         const page = req.query.page || '1';
-        const perPage = req.query.per_page || '30';
+        const perPage = req.query.per_page || '100';
         const sort = req.query.sort || 'updated';
+        const type = req.query.type as string;
 
-        const repos = await githubFetch(`/user/repos?page=${page}&per_page=${perPage}&sort=${sort}&affiliation=owner,collaborator`, token);
+        if (type === 'starred') {
+            const starred = await githubFetch(`/user/starred?page=${page}&per_page=${perPage}&sort=${sort}`, token);
+            res.json(starred);
+            return;
+        }
+
+        const repos = await githubFetch(`/user/repos?page=${page}&per_page=${perPage}&sort=${sort}&affiliation=owner,collaborator,organization_member`, token);
         res.json(repos);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -428,6 +455,69 @@ export async function getBranches(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * POST /api/github/repos/:owner/:repo/commit-file
+ * Commits or updates a file (like README.md) on GitHub.
+ */
+export async function commitFile(req: Request, res: Response): Promise<void> {
+    try {
+        const token = await getToken(req);
+        if (!token) { res.status(401).json({ error: 'Not authenticated' }); return; }
+
+        const { owner, repo } = req.params;
+        const { path, content, message, branch, sha: clientSha } = req.body;
+
+        if (!path || content === undefined) {
+            res.status(400).json({ error: 'path and content are required' });
+            return;
+        }
+
+        const targetBranch = branch || 'main';
+        let sha = clientSha;
+
+        // If sha is not provided, check if the file already exists on GitHub to grab its sha
+        if (!sha) {
+            try {
+                const existing = await githubFetch(`/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(targetBranch)}`, token);
+                if (existing && existing.sha) {
+                    sha = existing.sha;
+                }
+            } catch {
+                // File does not exist yet; creating a new file does not require sha
+            }
+        }
+
+        const base64Content = Buffer.from(content, 'utf-8').toString('base64');
+        const commitMessage = message || `docs: update ${path} via Akasha AI`;
+
+        const payload: Record<string, any> = {
+            message: commitMessage,
+            content: base64Content,
+            branch: targetBranch,
+        };
+        if (sha) {
+            payload.sha = sha;
+        }
+
+        const result = await githubFetch(`/repos/${owner}/${repo}/contents/${path}`, token, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        res.json({
+            success: true,
+            commit: result?.commit,
+            content: result?.content,
+        });
+    } catch (error: any) {
+        console.error('[GitHub commitFile] error:', error);
+        res.status(500).json({ error: error.message || 'Failed to commit file to GitHub' });
+    }
+}
+
+/**
  * POST /api/github/disconnect
  * Clears the stored token.
  */
@@ -448,4 +538,125 @@ export async function disconnect(req: Request, res: Response): Promise<void> {
     // Clear cookie
     res.setHeader('Set-Cookie', 'gh_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
     res.json({ success: true });
+}
+
+/**
+ * POST /api/github/ingest
+ * Ingests a GitHub repository and autonomously synthesizes a complete project.
+ */
+export async function ingestRepo(req: Request, res: Response): Promise<void> {
+    try {
+        let { owner, repo, branch, url, apiKey, model, apiBaseUrl } = req.body;
+
+        // Parse owner and repo from URL if provided
+        if (url && typeof url === 'string') {
+            const cleanUrl = url.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '');
+            const parts = cleanUrl.split('/');
+            if (parts.length >= 2) {
+                owner = parts[0];
+                repo = parts[1];
+            }
+        }
+
+        if (!owner || !repo) {
+            res.status(400).json({ error: 'Repository owner and name (or valid GitHub URL) are required' });
+            return;
+        }
+
+        const token = (await getToken(req)) || undefined;
+        const user = (req as any).user;
+        const userId = user?.id || 'standalone-dev';
+        const orgId = user?.orgId;
+
+        const { ingestGitHubRepository } = await import('../services/githubIngestionService.js');
+        const result = await ingestGitHubRepository(
+            owner.trim(),
+            repo.trim(),
+            branch?.trim(),
+            token,
+            userId,
+            orgId,
+            { apiKey, model, apiBaseUrl }
+        );
+
+        res.json({
+            success: true,
+            project: result.project,
+            stats: result.stats
+        });
+    } catch (error: any) {
+        console.error('[GitHub Ingest] Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to ingest repository' });
+    }
+}
+
+/**
+ * POST /api/github/repos/:owner/:repo/sync-tasks
+ * Syncs recent commits against project tasks to auto-mark resolved tasks as done.
+ */
+export async function syncTasks(req: Request, res: Response): Promise<void> {
+    try {
+        const { owner, repo } = req.params;
+        const { projectId, branch } = req.body;
+
+        if (!projectId) {
+            res.status(400).json({ error: 'projectId is required' });
+            return;
+        }
+
+        const token = (await getToken(req)) || undefined;
+        const { syncGitHubTasksForProject } = await import('../services/githubCommitWatcher.js');
+        const result = await syncGitHubTasksForProject(projectId, token, branch);
+
+        res.json(result);
+    } catch (error: any) {
+        console.error('[GitHub SyncTasks] Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to sync tasks' });
+    }
+}
+
+/**
+ * POST /api/github/projects/:projectId/sync-tasks
+ * Convenient shortcut to sync tasks for a project using its saved github_repo settings.
+ */
+export async function syncProjectTasks(req: Request, res: Response): Promise<void> {
+    try {
+        const projectId = req.params.projectId as string;
+        if (!projectId) {
+            res.status(400).json({ error: 'projectId is required' });
+            return;
+        }
+        const { branch } = req.body || {};
+
+        const token = (await getToken(req)) || undefined;
+        const { syncGitHubTasksForProject } = await import('../services/githubCommitWatcher.js');
+        const result = await syncGitHubTasksForProject(projectId, token, branch);
+
+        res.json(result);
+    } catch (error: any) {
+        console.error('[GitHub SyncProjectTasks] Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to sync tasks' });
+    }
+}
+
+/**
+ * POST /api/github/projects/:projectId/auto-sync-check
+ * Checks if the linked GitHub repository has new commits and auto-triggers the Agentic Sync Pipeline.
+ */
+export async function checkProjectAutoSync(req: Request, res: Response): Promise<void> {
+    try {
+        const projectId = req.params.projectId as string;
+        if (!projectId) {
+            res.status(400).json({ error: 'projectId is required' });
+            return;
+        }
+        const { branch } = req.body || {};
+        const token = (await getToken(req)) || undefined;
+        const { checkAndAutoSyncProject } = await import('../services/githubCommitWatcher.js');
+        const result = await checkAndAutoSyncProject(projectId, token, branch);
+        res.json(result);
+    } catch (error: any) {
+        console.error('[GitHub CheckProjectAutoSync] Error:', error);
+        res.status(500).json({ error: error.message || 'Failed to check auto-sync' });
+    }
 }

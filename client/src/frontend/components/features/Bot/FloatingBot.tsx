@@ -13,6 +13,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import BotChat from "./BotChat";
+import CyberPet from "./CyberPet";
 import { useProjectStore } from "../../../hooks/useProjectStore";
 import { setActivePage } from "../../../stores/projectStore";
 
@@ -128,6 +129,11 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [ideaPopover, setIdeaPopover] = useState(false);
 
+    /* ── remote open / prompt triggers ──────────── */
+    const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
+    const [initialContext, setInitialContext] = useState<string | null>(null);
+    const [openSettings, setOpenSettings] = useState(false);
+
     /* ── tip bubble ──────────────────────────────── */
     const [tipText, setTipText] = useState<string | null>(null);
     const [tipFading, setTipFading] = useState(false);
@@ -136,6 +142,28 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
     const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
     const botRef = useRef<HTMLDivElement>(null);
     const didDrag = useRef(false);
+
+    /* ── Listen for global akasha:open-chat custom event ── */
+    useEffect(() => {
+        const handleOpenChat = (e: Event) => {
+            const customEvent = e as CustomEvent<{ prompt?: string; context?: string; openSettings?: boolean }>;
+            setIsOpen(true);
+            setMenuOpen(false);
+            setIdeaPopover(false);
+            if (customEvent.detail?.prompt) {
+                setInitialPrompt(customEvent.detail.prompt);
+            }
+            if (customEvent.detail?.context) {
+                setInitialContext(customEvent.detail.context);
+            }
+            if (customEvent.detail?.openSettings) {
+                setOpenSettings(true);
+            }
+        };
+
+        window.addEventListener("akasha:open-chat", handleOpenChat);
+        return () => window.removeEventListener("akasha:open-chat", handleOpenChat);
+    }, []);
 
     /* ── Inject CSS once ─────────────────────────── */
     useEffect(() => {
@@ -317,8 +345,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
     const menuItems = useMemo(
         () => [
             {
-                icon: "💬",
-                label: "Chat",
+                label: "CHAT",
                 angle: -90,
                 action: () => {
                     setIsOpen(true);
@@ -326,8 +353,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                 },
             },
             {
-                icon: "💡",
-                label: "Idea",
+                label: "IDEA",
                 angle: -30,
                 action: () => {
                     setIdeaPopover(true);
@@ -335,8 +361,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                 },
             },
             {
-                icon: "📋",
-                label: "Tasks",
+                label: "TASKS",
                 angle: 30,
                 action: () => {
                     setActivePage("team");
@@ -344,8 +369,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                 },
             },
             {
-                icon: "🧭",
-                label: "Navigate",
+                label: "PLAN",
                 angle: 90,
                 action: () => {
                     setActivePage("idea");
@@ -353,8 +377,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                 },
             },
             {
-                icon: "🗺️",
-                label: "Diagrams",
+                label: "DIAG",
                 angle: 150,
                 action: () => {
                     setActivePage("diagrams");
@@ -362,8 +385,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                 },
             },
             {
-                icon: "⚙️",
-                label: "Settings",
+                label: "SETT",
                 angle: 210,
                 action: () => {
                     setActivePage("settings");
@@ -375,10 +397,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
     );
 
     /* ── Derived animation values ─────────────────── */
-    const ringDuration = isThinking ? "2s" : isHovered ? "8s" : "20s";
-    const breatheAnim = isDragging ? "none" : "akasha-breathe 4s ease-in-out infinite";
-    const thinkAnim = isThinking ? "akasha-think-hue 2s ease-in-out infinite" : "none";
-    const avatarScale = isDragging ? 1.1 : isHovered ? 1.15 : 1;
+    const avatarScale = isDragging ? 1.05 : isHovered ? 1.08 : 1;
 
     /* ── Context badge text ──────────────────────── */
     const badgeText = PAGE_LABELS[activePage] ?? "GLOBAL";
@@ -388,16 +407,14 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
 
     return (
         <>
-            {/* ───── Floating Avatar ───── */}
+            {/* ───── Floating Avatar (Standalone CyberPet - NO BAR) ───── */}
             {!isOpen && (
                 <div
                     ref={botRef}
                     className={`fixed z-[9999] select-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
                     style={{
-                        left: position.x - 40,
-                        top: position.y - 40,
-                        width: 80,
-                        height: 80,
+                        left: position.x - 27,
+                        top: position.y - 27,
                         transition: isDragging ? "none" : "left 0.4s cubic-bezier(.34,1.56,.64,1), top 0.4s cubic-bezier(.34,1.56,.64,1)",
                     }}
                     onMouseDown={handleMouseDown}
@@ -406,193 +423,65 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
                 >
-                    {/* ── Ambient glow ── */}
+                    {/* ── Standalone Animated CyberPet (NO BAR) ── */}
                     <div
-                        className="absolute rounded-full transition-all duration-500"
+                        className="relative flex items-center justify-center group cursor-pointer"
                         style={{
-                            inset: -8,
-                            background: isThinking
-                                ? "radial-gradient(circle, rgba(251,191,36,0.35) 0%, transparent 70%)"
-                                : "radial-gradient(circle, rgba(6,182,212,0.25) 0%, transparent 70%)",
-                            filter: `blur(${isHovered ? 14 : 10}px)`,
-                        }}
-                    />
-
-                    {/* ── Main SVG avatar ── */}
-                    <svg
-                        viewBox="0 0 80 80"
-                        width={80}
-                        height={80}
-                        className="relative"
-                        style={{
-                            animation: `${breatheAnim}, ${thinkAnim}`,
                             transform: `scale(${avatarScale})`,
-                            transition: "transform 0.35s cubic-bezier(.34,1.56,.64,1)",
                         }}
                     >
-                        <defs>
-                            {/* Gradient for inner core */}
-                            <radialGradient id="akasha-core-grad" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" stopColor="#22d3ee" />
-                                <stop offset="50%" stopColor="#8b5cf6" />
-                                <stop offset="100%" stopColor="#6366f1" />
-                            </radialGradient>
-                            {/* Gradient for ring */}
-                            <linearGradient id="akasha-ring-grad" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stopColor="#22d3ee" />
-                                <stop offset="100%" stopColor="#6366f1" />
-                            </linearGradient>
-                            {/* Glow filter */}
-                            <filter id="akasha-glow">
-                                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                                <feMerge>
-                                    <feMergeNode in="blur" />
-                                    <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                            </filter>
-                            <filter id="akasha-glow-strong">
-                                <feGaussianBlur stdDeviation="4" result="blur" />
-                                <feMerge>
-                                    <feMergeNode in="blur" />
-                                    <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                            </filter>
-                        </defs>
-
-                        {/* ── Outer rotating ring with 6 nodes ── */}
-                        <g
-                            style={{
-                                transformOrigin: "40px 40px",
-                                animation: `akasha-ring-spin ${ringDuration} linear infinite`,
-                            }}
-                        >
-                            <circle
-                                cx={40}
-                                cy={40}
-                                r={34}
-                                fill="none"
-                                stroke="url(#akasha-ring-grad)"
-                                strokeWidth={isDragging ? 1.2 : 1.5}
-                                opacity={0.7}
-                            />
-                            {/* 6 evenly-spaced nodes */}
-                            {[0, 60, 120, 180, 240, 300].map((deg) => {
-                                const rad = (deg * Math.PI) / 180;
-                                return (
-                                    <circle
-                                        key={deg}
-                                        cx={40 + 34 * Math.cos(rad)}
-                                        cy={40 + 34 * Math.sin(rad)}
-                                        r={2}
-                                        fill="#22d3ee"
-                                        opacity={0.9}
-                                        filter="url(#akasha-glow)"
-                                    />
-                                );
-                            })}
-                        </g>
-
-                        {/* ── Inner glowing core ── */}
-                        <circle
-                            cx={40}
-                            cy={40}
-                            r={20}
-                            fill="url(#akasha-core-grad)"
-                            filter="url(#akasha-glow)"
-                            opacity={0.95}
-                        />
-
-                        {/* ── Center "all-seeing" eye ── */}
-                        <circle
-                            cx={40}
-                            cy={40}
-                            r={6}
-                            fill={isThinking ? "#fbbf24" : "#ffffff"}
-                            opacity={0.9}
-                            filter="url(#akasha-glow-strong)"
-                            style={{ animation: "akasha-core-pulse 3s ease-in-out infinite" }}
-                        />
-
-                        {/* ── 3 orbital particles ── */}
-                        <g style={{ transformOrigin: "40px 40px", animation: "akasha-orbit-1 7s linear infinite" }}>
-                            <circle cx={40} cy={40} r={2.2} fill="#67e8f9" opacity={0.85} filter="url(#akasha-glow)" />
-                        </g>
-                        <g style={{ transformOrigin: "40px 40px", animation: "akasha-orbit-2 11s linear infinite" }}>
-                            <circle cx={40} cy={40} r={1.8} fill="#a78bfa" opacity={0.8} filter="url(#akasha-glow)" />
-                        </g>
-                        <g style={{ transformOrigin: "40px 40px", animation: "akasha-orbit-3 9s linear infinite" }}>
-                            <circle cx={40} cy={40} r={1.5} fill="#818cf8" opacity={0.75} filter="url(#akasha-glow)" />
-                        </g>
-                    </svg>
-
-                    {/* ── Context badge ── */}
-                    {!isDragging && (
+                        {/* Ambient levitation shadow pool under pet */}
                         <div
-                            className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5"
-                            style={{ top: 78 }}
-                        >
-                            <span
-                                className="whitespace-nowrap uppercase tracking-[0.18em] font-bold"
-                                style={{
-                                    fontSize: 7,
-                                    color: "rgba(255,255,255,0.5)",
-                                    letterSpacing: "0.18em",
-                                }}
-                            >
-                                AKASHA
-                            </span>
-                            <span
-                                className="whitespace-nowrap rounded-full px-2 py-[1px] uppercase tracking-[0.14em] font-semibold"
-                                style={{
-                                    fontSize: 7,
-                                    background: "rgba(255,255,255,0.07)",
-                                    backdropFilter: "blur(8px)",
-                                    WebkitBackdropFilter: "blur(8px)",
-                                    border: "1px solid rgba(255,255,255,0.10)",
-                                    color: "rgba(255,255,255,0.45)",
-                                }}
-                            >
-                                {badgeText}
-                            </span>
+                            className="absolute -bottom-2.5 w-10 h-2.5 rounded-full bg-cyan-500/25 blur-xs pet-shadow-pool pointer-events-none"
+                            style={{
+                                transform: isHovered ? "scale(1.2) translateY(2px)" : "scale(1)",
+                            }}
+                        />
+
+                        {/* Ambient Ethereal Glow Aura */}
+                        <div
+                            className="absolute -inset-3 rounded-full bg-cyan-400/20 blur-xl transition-opacity duration-300 pointer-events-none"
+                            style={{ opacity: isHovered ? 0.9 : 0.45 }}
+                        />
+
+                        {/* Standalone CyberPet Companion */}
+                        <CyberPet
+                            isThinking={isThinking}
+                            isHovered={isHovered}
+                            size={54}
+                        />
+
+                        {/* Online Status Indicator Node */}
+                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#090d16] shadow-[0_0_8px_#34d399] flex items-center justify-center pointer-events-none">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping opacity-75" />
+                        </span>
+
+                        {/* Sleek Context Micro-Badge on Hover */}
+                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-black/90 border border-white/20 text-[9px] font-black tracking-widest text-cyan-300 uppercase whitespace-nowrap shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none">
+                            AKASHA • {badgeText}
                         </div>
-                    )}
+                    </div>
 
                     {/* ── Tip bubble ── */}
                     {tipText && (
                         <div
                             className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
                             style={{
-                                bottom: 90,
+                                bottom: 62,
                                 animation: tipFading
                                     ? "akasha-tip-out 0.5s ease forwards"
                                     : "akasha-tip-in 0.4s ease forwards",
                             }}
                         >
                             <div
-                                className="relative rounded-lg px-3 py-2 text-[11px] font-medium text-white/90 whitespace-nowrap shadow-lg"
+                                className="relative rounded-xl px-3.5 py-2 text-[11px] font-medium text-neutral-900 dark:text-white whitespace-nowrap shadow-xl backdrop-blur-xl saturate-[200%] bg-white/95 dark:bg-neutral-900/95 border border-black/[0.08] dark:border-white/15"
                                 style={{
-                                    background: "rgba(15,23,42,0.85)",
-                                    backdropFilter: "blur(12px)",
-                                    WebkitBackdropFilter: "blur(12px)",
-                                    border: "1px solid rgba(255,255,255,0.10)",
-                                    maxWidth: 220,
+                                    maxWidth: 240,
                                     whiteSpace: "normal",
                                     textAlign: "center",
                                 }}
                             >
                                 {tipText}
-                                {/* Caret */}
-                                <div
-                                    className="absolute left-1/2 -translate-x-1/2"
-                                    style={{
-                                        bottom: -5,
-                                        width: 0,
-                                        height: 0,
-                                        borderLeft: "5px solid transparent",
-                                        borderRight: "5px solid transparent",
-                                        borderTop: "5px solid rgba(15,23,42,0.85)",
-                                    }}
-                                />
                             </div>
                         </div>
                     )}
@@ -602,26 +491,20 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                         <div className="absolute inset-0" style={{ pointerEvents: "none" }}>
                             {menuItems.map((item, idx) => {
                                 const rad = (item.angle * Math.PI) / 180;
-                                const dist = 60;
-                                const cx = 40 + dist * Math.cos(rad);
-                                const cy = 40 + dist * Math.sin(rad);
+                                const dist = 65;
+                                const cx = dist * Math.cos(rad);
+                                const cy = dist * Math.sin(rad);
                                 return (
                                     <button
                                         key={item.label}
                                         title={item.label}
-                                        className="absolute flex items-center justify-center rounded-full shadow-lg hover:scale-110 transition-transform duration-150"
+                                        className="absolute flex items-center justify-center rounded-full shadow-lg hover:scale-110 active:scale-95 transition-transform duration-150 backdrop-blur-[20px] saturate-[200%] bg-white/90 dark:bg-[#0f172a]/90 border border-black/[0.08] dark:border-white/15 text-neutral-900 dark:text-white font-black text-[9px] tracking-wider cursor-pointer"
                                         style={{
-                                            width: 32,
-                                            height: 32,
-                                            left: cx,
-                                            top: cy,
+                                            width: 36,
+                                            height: 36,
+                                            left: `calc(50% + ${cx}px)`,
+                                            top: `calc(50% + ${cy}px)`,
                                             transform: "translate(-50%, -50%)",
-                                            background: "rgba(15,23,42,0.88)",
-                                            backdropFilter: "blur(12px)",
-                                            WebkitBackdropFilter: "blur(12px)",
-                                            border: "1px solid rgba(255,255,255,0.12)",
-                                            cursor: "pointer",
-                                            fontSize: 14,
                                             pointerEvents: "auto",
                                             animation: `akasha-menu-pop 0.35s cubic-bezier(.34,1.56,.64,1) ${idx * 0.06}s both`,
                                         }}
@@ -631,7 +514,7 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                                             item.action();
                                         }}
                                     >
-                                        {item.icon}
+                                        <span>{item.label}</span>
                                     </button>
                                 );
                             })}
@@ -641,41 +524,37 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
                     {/* ── Idea popover ── */}
                     {ideaPopover && (
                         <div
-                            className="absolute z-10 rounded-xl shadow-2xl p-3"
+                            className="absolute z-10 rounded-2xl shadow-2xl p-4 backdrop-blur-[24px] saturate-[200%] bg-white/95 dark:bg-neutral-900/95 border border-black/[0.08] dark:border-white/15 text-neutral-900 dark:text-white"
                             style={{
-                                width: 220,
-                                right: 86,
-                                top: -10,
-                                background: "rgba(15,23,42,0.92)",
-                                backdropFilter: "blur(16px)",
-                                WebkitBackdropFilter: "blur(16px)",
-                                border: "1px solid rgba(255,255,255,0.10)",
+                                width: 240,
+                                right: 110,
+                                top: -20,
                                 animation: "akasha-tip-in 0.3s ease forwards",
                                 pointerEvents: "auto",
                             }}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 mb-1.5">
+                            <div className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-600 dark:text-cyan-400 mb-1.5">
                                 Project Idea
                             </div>
                             {ideaMeta ? (
                                 <>
-                                    <div className="text-[11px] font-semibold text-white/90 mb-0.5">
+                                    <div className="text-[11px] font-bold text-neutral-900 dark:text-white mb-0.5">
                                         {ideaMeta.ideaName || project?.name || "Untitled"}
                                     </div>
                                     {ideaMeta.tagline && (
-                                        <div className="text-[10px] italic text-white/50 mb-1">
+                                        <div className="text-[10px] italic text-neutral-600 dark:text-neutral-400 mb-1">
                                             {ideaMeta.tagline}
                                         </div>
                                     )}
                                     {ideaMeta.summary && (
-                                        <div className="text-[10px] text-white/60 leading-snug line-clamp-4">
+                                        <div className="text-[10px] text-neutral-700 dark:text-neutral-300 leading-snug line-clamp-4">
                                             {ideaMeta.summary}
                                         </div>
                                     )}
                                 </>
                             ) : (
-                                <div className="text-[10px] text-white/40">
+                                <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
                                     No idea details yet. Start with the Idea page!
                                 </div>
                             )}
@@ -687,11 +566,20 @@ const FloatingBot: React.FC<FloatingBotProps> = ({ isThinking = false }) => {
             {/* ───── Chat Panel ───── */}
             {isOpen && (
                 <BotChat
-                    onClose={() => setIsOpen(false)}
+                    onClose={() => {
+                        setIsOpen(false);
+                        setInitialPrompt(null);
+                        setInitialContext(null);
+                        setOpenSettings(false);
+                    }}
                     projectId={project?.id || null}
                     projectName={project?.name || null}
                     anchorX={position.x}
                     anchorY={position.y}
+                    initialPrompt={initialPrompt}
+                    initialContext={initialContext}
+                    initialOpenSettings={openSettings}
+                    onClearInitialPrompt={() => setInitialPrompt(null)}
                 />
             )}
         </>

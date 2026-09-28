@@ -1,7 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
+import GlassSelect from "../components/ui/GlassSelect";
 import { useApi } from "../hooks/useApi";
 import { useProjectStore } from "../hooks/useProjectStore";
+import { refreshCurrentProject } from "../stores/projectStore";
 import type { UseCaseSchema } from "../types/api";
+import { LiquidCard, LiquidPill } from "../components/ui/LiquidGlass";
+import { useBackgroundLoading } from "../context/BackgroundLoadingContext";
+import { useToast } from "../context/ToastContext";
+import { client } from "../hooks/useHttpApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Priority = "low" | "medium" | "high" | "critical";
@@ -26,196 +32,90 @@ interface UseCase {
   createdAt: string;
 }
 
-// ─── Data Source ─────────────────────────────────────────────────────────────
-const SEED: UseCase[] = [];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const uid = () => `uc-${Math.random().toString(36).slice(2, 8)}`;
 
-const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string; dot: string }> = {
-  critical: { label: "Critical", color: "#ffffff", bg: "rgba(255,255,255,0.1)", dot: "#ffffff" },
-  high:     { label: "High",     color: "#e5e7eb", bg: "rgba(255,255,255,0.08)", dot: "#e5e7eb" },
-  medium:   { label: "Medium",   color: "#9ca3af", bg: "rgba(255,255,255,0.06)", dot: "#9ca3af" },
-  low:      { label: "Low",      color: "#4b5563", bg: "rgba(255,255,255,0.04)", dot: "#4b5563" },
+const PRIORITY_META: Record<Priority, { label: string; badgeClass: string }> = {
+  critical: { label: "Critical", badgeClass: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30" },
+  high:     { label: "High",     badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30" },
+  medium:   { label: "Medium",   badgeClass: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+  low:      { label: "Low",      badgeClass: "bg-neutral-500/15 text-neutral-700 dark:text-neutral-300 border-neutral-500/30" },
 };
 
-const STATUS_META: Record<Status, { label: string; color: string; bg: string }> = {
-  active:    { label: "Active",    color: "#ffffff", bg: "rgba(255,255,255,0.1)"  },
-  draft:     { label: "Draft",     color: "#9ca3af", bg: "rgba(255,255,255,0.05)" },
-  completed: { label: "Completed", color: "#e5e7eb", bg: "rgba(255,255,255,0.08)" },
-  archived:  { label: "Archived",  color: "#6b7280", bg: "rgba(255,255,255,0.03)"  },
+const STATUS_META: Record<Status, { label: string; badgeClass: string }> = {
+  active:    { label: "Active",    badgeClass: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+  draft:     { label: "Draft",     badgeClass: "bg-neutral-500/15 text-neutral-600 dark:text-neutral-400 border-neutral-500/30" },
+  completed: { label: "Completed", badgeClass: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30" },
+  archived:  { label: "Archived",  badgeClass: "bg-neutral-400/15 text-neutral-500 dark:text-neutral-400 border-neutral-400/30" },
 };
 
-// ─── Sub-Components ────────────────────────────────────────────────────────────
-
-const Badge = ({ text, color, bg }: { text: string; color: string; bg: string }) => (
-  <span style={{
-    display: "inline-flex", alignItems: "center", gap: 5,
-    padding: "3px 10px", borderRadius: 20, fontSize: 11,
-    fontFamily: "'Space Mono', monospace", letterSpacing: "0.04em",
-    color, background: bg, border: `1px solid ${color}33`,
-    fontWeight: 500, textTransform: "uppercase",
-  }}>
-    <span style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
+// ─── Sub-Components (Pure Typography, Zero Icons) ──────────────────────────────
+const TypographyBadge = ({ text, badgeClass }: { text: string; badgeClass: string }) => (
+  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeClass}`}>
     {text}
   </span>
 );
 
-const IconSearch = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-  </svg>
-);
-
-const IconPlus = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
-
-const IconClose = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M18 6 6 18M6 6l12 12" />
-  </svg>
-);
-
-const IconEdit = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-  </svg>
-);
-
-const IconTrash = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    <path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-  </svg>
-);
-
-const IconUsers = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
-const IconSteps = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="8" y1="6" x2="21" y2="6" />
-    <line x1="8" y1="12" x2="21" y2="12" />
-    <line x1="8" y1="18" x2="21" y2="18" />
-    <line x1="3" y1="6" x2="3.01" y2="6" />
-    <line x1="3" y1="12" x2="3.01" y2="12" />
-    <line x1="3" y1="18" x2="3.01" y2="18" />
-  </svg>
-);
-
-// ─── Card ─────────────────────────────────────────────────────────────────────
+// ─── Card (Apple Liquid Glass) ────────────────────────────────────────────────
 const UseCaseCard = ({
   uc, onEdit, onDelete,
 }: { uc: UseCase; onEdit: (u: UseCase) => void; onDelete: (id: string) => void }) => {
-  const [hovered, setHovered] = useState(false);
-  const pm = PRIORITY_META[uc.priority];
-  const sm = STATUS_META[uc.status];
+  const pm = PRIORITY_META[uc.priority] || PRIORITY_META.medium;
+  const sm = STATUS_META[uc.status] || STATUS_META.draft;
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "relative",
-        background: hovered
-          ? "rgba(255,255,255,0.06)"
-          : "rgba(255,255,255,0.02)",
-        border: `1px solid ${hovered ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`,
-        borderRadius: 12,
-        padding: "20px 22px",
-        cursor: "pointer",
-        transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)",
-        backdropFilter: "blur(12px)",
-        boxShadow: hovered
-          ? "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)"
-          : "0 2px 8px rgba(0,0,0,0.3)",
-        transform: hovered ? "translateY(-2px)" : "none",
-        overflow: "hidden",
-      }}
+    <LiquidCard
+      variant="glass"
+      className="p-5 cursor-pointer flex flex-col justify-between group hover:scale-[1.01] transition-all duration-300 relative overflow-hidden"
     >
-      {/* Accent line top */}
-      <div style={{
-        position: "absolute", top: 0, left: 22, right: 22, height: 1,
-        background: hovered ? `linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)` : "transparent",
-        transition: "all 0.3s ease",
-      }} />
+      {/* Category Tag & Top Actions */}
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 truncate">
+            {uc.category || "GENERAL"}
+          </span>
+          <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(uc); }}
+              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.16] text-neutral-700 dark:text-neutral-300 transition-colors"
+            >
+              Edit
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(uc.id); }}
+              className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors"
+            >
+              Del
+            </button>
+          </div>
+        </div>
 
-      {/* Category tag */}
-      <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{
-          fontSize: 10, fontFamily: "'Space Mono', monospace", letterSpacing: "0.08em",
-          color: "rgba(255,255,255,0.4)", textTransform: "uppercase",
-        }}>
-          {uc.category}
-        </span>
-        <div style={{ display: "flex", gap: 6, opacity: hovered ? 1 : 0, transition: "opacity 0.2s" }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(uc); }}
-            style={{
-              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 6, color: "white", cursor: "pointer", padding: "4px 8px",
-              display: "flex", alignItems: "center",
-            }}
-          ><IconEdit /></button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(uc.id); }}
-            style={{
-              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 6, color: "rgba(255,255,255,0.6)", cursor: "pointer", padding: "4px 8px",
-              display: "flex", alignItems: "center",
-            }}
-          ><IconTrash /></button>
+        {/* Title */}
+        <h3 className="text-sm font-bold text-neutral-950 dark:text-white mb-2 line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          {uc.name}
+        </h3>
+
+        {/* Description */}
+        <p className="text-xs text-neutral-600 dark:text-neutral-300 mb-4 line-clamp-2 leading-relaxed">
+          {uc.description || "No description provided for this use case."}
+        </p>
+
+        {/* Badges */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <TypographyBadge text={pm.label} badgeClass={pm.badgeClass} />
+          <TypographyBadge text={sm.label} badgeClass={sm.badgeClass} />
         </div>
       </div>
 
-      {/* Title */}
-      <h3 style={{
-        margin: "0 0 8px", fontSize: 15, fontFamily: "'Outfit', sans-serif",
-        fontWeight: 600, color: "#e8f4f8", lineHeight: 1.35, letterSpacing: "-0.01em",
-      }}>{uc.name}</h3>
-
-      {/* Description */}
-      <p style={{
-        margin: "0 0 16px", fontSize: 12.5, color: "rgba(180,210,225,0.6)",
-        lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2,
-        WebkitBoxOrient: "vertical", overflow: "hidden",
-      }}>{uc.description}</p>
-
-      {/* Badges */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-        <Badge text={pm.label} color={pm.color} bg={pm.bg} />
-        <Badge text={sm.label} color={sm.color} bg={sm.bg} />
+      {/* Footer Meta */}
+      <div className="pt-3 border-t border-black/[0.06] dark:border-white/10 flex items-center justify-between text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+        <span>{uc.actors.length} {uc.actors.length === 1 ? "actor" : "actors"}</span>
+        <span>{uc.steps.length} {uc.steps.length === 1 ? "step" : "steps"}</span>
       </div>
-
-      {/* Footer meta */}
-      <div style={{
-        borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12,
-        display: "flex", gap: 16, alignItems: "center",
-      }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>
-          <IconUsers />
-          <span style={{ color: "rgba(255,255,255,0.5)" }}>{uc.actors.length} actor{uc.actors.length !== 1 ? "s" : ""}</span>
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "rgba(255,255,255,0.35)" }}>
-          <IconSteps />
-          <span style={{ color: "rgba(255,255,255,0.5)" }}>{uc.steps.length} steps</span>
-        </span>
-      </div>
-    </div>
+    </LiquidCard>
   );
 };
 
-// ─── Modal ─────────────────────────────────────────────────────────────────────
+// ─── Modal ────────────────────────────────────────────────────────────────────
 const EMPTY: Omit<UseCase, "id" | "createdAt"> = {
   name: "", description: "", actors: [],
   preconditions: "", postconditions: "",
@@ -236,7 +136,6 @@ const Modal = ({
     initial ? { ...initial } : { ...EMPTY }
   );
   const [actorInput, setActorInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"core" | "flow" | "conditions">("core");
 
   const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -245,6 +144,10 @@ const Modal = ({
       set("actors", [...form.actors, actorInput.trim()]);
       setActorInput("");
     }
+  };
+
+  const removeActor = (index: number) => {
+    set("actors", form.actors.filter((_, idx) => idx !== index));
   };
 
   const addStep = () =>
@@ -271,355 +174,272 @@ const Modal = ({
     });
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", background: "rgba(255,255,255,0.02)",
-    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
-    color: "#e8f4f8", fontSize: 13, padding: "9px 12px",
-    outline: "none", fontFamily: "inherit", boxSizing: "border-box",
-    transition: "border-color 0.2s",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 10.5, fontFamily: "'Space Mono', monospace",
-    letterSpacing: "0.08em", color: "rgba(255,255,255,0.4)",
-    textTransform: "uppercase", display: "block", marginBottom: 6,
-  };
-
-  const tabs = [
-    { key: "core", label: "Core Info" },
-    { key: "flow", label: "Steps & Actors" },
-    { key: "conditions", label: "Conditions" },
-  ] as const;
-
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 1000,
-      background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: 20,
-    }}>
-      <div style={{
-        background: "#0a0a0a",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 16, width: "100%", maxWidth: 620,
-        maxHeight: "90vh", display: "flex", flexDirection: "column",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.8)",
-        overflow: "hidden",
-      }}>
-        {/* Header */}
-        <div style={{
-          padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.06)",
-          display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
-        }}>
-          <div>
-            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", marginBottom: 4 }}>
-              {initial ? "EDIT USE CASE" : "NEW USE CASE"}
-            </div>
-            <h2 style={{ margin: 0, fontSize: 17, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#e8f4f8" }}>
-              {initial ? initial.name : "Define Interaction"}
-            </h2>
-          </div>
-          <button onClick={onClose} style={{
-            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 8, color: "rgba(180,210,225,0.6)", cursor: "pointer",
-            padding: "6px 8px", display: "flex", alignItems: "center",
-          }}><IconClose /></button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: "flex", padding: "0 24px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                padding: "12px 16px 10px", fontSize: 12.5,
-                fontFamily: "'Space Mono', monospace", letterSpacing: "0.03em",
-                color: activeTab === t.key ? "white" : "rgba(255,255,255,0.3)",
-                borderBottom: `2px solid ${activeTab === t.key ? "white" : "transparent"}`,
-                transition: "all 0.2s", marginBottom: -1,
-              }}
-            >{t.label}</button>
-          ))}
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: "20px 24px", overflowY: "auto", flex: 1 }}>
-          {/* ── Tab: Core ── */}
-          {activeTab === "core" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label style={labelStyle}>Name *</label>
-                <input style={inputStyle} value={form.name} placeholder="e.g. Reset Password"
-                  onChange={(e) => set("name", e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Description</label>
-                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 80 }}
-                  value={form.description} placeholder="Describe the goal of this interaction…"
-                  onChange={(e) => set("description", e.target.value)} />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={labelStyle}>Category</label>
-                  <input style={inputStyle} value={form.category} placeholder="e.g. Auth"
-                    onChange={(e) => set("category", e.target.value)} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Priority</label>
-                  <select style={{ ...inputStyle, cursor: "pointer" }} value={form.priority}
-                    onChange={(e) => set("priority", e.target.value as Priority)}>
-                    {(["critical", "high", "medium", "low"] as Priority[]).map((p) => (
-                      <option key={p} value={p} style={{ background: "#0d1f31" }}>{PRIORITY_META[p].label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Status</label>
-                  <select style={{ ...inputStyle, cursor: "pointer" }} value={form.status}
-                    onChange={(e) => set("status", e.target.value as Status)}>
-                    {(["draft", "active", "completed", "archived"] as Status[]).map((s) => (
-                      <option key={s} value={s} style={{ background: "#0d1f31" }}>{STATUS_META[s].label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Tab: Flow ── */}
-          {activeTab === "flow" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* Actors */}
-              <div>
-                <label style={labelStyle}>Actors</label>
-                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                  <input style={{ ...inputStyle, flex: 1 }} value={actorInput}
-                    placeholder="Add actor role…"
-                    onChange={(e) => setActorInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addActor()} />
-                  <button onClick={addActor} style={{
-                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-                    borderRadius: 8, color: "white", cursor: "pointer", padding: "0 14px",
-                    fontSize: 18, display: "flex", alignItems: "center",
-                  }}>+</button>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {form.actors.map((a, i) => (
-                    <span key={i} style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: 20, padding: "4px 10px", fontSize: 12, color: "white",
-                    }}>
-                      {a}
-                      <span onClick={() => set("actors", form.actors.filter((_, j) => j !== i))}
-                        style={{ cursor: "pointer", opacity: 0.6, fontSize: 14 }}>×</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Steps */}
-              <div>
-                <label style={labelStyle}>Sequential Steps</label>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {form.steps.map((s, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{
-                        width: 24, height: 24, borderRadius: "50%",
-                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 10, fontFamily: "'Space Mono', monospace",
-                        color: "white", flexShrink: 0,
-                      }}>{s.order}</span>
-                      <input style={{ ...inputStyle, flex: 1 }} value={s.description}
-                        placeholder={`Step ${s.order} description…`}
-                        onChange={(e) => updateStep(i, e.target.value)} />
-                      {form.steps.length > 1 && (
-                        <button onClick={() => removeStep(i)} style={{
-                          background: "rgba(255,69,96,0.06)", border: "1px solid rgba(255,69,96,0.15)",
-                          borderRadius: 6, color: "#ff4560", cursor: "pointer", padding: "6px 8px",
-                          display: "flex", alignItems: "center",
-                        }}><IconTrash /></button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <button onClick={addStep} style={{
-                  marginTop: 10, background: "rgba(255,255,255,0.02)",
-                  border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 8,
-                  color: "rgba(255,255,255,0.3)", cursor: "pointer", padding: "8px 16px",
-                  fontSize: 12, fontFamily: "'Space Mono', monospace", width: "100%",
-                  transition: "all 0.2s",
-                }}>+ Add Step</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Tab: Conditions ── */}
-          {activeTab === "conditions" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
-                <label style={labelStyle}>Preconditions</label>
-                <div style={{
-                  fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 8,
-                  fontFamily: "'Space Mono', monospace",
-                }}>State that must be true before this interaction begins</div>
-                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
-                  value={form.preconditions} placeholder="e.g. User has a verified account. Service is running."
-                  onChange={(e) => set("preconditions", e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Postconditions</label>
-                <div style={{
-                  fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 8,
-                  fontFamily: "'Space Mono', monospace",
-                }}>Expected outcome after successful completion</div>
-                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 100 }}
-                  value={form.postconditions} placeholder="e.g. Session is created. User is redirected to dashboard."
-                  onChange={(e) => set("postconditions", e.target.value)} />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          padding: "14px 24px", borderTop: "1px solid rgba(255,255,255,0.06)",
-          display: "flex", justifyContent: "flex-end", gap: 10, flexShrink: 0,
-        }}>
-          <button onClick={onClose} style={{
-            background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: 8, color: "rgba(255,255,255,0.5)", cursor: "pointer",
-            padding: "9px 20px", fontSize: 13, fontFamily: "inherit",
-          }}>Cancel</button>
-          <button onClick={handleSave} style={{
-            background: "white",
-            border: "none", borderRadius: 8,
-            color: "black", cursor: "pointer", padding: "9px 22px",
-            fontSize: 13, fontFamily: "inherit", fontWeight: 700,
-            boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
-          }}>
-            {initial ? "Save Changes" : "Create Use Case"}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
+      <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white/95 dark:bg-neutral-900/95 border border-black/[0.1] dark:border-white/15 p-6 shadow-2xl space-y-5 text-neutral-900 dark:text-white">
+        <div className="flex items-center justify-between pb-3 border-b border-black/[0.08] dark:border-white/10">
+          <h2 className="text-base font-bold">
+            {initial ? "Edit Use Case" : "New Use Case"}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-xs font-bold uppercase text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+          >
+            Close
           </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">
+              Title
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="e.g. User logs into portal"
+              className="w-full h-9 px-3 rounded-xl bg-white dark:bg-white/[0.08] border border-black/15 dark:border-white/15 text-xs font-semibold text-neutral-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">
+              Category
+            </label>
+            <input
+              type="text"
+              value={form.category}
+              onChange={(e) => set("category", e.target.value)}
+              placeholder="e.g. Authentication, Billing, Clinical"
+              className="w-full h-9 px-3 rounded-xl bg-white dark:bg-white/[0.08] border border-black/15 dark:border-white/15 text-xs font-semibold text-neutral-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">
+                Priority
+              </label>
+              <GlassSelect
+                value={form.priority}
+                onChange={(v) => set("priority", v as Priority)}
+                options={[
+                  { value: "low", label: "Low" },
+                  { value: "medium", label: "Medium" },
+                  { value: "high", label: "High" },
+                  { value: "critical", label: "Critical" },
+                ]}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">
+                Status
+              </label>
+              <GlassSelect
+                value={form.status}
+                onChange={(v) => set("status", v as Status)}
+                options={[
+                  { value: "draft", label: "Draft" },
+                  { value: "active", label: "Active" },
+                  { value: "completed", label: "Completed" },
+                  { value: "archived", label: "Archived" },
+                ]}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">
+              Description
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+              rows={3}
+              placeholder="Detailed description of the workflow..."
+              className="w-full p-3 rounded-xl bg-white dark:bg-white/[0.08] border border-black/15 dark:border-white/15 text-xs font-semibold text-neutral-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+
+          {/* Actors */}
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">
+              Actors
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={actorInput}
+                onChange={(e) => setActorInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addActor(); } }}
+                placeholder="Add actor (e.g. Doctor, Patient)..."
+                className="flex-1 h-8 px-3 rounded-lg bg-white dark:bg-white/[0.08] border border-black/15 dark:border-white/15 text-xs font-semibold text-neutral-950 dark:text-white"
+              />
+              <LiquidPill variant="secondary" size="sm" onClick={addActor}>
+                Add
+              </LiquidPill>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {form.actors.map((actor, idx) => (
+                <span
+                  key={idx}
+                  onClick={() => removeActor(idx)}
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-black/[0.05] dark:bg-white/[0.1] text-neutral-800 dark:text-neutral-200 cursor-pointer hover:bg-rose-500/20 hover:text-rose-600"
+                >
+                  {actor} ×
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Flow Steps */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">
+                Workflow Steps ({form.steps.length})
+              </label>
+              <button
+                type="button"
+                onClick={addStep}
+                className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                + Add Step
+              </button>
+            </div>
+            <div className="space-y-2">
+              {form.steps.map((step, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-neutral-500 w-5 text-center">
+                    {step.order}
+                  </span>
+                  <input
+                    type="text"
+                    value={step.description}
+                    onChange={(e) => updateStep(idx, e.target.value)}
+                    placeholder={`Step ${step.order} description...`}
+                    className="flex-1 h-8 px-3 rounded-lg bg-white dark:bg-white/[0.08] border border-black/15 dark:border-white/15 text-xs font-semibold text-neutral-950 dark:text-white"
+                  />
+                  {form.steps.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeStep(idx)}
+                      className="text-xs text-rose-500 px-1 font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-4 border-t border-black/[0.08] dark:border-white/10">
+          <LiquidPill variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </LiquidPill>
+          <LiquidPill variant="primary" size="sm" onClick={handleSave}>
+            {initial ? "Save Changes" : "Create Use Case"}
+          </LiquidPill>
         </div>
       </div>
     </div>
   );
 };
 
-// ─── Detail Drawer ─────────────────────────────────────────────────────────────
+// ─── Detail Drawer ────────────────────────────────────────────────────────────
 const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onEdit: () => void }) => {
-  const pm = PRIORITY_META[uc.priority];
-  const sm = STATUS_META[uc.status];
+  const pm = PRIORITY_META[uc.priority] || PRIORITY_META.medium;
+  const sm = STATUS_META[uc.status] || STATUS_META.draft;
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 900,
-      display: "flex", justifyContent: "flex-end",
-    }} onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 440, height: "100%", overflowY: "auto",
-          background: "#050508",
-          borderLeft: "1px solid rgba(255,255,255,0.1)",
-          boxShadow: "-20px 0 60px rgba(0,0,0,0.8)",
-          padding: "28px 28px 40px",
-          display: "flex", flexDirection: "column", gap: 20,
-        }}
+        className="w-full max-w-md h-full overflow-y-auto bg-white/95 dark:bg-neutral-950/95 border-l border-black/[0.08] dark:border-white/10 p-6 shadow-2xl flex flex-col justify-between text-neutral-950 dark:text-white space-y-6"
       >
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{ flex: 1, paddingRight: 12 }}>
-            <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em", marginBottom: 6 }}>
-              {uc.category} · {uc.id.toUpperCase()}
+        <div className="space-y-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+                {uc.category || "GENERAL"} · {uc.id.toUpperCase()}
+              </span>
+              <h2 className="text-lg font-bold text-neutral-950 dark:text-white mt-1">
+                {uc.name}
+              </h2>
             </div>
-            <h2 style={{ margin: 0, fontSize: 18, fontFamily: "'Outfit', sans-serif", fontWeight: 600, color: "#e8f4f8", lineHeight: 1.3 }}>{uc.name}</h2>
+            <div className="flex items-center gap-1.5">
+              <LiquidPill variant="secondary" size="sm" onClick={onEdit}>
+                Edit
+              </LiquidPill>
+              <button
+                onClick={onClose}
+                className="text-xs font-bold uppercase text-neutral-500 hover:text-neutral-900 dark:hover:text-white px-2"
+              >
+                Close
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button onClick={onEdit} style={{
-              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 8, color: "white", cursor: "pointer", padding: "7px 12px",
-              display: "flex", alignItems: "center", gap: 6, fontSize: 12,
-            }}><IconEdit /> Edit</button>
-            <button onClick={onClose} style={{
-              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 8, color: "rgba(180,210,225,0.5)", cursor: "pointer",
-              padding: "7px 9px", display: "flex", alignItems: "center",
-            }}><IconClose /></button>
+
+          <div className="flex items-center gap-2">
+            <TypographyBadge text={pm.label} badgeClass={pm.badgeClass} />
+            <TypographyBadge text={sm.label} badgeClass={sm.badgeClass} />
           </div>
-        </div>
 
-        {/* Badges */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Badge text={pm.label} color={pm.color} bg={pm.bg} />
-          <Badge text={sm.label} color={sm.color} bg={sm.bg} />
-        </div>
-
-        {/* Description */}
-        <p style={{ margin: 0, fontSize: 13.5, color: "rgba(180,210,225,0.65)", lineHeight: 1.7 }}>{uc.description}</p>
-
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }} />
-
-        {/* Actors */}
-        <div>
-          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: 10 }}>ACTORS</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {uc.actors.map((a, i) => (
-              <span key={i} style={{
-                background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.18)",
-                borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#a8d8ea",
-              }}>{a}</span>
-            ))}
+          <div>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1.5">
+              Description
+            </h4>
+            <p className="text-xs text-neutral-700 dark:text-neutral-300 leading-relaxed">
+              {uc.description || "No description provided."}
+            </p>
           </div>
-        </div>
 
-        {/* Steps */}
-        <div>
-          <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: 12 }}>FLOW — {uc.steps.length} STEPS</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {uc.steps.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 14 }}>
-                {/* Timeline line */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                  <div style={{
-                    width: 22, height: 22, borderRadius: "50%",
-                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 9, fontFamily: "'Space Mono', monospace", color: "white",
-                  }}>{s.order}</div>
-                  {i < uc.steps.length - 1 && (
-                    <div style={{ width: 1, flex: 1, minHeight: 16, background: "linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.05) 100%)", marginTop: 4 }} />
-                  )}
-                </div>
-                <div style={{ paddingBottom: i < uc.steps.length - 1 ? 14 : 0, paddingTop: 2 }}>
-                  <p style={{ margin: 0, fontSize: 13, color: "rgba(180,210,225,0.75)", lineHeight: 1.6 }}>{s.description}</p>
-                </div>
+          {uc.actors.length > 0 && (
+            <div>
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                Actors
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {uc.actors.map((actor, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/[0.05] dark:bg-white/[0.08] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/10"
+                  >
+                    {actor}
+                  </span>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {uc.steps.length > 0 && (
+            <div>
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                Workflow Sequence
+              </h4>
+              <div className="space-y-2">
+                {uc.steps.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5 text-xs">
+                    <span className="w-5 h-5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0">
+                      {step.order}
+                    </span>
+                    <span className="text-neutral-800 dark:text-neutral-200 leading-relaxed">
+                      {step.description}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Conditions */}
-        {(uc.preconditions || uc.postconditions) && (
-          <>
-            <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 4 }} />
-            {uc.preconditions && (
-              <div>
-                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", marginBottom: 8 }}>PRECONDITIONS</div>
-                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px" }}>{uc.preconditions}</p>
-              </div>
-            )}
-            {uc.postconditions && (
-              <div>
-                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em", marginBottom: 8 }}>POSTCONDITIONS</div>
-                <p style={{ margin: 0, fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px" }}>{uc.postconditions}</p>
-              </div>
-            )}
-          </>
-        )}
+        <div className="pt-4 border-t border-black/[0.08] dark:border-white/10 flex justify-end">
+          <LiquidPill variant="secondary" size="sm" onClick={onClose}>
+            Close Details
+          </LiquidPill>
+        </div>
       </div>
     </div>
   );
@@ -629,8 +449,46 @@ const Drawer = ({ uc, onClose, onEdit }: { uc: UseCase; onClose: () => void; onE
 export default function UseCasesPage() {
   const api = useApi();
   const { project } = useProjectStore();
-  const [useCases, setUseCases] = useState<UseCase[]>(SEED);
+  const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [search, setSearch] = useState("");
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const toast = useToast();
+  const { startTask, completeTask, failTask } = useBackgroundLoading();
+
+  const handleSynthesizeUseCases = async () => {
+    if (!project?.id) return;
+    setIsSynthesizing(true);
+    startTask({
+      title: "Agent: Use Cases",
+      step: "Synthesizing actor workflows...",
+      progress: 50,
+    });
+    toast.showToast("Mapping actor workflows in background...", "info");
+    try {
+      const res = await client.post("/ai/agent/synthesize-step", {
+        projectId: project.id,
+        step: "usecases",
+      });
+      if (res.data?.success) {
+        completeTask({
+          resultSummary: "Workflows Ready ✓",
+          step: "Mapped actor journeys and scenarios",
+        });
+        toast.showToast("Workflows synthesized successfully!", "success");
+        await refreshCurrentProject();
+        const rows = (await api.listUseCases()) as UseCaseSchema[];
+        setUseCases(Array.isArray(rows) ? rows.map(fromApiUseCase) : []);
+      } else {
+        failTask({ error: res.data?.error || "Failed to synthesize use cases" });
+        toast.showToast(`Error: ${res.data?.error}`, "error");
+      }
+    } catch (err: any) {
+      failTask({ error: err.message });
+      toast.showToast(`Failed: ${err.message}`, "error");
+    } finally {
+      setIsSynthesizing(false);
+    }
+  };
   const [filterStatus, setFilterStatus] = useState<Status | "all">("all");
   const [filterPriority, setFilterPriority] = useState<Priority | "all">("all");
   const [filterActor, setFilterActor] = useState<string>("all");
@@ -759,148 +617,137 @@ export default function UseCasesPage() {
     setModalOpen(true);
   };
 
-  const selectStyle: React.CSSProperties = {
-    width: "100%", background: "rgba(255,255,255,0.02)",
-    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
-    color: "#e8f4f8", fontSize: 12.5, padding: "8px 12px",
-    outline: "none", fontFamily: "'Space Mono', monospace",
-    boxSizing: "border-box", transition: "border-color 0.2s",
-    cursor: "pointer",
-  };
-
   return (
-    <div style={{
-      height: "100%", overflowY: "auto", position: "relative",
-      background: "var(--ide-bg)",
-      color: "var(--ide-text)",
-    }}>
-      {/* Background grid */}
-      <div style={{
-        position: "fixed", inset: 0, pointerEvents: "none",
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)
-        `,
-        backgroundSize: "48px 48px",
-      }} />
-
-      <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
+    <div className="h-full w-full overflow-y-auto relative p-6 sm:p-10 select-none">
+      <div className="relative z-10 max-w-6xl mx-auto space-y-6">
 
         {/* ── Header ── */}
-        <div style={{ marginBottom: 32, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, animation: "fadeSlideUp 0.5s ease-out both" }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/[0.08] dark:border-white/10">
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{
-                width: 6, height: 24, background: "linear-gradient(180deg, #ffffff, rgba(255,255,255,0.1))",
-                borderRadius: 3,
-              }} />
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", color: "var(--ide-text)" }}>
-                Use Cases
-              </h1>
-            </div>
-            <p style={{ margin: 0, fontSize: 13.5, color: "var(--ide-text-secondary)", paddingLeft: 16, fontFamily: "'Space Mono', monospace" }}>
-              {stats.total} total · {stats.active} active · {stats.critical} critical
+            <h1 className="text-xl font-bold tracking-tight text-neutral-950 dark:text-white">
+              Use Cases
+            </h1>
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+              {stats.total} total · {stats.active} active · {stats.critical} critical · {stats.draft} draft
             </p>
           </div>
-          <button
-            onClick={() => { setEditTarget(undefined); setModalOpen(true); }}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              background: "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)",
-              border: "1px solid rgba(255,255,255,0.25)", borderRadius: 10,
-              color: "#ffffff", cursor: "pointer", padding: "10px 20px",
-              fontSize: 13.5, fontFamily: "inherit", fontWeight: 600,
-              boxShadow: "0 0 20px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.05)",
-              transition: "all 0.2s",
-            }}
-          >
-            <IconPlus /> New Use Case
-          </button>
+          <div className="flex items-center gap-2">
+            <LiquidPill
+              variant="secondary"
+              size="sm"
+              onClick={handleSynthesizeUseCases}
+              disabled={isSynthesizing}
+            >
+              {isSynthesizing ? "Mapping…" : "AI Map Workflows"}
+            </LiquidPill>
+            <LiquidPill
+              variant="primary"
+              size="sm"
+              onClick={() => { setEditTarget(undefined); setModalOpen(true); }}
+            >
+              + New Use Case
+            </LiquidPill>
+          </div>
         </div>
 
-        {/* ── Stats ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+        {/* ── Stat Counters (High Contrast) ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: "Total", value: stats.total, color: "#ffffff" },
-            { label: "Active", value: stats.active, color: "#e5e7eb" },
-            { label: "Critical", value: stats.critical, color: "#ffffff" },
-            { label: "Draft", value: stats.draft, color: "#9ca3af" },
+            { label: "Total", value: stats.total, colorClass: "text-neutral-950 dark:text-white" },
+            { label: "Active", value: stats.active, colorClass: "text-emerald-700 dark:text-emerald-400" },
+            { label: "Critical", value: stats.critical, colorClass: "text-rose-700 dark:text-rose-400" },
+            { label: "Draft", value: stats.draft, colorClass: "text-neutral-600 dark:text-neutral-400" },
           ].map((s) => (
-            <div key={s.label} style={{
-              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 10, padding: "14px 18px",
-              borderTop: `2px solid ${s.color}33`,
-            }}>
-              <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label.toUpperCase()}</div>
-              <div style={{ fontSize: 26, fontWeight: 700, color: s.color, letterSpacing: "-0.02em", fontFamily: "'Outfit', sans-serif" }}>{s.value}</div>
-            </div>
+            <LiquidCard key={s.label} variant="glass" className="p-4 flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+                {s.label}
+              </span>
+              <span className={`text-2xl font-black mt-1 ${s.colorClass}`}>
+                {s.value}
+              </span>
+            </LiquidCard>
           ))}
         </div>
 
-        {/* ── Filters ── */}
-        <div style={{
-          display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 24,
-          background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
-          borderRadius: 12, padding: "14px 16px",
-        }}>
+        {/* ── Filter Bar (Compact Single-Row Horizontal Toolbar) ── */}
+        <div className="relative z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 px-3 rounded-xl bg-white/80 dark:bg-[#0c0d16]/70 border border-black/[0.06] dark:border-white/10 backdrop-blur-md">
           {/* Search */}
-          <div style={{ flex: 1, minWidth: 200, position: "relative", display: "flex", alignItems: "center" }}>
-            <span style={{ position: "absolute", left: 12, color: "rgba(255,255,255,0.4)", display: "flex" }}><IconSearch /></span>
+          <div className="relative flex-1 max-w-sm">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 dark:text-neutral-500 text-xs pointer-events-none">
+              ⌕
+            </span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search use cases…"
-              style={{
-                width: "100%", background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8,
-                color: "#e8f4f8", fontSize: 13, padding: "8px 12px 8px 36px",
-                outline: "none", fontFamily: "inherit", boxSizing: "border-box",
-              }}
+              placeholder="Search use cases..."
+              className="w-full h-8 pl-8 pr-3 rounded-lg bg-white/90 dark:bg-[#07090f]/80 border border-black/[0.08] dark:border-white/12 text-xs font-semibold text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all"
             />
           </div>
 
-          <select style={selectStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as Status | "all")}>
-            <option value="all" style={{ background: "#0d1f31" }}>All Statuses</option>
-            {(["draft", "active", "completed", "archived"] as Status[]).map((s) => (
-              <option key={s} value={s} style={{ background: "#0d1f31" }}>{STATUS_META[s].label}</option>
-            ))}
-          </select>
+          {/* Filter Dropdowns on the right — Single Horizontal Line */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <GlassSelect
+              value={filterStatus}
+              onChange={(v) => setFilterStatus(v as Status | "all")}
+              className="w-36 flex-shrink-0"
+              options={[
+                { value: "all", label: "All Statuses" },
+                { value: "active", label: "Active" },
+                { value: "draft", label: "Draft" },
+                { value: "completed", label: "Completed" },
+                { value: "archived", label: "Archived" },
+              ]}
+            />
 
-          <select style={selectStyle} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value as Priority | "all")}>
-            <option value="all" style={{ background: "#0d1f31" }}>All Priorities</option>
-            {(["critical", "high", "medium", "low"] as Priority[]).map((p) => (
-              <option key={p} value={p} style={{ background: "#0d1f31" }}>{PRIORITY_META[p].label}</option>
-            ))}
-          </select>
+            <GlassSelect
+              value={filterPriority}
+              onChange={(v) => setFilterPriority(v as Priority | "all")}
+              className="w-36 flex-shrink-0"
+              options={[
+                { value: "all", label: "All Priorities" },
+                { value: "critical", label: "Critical" },
+                { value: "high", label: "High" },
+                { value: "medium", label: "Medium" },
+                { value: "low", label: "Low" },
+              ]}
+            />
 
-          <select style={selectStyle} value={filterActor} onChange={(e) => setFilterActor(e.target.value)}>
-            <option value="all" style={{ background: "#0d1f31" }}>All Actors</option>
-            {allActors.map((a) => (
-              <option key={a} value={a} style={{ background: "#0d1f31" }}>{a}</option>
-            ))}
-          </select>
+            {allActors.length > 0 && (
+              <GlassSelect
+                value={filterActor}
+                onChange={(v) => setFilterActor(v)}
+                className="w-36 flex-shrink-0"
+                options={[
+                  { value: "all", label: "All Actors" },
+                  ...allActors.map((a) => ({ value: a, label: a })),
+                ]}
+              />
+            )}
 
-          {(search || filterStatus !== "all" || filterPriority !== "all" || filterActor !== "all") && (
-            <button onClick={() => { setSearch(""); setFilterStatus("all"); setFilterPriority("all"); setFilterActor("all"); }}
-              style={{
-                background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 14px",
-                fontSize: 11.5, fontFamily: "'Space Mono', monospace",
-              }}>Clear</button>
-          )}
+            {(search || filterStatus !== "all" || filterPriority !== "all" || filterActor !== "all") && (
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setFilterStatus("all"); setFilterPriority("all"); setFilterActor("all"); }}
+                className="h-8 px-2.5 rounded-lg text-[10px] font-bold text-neutral-500 hover:text-neutral-900 dark:hover:text-white bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/10 transition-all cursor-pointer whitespace-nowrap"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* ── Grid ── */}
+        {/* ── Cards Grid ── */}
         {filtered.length === 0 ? (
-          <div style={{
-            textAlign: "center", padding: "80px 0",
-              color: "var(--ide-text-secondary)", fontFamily: "'Space Mono', monospace", fontSize: 13,
-          }}>
-            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.3 }}>◈</div>
-            No use cases match your filters.
-          </div>
+          <LiquidCard variant="glass" className="p-12 text-center">
+            <span className="text-xs font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 block mb-1">
+              No Use Cases Found
+            </span>
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-sm mx-auto">
+              Create a new use case or adjust your filters to view specifications.
+            </p>
+          </LiquidCard>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((uc) => (
               <div key={uc.id} onClick={() => setDrawerTarget(uc)}>
                 <UseCaseCard uc={uc} onEdit={openEdit} onDelete={handleDelete} />
@@ -927,17 +774,6 @@ export default function UseCasesPage() {
           onEdit={() => openEdit(drawerTarget)}
         />
       )}
-
-      {/* Font import */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.15); border-radius: 3px; }
-        input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.25); }
-        select option { background: #0a0a0a; color: #e8f4f8; }
-      `}</style>
     </div>
   );
 }

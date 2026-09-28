@@ -30,30 +30,26 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({ zoom, onZoomChange
             <button
                 disabled={!canUndo}
                 onClick={() => actions.history.undo()}
-                className={`p-1 rounded-md transition-all ${canUndo
+                className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider transition-all ${canUndo
                         ? "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-white/10 hover:shadow-sm"
                         : "text-[var(--ide-text-muted)] opacity-30 cursor-not-allowed"
                     }`}
                 title="Undo (Ctrl+Z)"
             >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
+                UNDO
             </button>
 
             {/* Redo */}
             <button
                 disabled={!canRedo}
                 onClick={() => actions.history.redo()}
-                className={`p-1 rounded-md transition-all ${canRedo
+                className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider transition-all ${canRedo
                         ? "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-white/10 hover:shadow-sm"
                         : "text-[var(--ide-text-muted)] opacity-30 cursor-not-allowed"
                     }`}
                 title="Redo (Ctrl+Y)"
             >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 10H11a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
-                </svg>
+                REDO
             </button>
 
             {/* Separator */}
@@ -62,12 +58,10 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({ zoom, onZoomChange
             {/* Zoom Out */}
             <button
                 onClick={zoomOut}
-                className="p-1 text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-white/10 rounded-md transition-all"
+                className="w-5 h-5 flex items-center justify-center text-[11px] font-bold text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-white/10 rounded transition-all leading-none"
                 title="Zoom Out"
             >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
-                </svg>
+                -
             </button>
 
             {/* Zoom Level */}
@@ -82,12 +76,10 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({ zoom, onZoomChange
             {/* Zoom In */}
             <button
                 onClick={zoomIn}
-                className="p-1 text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-white/10 rounded-md transition-all"
+                className="w-5 h-5 flex items-center justify-center text-[11px] font-bold text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-white/10 rounded transition-all leading-none"
                 title="Zoom In"
             >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                </svg>
+                +
             </button>
         </div>
     );

@@ -53,6 +53,7 @@ router.post('/ui-builder/stream', uiBuilderCtrl.stream);
 router.post('/analyze-idea', ctrl.analyzeIdea);
 router.post('/review-idea-feature', ctrl.reviewIdeaFeature);
 router.post('/refine-idea', ctrl.refineIdea);
+router.post('/refine-section', ctrl.refineSection);
 
 // Database Schema Generation
 router.post('/generate-schema', ctrl.generateSchemaFromIdea);
@@ -68,4 +69,12 @@ router.post('/sandbox/save', ctrl.sandboxSave);
 router.get('/sandbox/load/:projectId', ctrl.sandboxLoad);
 router.post('/sandbox/auto-save', ctrl.sandboxAutoSave);
 
+// Autonomous Agent Synthesizer endpoints
+router.post('/agent/plan', ctrl.agentPlan);
+router.post('/agent/synthesize-step', ctrl.agentSynthesizeStep);
+router.post('/agent/synthesize-all', ctrl.agentSynthesizeAll);
+router.post('/agent/sync-pipeline', ctrl.agentSynthesizeAll);
+router.get('/agent/status/:projectId', ctrl.agentGetStatus);
+
 export default router;
+

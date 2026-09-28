@@ -1,10 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { useToast } from '../context/ToastContext';
 import { httpApi } from '../hooks/useHttpApi';
-import StructuredAiResponseCard from '../components/ui/StructuredAiResponse';
 import { normalizeAiResponse, type StructuredAiResponse } from '../utils/aiResponse';
-import { getSampleProjectIdeaJson } from '../utils/projectTemplates';
 
 interface IdeaWorkshopProps {
     projectName: string;
@@ -96,7 +94,7 @@ interface RefinedIdeaDoc {
     open_questions: string[];
 }
 
-const QUICK_PROMPTS = [
+export const QUICK_PROMPTS = [
     'What is the biggest market risk here?',
     'Suggest an MVP scope for 4 weeks.',
     'What should we cut to ship faster?',
@@ -106,70 +104,6 @@ const QUICK_PROMPTS = [
 ];
 
 const WORKFLOW_STEPS = ['Capture', 'Analyze', 'Decide', 'Finalize'];
-
-const IDEA_SECTION_TEMPLATES = [
-    {
-        id: 'problem',
-        label: 'Problem',
-        content:
-            '## Problem\n- What pain point exists today?\n- Who is affected and how often?\n- Why current alternatives fail?',
-    },
-    {
-        id: 'users',
-        label: 'Users',
-        content:
-            '## Target Users\n- Primary users:\n- Secondary users:\n- User context and constraints:',
-    },
-    {
-        id: 'value',
-        label: 'Value',
-        content:
-            '## Value Proposition\n- Core value:\n- Differentiator:\n- Why users will switch:',
-    },
-    {
-        id: 'mvp',
-        label: 'MVP',
-        content:
-            '## MVP Scope\n- Must-have features:\n- Nice-to-have features:\n- Out of scope for v1:',
-    },
-    {
-        id: 'constraints',
-        label: 'Constraints',
-        content:
-            '## Constraints\n- Timeline:\n- Budget/team:\n- Technical constraints:\n- Compliance/security constraints:',
-    },
-];
-
-const FULL_IDEA_TEMPLATE = `## Problem
-- What pain point exists today?
-- Who is affected and how often?
-- Why current alternatives fail?
-
-## Target Users
-- Primary users:
-- Secondary users:
-- User context and constraints:
-
-## Value Proposition
-- Core value:
-- Differentiator:
-- Why users will switch:
-
-## MVP Scope
-- Must-have features:
-- Nice-to-have features:
-- Out of scope for v1:
-
-## Constraints
-- Timeline:
-- Budget/team:
-- Technical constraints:
-- Compliance/security constraints:
-
-## Success Metrics
-- Metric 1:
-- Metric 2:
-- Metric 3:`;
 
 const IDEA_READINESS_CHECKS = [
     { id: 'problem', label: 'Problem clarity', pattern: /(problem|pain|challenge|issue)/i },
@@ -486,7 +420,6 @@ export default function IdeaWorkshop({
     const [idea, setIdea] = useState(initialIdea ?? '');
     const [analysis, setAnalysis] = useState<IdeaAnalysisResult | null>(null);
     const [history, setHistory] = useState<{ role: 'user' | 'assistant'; content: string; structured?: StructuredAiResponse }[]>([]);
-    const [chatInput, setChatInput] = useState('');
     const [isChatting, setIsChatting] = useState(false);
     const [refinedIdea, setRefinedIdea] = useState('');
     const [refinedDoc, setRefinedDoc] = useState<RefinedIdeaDoc | null>(null);
@@ -640,42 +573,6 @@ export default function IdeaWorkshop({
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
     }, [phase, analysis, featureDecisions, workingDoc, history, workshopStorageKey]);
-
-    const appendTemplateContent = (content: string) => {
-        setIdea((prev) => {
-            const trimmed = prev.trimEnd();
-            if (!trimmed) return content;
-            return `${trimmed}\n\n${content}`;
-        });
-    };
-
-    const applySectionTemplate = (templateId: string) => {
-        const template = IDEA_SECTION_TEMPLATES.find((item) => item.id === templateId);
-        if (!template) return;
-        appendTemplateContent(template.content);
-    };
-
-    const applyFullTemplate = () => {
-        if (!idea.trim()) {
-            setIdea(FULL_IDEA_TEMPLATE);
-            return;
-        }
-        appendTemplateContent(FULL_IDEA_TEMPLATE);
-    };
-
-    const applySampleJsonTemplate = () => {
-        const sampleJson = getSampleProjectIdeaJson(projectName);
-        if (!idea.trim()) {
-            setIdea(sampleJson);
-            return;
-        }
-
-        if (idea.trim() === sampleJson.trim()) {
-            return;
-        }
-
-        appendTemplateContent(sampleJson);
-    };
 
     const runAnalyze = async (overrideText?: string) => {
         const ideaText = typeof overrideText === 'string' ? overrideText : idea;
@@ -848,17 +745,18 @@ export default function IdeaWorkshop({
             setIsChatting(false);
         }
     };
+    void sendDiscussionMessage;
 
-    const handleSendChat = async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        const userMsg = chatInput.trim();
-        if (!userMsg) return;
-        setChatInput('');
-        await sendDiscussionMessage(userMsg);
-    };
 
-    const handleQuickPrompt = async (prompt: string) => {
-        await sendDiscussionMessage(prompt);
+    const handleQuickPrompt = (prompt: string) => {
+        window.dispatchEvent(
+            new CustomEvent('akasha:open-chat', {
+                detail: {
+                    prompt,
+                    context: 'idea'
+                }
+            })
+        );
     };
 
     const setFeatureDecision = (featureId: string, updater: (feature: FeatureDecision) => FeatureDecision) => {
@@ -1095,14 +993,6 @@ export default function IdeaWorkshop({
         }
     };
 
-    const handleClearDiscussion = () => {
-        setHistory([]);
-        setChatInput('');
-    };
-
-    const handleUndoLast = () => {
-        setHistory((prev) => prev.slice(0, -1));
-    };
 
     const handleCopyMarkdown = async () => {
         if (!refinedIdea.trim()) return;
@@ -1160,103 +1050,6 @@ export default function IdeaWorkshop({
         URL.revokeObjectURL(url);
     };
 
-    const renderChatPanel = () => (
-        <div className="flex-1 min-h-0 flex flex-col bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] rounded-2xl overflow-hidden shadow-inner">
-            <div className="bg-black/20 px-4 py-2 border-b border-[var(--ide-border)] flex items-center justify-between">
-                <span className="text-[10px] font-black text-[var(--ide-text-muted)] uppercase tracking-widest">Discussion</span>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleUndoLast}
-                        disabled={history.length === 0}
-                        className="h-7 px-2 rounded-lg text-[10px] font-bold bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-40 transition-all"
-                    >
-                        Undo
-                    </button>
-                    <button
-                        onClick={handleClearDiscussion}
-                        disabled={history.length === 0 && !chatInput.trim()}
-                        className="h-7 px-2 rounded-lg text-[10px] font-bold bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-40 transition-all"
-                    >
-                        Clear
-                    </button>
-                </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                {history.length === 0 && !isChatting && (
-                    <div className="h-full flex items-center justify-center text-center text-white/40 text-sm">
-                        Start by asking for scope, architecture, pricing, go-to-market, or risk reduction.
-                    </div>
-                )}
-
-                {history.map((msg, i) => (
-                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div
-                            className={`max-w-[92%] rounded-2xl px-4 py-3 ${
-                                msg.role === 'user'
-                                    ? 'bg-white/10 text-white border border-white/20 rounded-tr-sm'
-                                    : 'bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] text-gray-300 rounded-tl-sm shadow-sm'
-                            } ${fullScreen ? 'text-base leading-relaxed' : 'text-sm'}`}
-                        >
-                            {msg.role === 'assistant' && msg.structured ? (
-                                <StructuredAiResponseCard response={msg.structured} compact={!fullScreen} />
-                            ) : (
-                                <div
-                                    dangerouslySetInnerHTML={{ __html: marked.parse(msg.content, { async: false }) as string }}
-                                    className="prose prose-invert prose-sm max-w-none"
-                                />
-                            )}
-                        </div>
-                    </div>
-                ))}
-
-                {isChatting && (
-                    <div className="flex justify-start">
-                        <div className="bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] rounded-2xl rounded-tl-sm px-4 py-3 text-sm flex gap-1 items-center">
-                            <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce"></div>
-                        </div>
-                    </div>
-                )}
-
-                <div ref={chatEndRef} />
-            </div>
-
-            <div className="px-3 py-2 border-t border-[var(--ide-border)] bg-black/10 flex flex-wrap gap-2">
-                {QUICK_PROMPTS.slice(0, fullScreen ? 6 : 3).map((prompt) => (
-                    <button
-                        key={prompt}
-                        onClick={() => handleQuickPrompt(prompt)}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white transition-all"
-                    >
-                        {prompt}
-                    </button>
-                ))}
-            </div>
-
-            <form onSubmit={handleSendChat} className="p-3 bg-black/20 border-t border-[var(--ide-border)] flex gap-3">
-                <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask AI to improve scope, product strategy, architecture, or go-to-market..."
-                    className={`flex-1 bg-transparent text-white placeholder:text-white/30 focus:outline-none px-2 ${
-                        fullScreen ? 'text-base py-1.5' : 'text-sm'
-                    }`}
-                />
-                <button
-                    type="submit"
-                    disabled={!chatInput.trim() || isChatting}
-                    className={`bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 border border-white/10 disabled:opacity-50 transition-all ${
-                        fullScreen ? 'h-10 px-5 text-sm' : 'h-8 px-4 text-xs'
-                    }`}
-                >
-                    Send
-                </button>
-            </form>
-        </div>
-    );
 
     const renderFeatureDecisionBoard = () => {
         const reviewedCount = featureDecisions.filter((feature) => feature.status !== 'pending').length;
@@ -1853,10 +1646,8 @@ export default function IdeaWorkshop({
             <div className="flex-shrink-0 border-b border-[var(--ide-border)] bg-gradient-to-b from-white/[0.03] to-transparent">
                 <div className="flex items-center justify-between p-5">
                     <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-lg border border-white/20">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
+                        <div className="w-11 h-11 rounded-2xl bg-white/10 text-white flex items-center justify-center shadow-lg border border-white/20 font-black text-xs tracking-wider">
+                            AI
                         </div>
                         <div>
                             <h2 className="text-lg md:text-xl font-black text-[var(--ide-text)]">AI Idea Workshop</h2>
@@ -1867,14 +1658,16 @@ export default function IdeaWorkshop({
                         </div>
                     </div>
 
-                    {phase !== 'analyzing' && phase !== 'refining' && (
-                        <button
-                            onClick={onCancel}
-                            className="h-9 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-all text-xs font-bold"
-                        >
-                            {fullScreen ? 'Back' : '✕'}
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {phase !== 'analyzing' && phase !== 'refining' && (
+                            <button
+                                onClick={onCancel}
+                                className="h-9 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-[var(--ide-text-muted)] hover:text-white transition-all text-xs font-bold"
+                            >
+                                {fullScreen ? 'Back' : '✕'}
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="px-5 pb-4">
@@ -1945,49 +1738,13 @@ export default function IdeaWorkshop({
                                     ))}
                                 </ul>
                             </div>
-
-                            <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-3">
-                                <div>
-                                    <div className="text-[10px] font-black uppercase tracking-widest text-white/60">Templates</div>
-                                    <p className="mt-1 text-[11px] text-white/40">Kickstart with guided sections or a starter JSON brief.</p>
-                                </div>
-                                <button
-                                    onClick={applyFullTemplate}
-                                    type="button"
-                                    className="w-full h-9 rounded-xl text-xs font-bold bg-white/10 border border-white/20 text-white hover:bg-white/15 transition-all"
-                                >
-                                    Insert Full Template
-                                </button>
-                                <button
-                                    onClick={applySampleJsonTemplate}
-                                    type="button"
-                                    className="w-full h-9 rounded-xl text-xs font-bold bg-white/8 border border-white/15 text-white/80 hover:bg-white/12 transition-all"
-                                >
-                                    Insert Sample JSON
-                                </button>
-                            </div>
                         </div>
 
                         <div className="min-h-0 min-w-0 flex flex-col gap-4">
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-start gap-4">
                                 <div className="text-sm text-white/70">
-                                    <strong className="block text-white mb-1">Write with structure, then let AI sharpen it.</strong>
-                                    Include problem, user, value, MVP scope, and constraints. Plain text or JSON both work here. Better input gives stronger analysis and better final docs.
-                                </div>
-                            </div>
-
-                            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                                <div className="flex flex-wrap gap-2">
-                                    {IDEA_SECTION_TEMPLATES.map((template) => (
-                                        <button
-                                            key={template.id}
-                                            type="button"
-                                            onClick={() => applySectionTemplate(template.id)}
-                                            className="h-8 px-3 rounded-lg text-[11px] font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-all"
-                                        >
-                                            + {template.label}
-                                        </button>
-                                    ))}
+                                    <strong className="block text-white mb-1">Write your project vision freely.</strong>
+                                    Describe your concept, target users, desired capabilities, and constraints. Our real-time deep search and synthesis engine will analyze requirements and synthesize clean architecture.
                                 </div>
                             </div>
 
@@ -2014,10 +1771,8 @@ export default function IdeaWorkshop({
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-red-600/8 blur-[140px]" />
                         </div>
                         <div className="relative flex flex-col items-center gap-6 max-w-md text-center px-6">
-                            <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-                                <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                            <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center font-black text-red-400 text-xs tracking-widest">
+                                ERROR
                             </div>
                             <div className="space-y-2">
                                 <h2 className="text-xl font-black tracking-tight text-white">
@@ -2034,14 +1789,9 @@ export default function IdeaWorkshop({
                                 </button>
                                 <button
                                     onClick={() => lastPhaseBeforeFailure === 'discussion' ? handleRefine() : runAnalyze()}
-                                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all text-sm"
+                                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black tracking-wider transition-all text-xs uppercase"
                                 >
-                                    <span className="flex items-center gap-2">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                        Retry
-                                    </span>
+                                    RETRY
                                 </button>
                             </div>
                         </div>
@@ -2112,7 +1862,7 @@ export default function IdeaWorkshop({
                             {renderFeatureDecisionBoard()}
                         </div>
 
-                        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr,1.2fr] gap-4 overflow-hidden">
+                        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-hidden">
                             <div className="min-h-0 overflow-y-auto space-y-3 custom-scrollbar pr-1">
                                 <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                                     <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Project Concept</div>
@@ -2165,19 +1915,6 @@ export default function IdeaWorkshop({
                                     )}
                                 </div>
 
-                                {workingDoc?.technical_architecture && workingDoc.technical_architecture.length > 0 && (
-                                    <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
-                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Technical Architecture</div>
-                                        <ul className="space-y-1.5">
-                                            {workingDoc.technical_architecture.map((item, i) => (
-                                                <li key={i} className="text-xs text-white/70 flex items-start gap-2">
-                                                    <span className="text-white/30 mt-0.5">•</span>{item}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
                                 {workingDoc?.milestones && workingDoc.milestones.length > 0 && (
                                     <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
                                         <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Milestones</div>
@@ -2192,6 +1929,21 @@ export default function IdeaWorkshop({
                                         </div>
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="min-h-0 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+                                {workingDoc?.technical_architecture && workingDoc.technical_architecture.length > 0 && (
+                                    <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
+                                        <div className="text-xs font-black text-white/70 uppercase tracking-widest mb-3">Technical Architecture</div>
+                                        <ul className="space-y-1.5">
+                                            {workingDoc.technical_architecture.map((item, i) => (
+                                                <li key={i} className="text-xs text-white/70 flex items-start gap-2">
+                                                    <span className="text-white/30 mt-0.5">•</span>{item}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
 
                                 {analysis.questions && analysis.questions.length > 0 && (
                                     <div className="rounded-2xl border border-white/10 bg-[var(--ide-bg-elevated)] p-4">
@@ -2200,8 +1952,9 @@ export default function IdeaWorkshop({
                                             {(analysis.questions || []).map((q: string, i: number) => (
                                                 <button
                                                     key={i}
+                                                    type="button"
                                                     onClick={() => handleQuickPrompt(q)}
-                                                    className="px-2.5 py-1 bg-white/10 text-white/70 text-[11px] rounded-lg border border-white/15 hover:bg-white/20 transition-all"
+                                                    className="px-2.5 py-1 bg-white/10 text-white/70 text-[11px] rounded-lg border border-white/15 hover:bg-cyan-500/20 hover:border-cyan-500/40 hover:text-cyan-200 transition-all text-left"
                                                 >
                                                     {q}
                                                 </button>
@@ -2209,10 +1962,6 @@ export default function IdeaWorkshop({
                                         </div>
                                     </div>
                                 )}
-                            </div>
-
-                            <div className="min-h-0 flex flex-col">
-                                {renderChatPanel()}
                             </div>
                         </div>
                     </div>

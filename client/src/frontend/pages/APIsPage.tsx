@@ -2,7 +2,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import useApi from "../hooks/useApi";
 import { useProjectStore } from "../hooks/useProjectStore";
-import { addApi } from "../stores/projectStore";
+import { addApi, refreshCurrentProject } from "../stores/projectStore";
+import { useBackgroundLoading } from "../context/BackgroundLoadingContext";
+import { client } from "../hooks/useHttpApi";
 import Modal from "../components/ui/Modal";
 import type { ProxyResponse, ApiRequestEntry } from "../types/api";
 const API_PORT = (import.meta as any).env?.VITE_API_PORT || "3001";
@@ -75,22 +77,22 @@ const REQUEST_PRESETS: RequestPreset[] = [
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
 
 const METHOD_COLORS: Record<string, string> = {
-    GET: "#ffffff", POST: "#e5e7eb", PUT: "#d1d5db",
-    PATCH: "#9ca3af", DELETE: "#6b7280", HEAD: "#4b5563", OPTIONS: "#374151",
+    GET: "#10b981", POST: "#3b82f6", PUT: "#f59e0b",
+    PATCH: "#8b5cf6", DELETE: "#ef4444", HEAD: "#64748b", OPTIONS: "#64748b",
 };
 
-const shellSurface = "rgba(255,255,255,0.02)";
-const shellSurfaceSoft = "rgba(255,255,255,0.03)";
-const shellSurfaceMuted = "rgba(255,255,255,0.01)";
-const shellBorder = "rgba(255,255,255,0.06)";
-const shellBorderStrong = "rgba(255,255,255,0.10)";
+const shellSurface = "var(--ide-bg-elevated, rgba(255,255,255,0.8))";
+const shellSurfaceSoft = "var(--ide-accent-subtle, rgba(0,0,0,0.04))";
+const shellSurfaceMuted = "var(--ide-bg, rgba(0,0,0,0.02))";
+const shellBorder = "var(--ide-border, rgba(0,0,0,0.08))";
+const shellBorderStrong = "var(--ide-border-strong, rgba(0,0,0,0.15))";
 
 function getStatusColor(status: number): { text: string; bg: string; border: string } {
-    if (status >= 200 && status < 300) return { text: "#ffffff", bg: "rgba(255,255,255,0.1)", border: "rgba(255,255,255,0.3)" };
-    if (status >= 300 && status < 400) return { text: "#e5e7eb", bg: "rgba(255,255,255,0.08)", border: "rgba(255,255,255,0.2)" };
-    if (status >= 400 && status < 500) return { text: "#d1d5db", bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.15)" };
-    if (status >= 500) return { text: "#9ca3af", bg: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.1)" };
-    return { text: "#6b7280", bg: "rgba(255,255,255,0.02)", border: "rgba(255,255,255,0.05)" };
+    if (status >= 200 && status < 300) return { text: "var(--ide-success, #16a34a)", bg: "rgba(22,163,74,0.12)", border: "rgba(22,163,74,0.3)" };
+    if (status >= 300 && status < 400) return { text: "var(--ide-info, #2563eb)", bg: "rgba(37,99,235,0.12)", border: "rgba(37,99,235,0.3)" };
+    if (status >= 400 && status < 500) return { text: "var(--ide-warning, #d97706)", bg: "rgba(217,119,6,0.12)", border: "rgba(217,119,6,0.3)" };
+    if (status >= 500) return { text: "var(--ide-danger, #dc2626)", bg: "rgba(220,38,38,0.12)", border: "rgba(220,38,38,0.3)" };
+    return { text: "var(--ide-text-secondary, #64748b)", bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.3)" };
 }
 
 function tryPrettyJson(str: string): string {
@@ -160,13 +162,14 @@ function generatePython(method: string, url: string, headers: Record<string, str
 /* ━━━ UI Components ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 const JsonHighlight: React.FC<{ json: string }> = ({ json }) => {
     const highlighted = useMemo(() => {
-        return tryPrettyJson(json).replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span style="color:#ffffff">$1</span>:')
-            .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span style="color:#e5e7eb">$1</span>')
-            .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#d1d5db">$1</span>')
-            .replace(/:\s*(true|false)/g, ': <span style="color:#9ca3af">$1</span>')
-            .replace(/:\s*(null)/g, ': <span style="color:#6b7280">$1</span>');
+        return tryPrettyJson(json)
+            .replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span style="color:var(--ide-accent, #3b82f6); font-weight:600;">$1</span>:')
+            .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span style="color:var(--ide-success, #10b981);">$1</span>')
+            .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:var(--ide-warning, #f59e0b);">$1</span>')
+            .replace(/:\s*(true|false)/g, ': <span style="color:var(--ide-purple, #8b5cf6); font-weight:600;">$1</span>')
+            .replace(/:\s*(null)/g, ': <span style="color:var(--ide-text-secondary, #94a3b8); font-style:italic;">$1</span>');
     }, [json]);
-    return <pre style={{ margin: 0, fontSize: 12, fontFamily: "'Space Mono', monospace", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-all" }} dangerouslySetInnerHTML={{ __html: highlighted }} />;
+    return <pre style={{ margin: 0, fontSize: 12, fontFamily: "'Space Mono', monospace", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-all", color: "var(--ide-text)" }} dangerouslySetInnerHTML={{ __html: highlighted }} />;
 };
 
 // ─── Input Styles ───
@@ -197,13 +200,13 @@ const KVEditor: React.FC<{ pairs: KVPair[]; onChange: (pairs: KVPair[]) => void;
             </div>
             {pairs.map((pair, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input type="checkbox" checked={pair.enabled} onChange={e => update(i, "enabled", e.target.checked)} style={{ accentColor: "#ffffff" }} />
+                    <input type="checkbox" checked={pair.enabled} onChange={e => update(i, "enabled", e.target.checked)} style={{ accentColor: "var(--ide-accent, #3b82f6)" }} />
                     <input style={{ ...inputStyle, flex: 1, padding: "6px 10px", fontSize: 12 }} value={pair.key} onChange={e => update(i, "key", e.target.value)} placeholder={keyPlaceholder} />
                     <input style={{ ...inputStyle, flex: 1, padding: "6px 10px", fontSize: 12 }} value={pair.value} onChange={e => update(i, "value", e.target.value)} placeholder={valuePlaceholder} />
-                    <button onClick={() => remove(i)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", padding: "2px 6px", fontSize: 10, fontFamily: "'Space Mono', monospace" }}>DEL</button>
+                    <button onClick={() => remove(i)} style={{ background: "transparent", border: "none", color: "var(--ide-text-secondary)", cursor: "pointer", padding: "2px 6px", fontSize: 10, fontFamily: "'Space Mono', monospace" }}>DEL</button>
                 </div>
             ))}
-            <button onClick={add} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "white", opacity: 0.6, fontSize: 11, cursor: "pointer", marginLeft: 28, padding: 4 }}>+ Add</button>
+            <button onClick={add} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--ide-text)", opacity: 0.8, fontSize: 11, fontWeight: 600, cursor: "pointer", marginLeft: 28, padding: 4 }}>+ ADD</button>
         </div>
     );
 };
@@ -277,6 +280,41 @@ const APIsPage: React.FC = () => {
     };
 
     const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+    const [isDerivingApis, setIsDerivingApis] = useState(false);
+    const { startTask, completeTask, failTask } = useBackgroundLoading();
+
+    const handleDeriveApis = async () => {
+        if (!project?.id) return;
+        setIsDerivingApis(true);
+        startTask({
+            title: "Agent: REST APIs",
+            step: "Deriving RESTful routes from data models...",
+            progress: 50,
+        });
+        setToast({ message: "Deriving REST endpoints in background...", type: "success" });
+        try {
+            const res = await client.post("/ai/agent/synthesize-step", {
+                projectId: project.id,
+                step: "apis",
+            });
+            if (res.data?.success) {
+                completeTask({
+                    resultSummary: "APIs Ready ✓",
+                    step: "Created route controllers and schemas",
+                });
+                setToast({ message: "REST APIs synthesized successfully!", type: "success" });
+                await refreshCurrentProject();
+            } else {
+                failTask({ error: res.data?.error || "Failed to derive APIs" });
+                setToast({ message: `Error: ${res.data?.error}`, type: "error" });
+            }
+        } catch (err: any) {
+            failTask({ error: err.message });
+            setToast({ message: `Failed: ${err.message}`, type: "error" });
+        } finally {
+            setIsDerivingApis(false);
+        }
+    };
 
     // ─── New Feature State ───
     const [environments, setEnvironments] = useState<ApiEnvironment[]>(() => {
@@ -626,7 +664,7 @@ const APIsPage: React.FC = () => {
             background: "none", border: "none", cursor: "pointer", padding: "12px 16px 10px", fontSize: 12,
             fontFamily: "'Space Mono', monospace", letterSpacing: "0.05em",
             color: active ? "var(--ide-text)" : "var(--ide-text-secondary)",
-            borderBottom: `2px solid ${active ? "#ffffff" : "transparent"}`, transition: "all 0.2s", marginBottom: -1,
+            borderBottom: `2px solid ${active ? "var(--ide-accent, #3b82f6)" : "transparent"}`, transition: "all 0.2s", marginBottom: -1,
             display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase"
         }}>
             {label}
@@ -640,16 +678,28 @@ const APIsPage: React.FC = () => {
     };
 
     return (
-        <div style={{
+        <div className="api-page-shell" style={{
             display: "flex", flex: 1, overflow: "hidden", height: "100%", position: "relative",
-            padding: 16, gap: 16,
-            background: "var(--ide-bg)",
+            padding: 10, gap: 10,
+            background: "transparent",
             color: "var(--ide-text)",
         }}>
-            {/* Background grid */}
-            <div style={{ position: "fixed", inset: 0, pointerEvents: "none", backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`, backgroundSize: "48px 48px" }} />
+            <style>{`
+                .api-page-shell { min-height: 0; }
+                .api-url-row { min-width: 0; }
+                .api-main { min-height: 0; }
+                @media (max-width: 900px) {
+                    .api-page-shell { flex-direction: column !important; overflow-y: auto !important; }
+                    .api-sidebar { width: 100% !important; max-height: 250px; }
+                    .api-main { min-height: 620px; flex: 1 0 auto !important; }
+                    .api-url-row { flex-wrap: wrap; }
+                    .api-url-row input { min-width: 0; }
+                    .api-send-button { flex: 1; }
+                    .api-save-button { display: none !important; }
+                }
+            `}</style>
 
-            <div style={{ width: 300, display: "flex", flexDirection: "column", flexShrink: 0, background: shellSurface, border: `1px solid ${shellBorder}`, borderRadius: 24, overflow: "hidden", backdropFilter: "blur(12px)", zIndex: 10 }}>
+            <div className="api-sidebar" style={{ width: 270, display: "flex", flexDirection: "column", flexShrink: 0, background: shellSurface, border: `1px solid ${shellBorder}`, borderRadius: 14, overflow: "hidden", backdropFilter: "blur(12px)", zIndex: 10 }}>
                 {/* Environment Switcher */}
                 <div style={{ padding: "10px 12px", borderBottom: `1px solid ${shellBorder}`, display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     <span style={{ fontSize: 9, color: "var(--ide-text-secondary)", fontFamily: "'Space Mono', monospace", letterSpacing: "0.08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>ENV</span>
@@ -661,12 +711,31 @@ const APIsPage: React.FC = () => {
 
                 {/* Tabs */}
                 <div style={{ display: "flex", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0 }}>
-                    <button onClick={() => setSidebarTab("collections")} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "12px 0", fontSize: 10, fontFamily: "'Space Mono', monospace", color: sidebarTab === "collections" ? "var(--ide-text)" : "var(--ide-text-secondary)", borderBottom: `2px solid ${sidebarTab === "collections" ? "#ffffff" : "transparent"}`, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.2s", marginBottom: -1 }}>Collections ({collections.length})</button>
-                    <button onClick={() => setSidebarTab("history")} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "12px 0", fontSize: 10, fontFamily: "'Space Mono', monospace", color: sidebarTab === "history" ? "var(--ide-text)" : "var(--ide-text-secondary)", borderBottom: `2px solid ${sidebarTab === "history" ? "#ffffff" : "transparent"}`, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.2s", marginBottom: -1 }}>History ({history.length})</button>
+                    <button onClick={() => setSidebarTab("collections")} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "12px 0", fontSize: 10, fontFamily: "'Space Mono', monospace", color: sidebarTab === "collections" ? "var(--ide-text)" : "var(--ide-text-secondary)", borderBottom: `2px solid ${sidebarTab === "collections" ? "var(--ide-accent, #3b82f6)" : "transparent"}`, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.2s", marginBottom: -1 }}>Collections ({collections.length})</button>
+                    <button onClick={() => setSidebarTab("history")} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", padding: "12px 0", fontSize: 10, fontFamily: "'Space Mono', monospace", color: sidebarTab === "history" ? "var(--ide-text)" : "var(--ide-text-secondary)", borderBottom: `2px solid ${sidebarTab === "history" ? "var(--ide-accent, #3b82f6)" : "transparent"}`, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.2s", marginBottom: -1 }}>History ({history.length})</button>
                 </div>
 
                 {/* Actions Row */}
-                <div style={{ display: "flex", gap: 6, padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 6, padding: "10px 12px", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0, flexWrap: "wrap" }}>
+                    <button
+                        onClick={handleDeriveApis}
+                        disabled={isDerivingApis}
+                        style={{
+                            flex: "1 0 100%",
+                            background: "rgba(59, 130, 246, 0.15)",
+                            border: "1px solid rgba(59, 130, 246, 0.4)",
+                            borderRadius: 6,
+                            color: "#60a5fa",
+                            fontSize: 9,
+                            fontWeight: 700,
+                            fontFamily: "'Space Mono', monospace",
+                            padding: "6px 0",
+                            cursor: isDerivingApis ? "wait" : "pointer",
+                            marginBottom: 2
+                        }}
+                    >
+                        {isDerivingApis ? "DERIVING APIS IN BACKGROUND..." : "AI DERIVE REST APIS"}
+                    </button>
                     <button onClick={() => setImportCurlOpen(true)} style={{ flex: 1, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>IMPORT CURL</button>
                     <button onClick={() => setCodeGenOpen(true)} style={{ flex: 1, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>GENERATE CODE</button>
                     <button onClick={() => setPresetOpen(true)} style={{ flex: 1, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 9, fontFamily: "'Space Mono', monospace", padding: "5px 0", cursor: "pointer", minWidth: 70 }}>LOAD PRESET</button>
@@ -675,8 +744,8 @@ const APIsPage: React.FC = () => {
 
                 {/* Collection Search */}
                 {sidebarTab === "collections" && collections.length > 3 && (
-                    <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)", flexShrink: 0 }}>
-                        <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11, background: "rgba(255,255,255,0.03)" }} placeholder="Search collections..." value={collectionSearch} onChange={e => setCollectionSearch(e.target.value)} />
+                    <div style={{ padding: "8px 12px", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0 }}>
+                        <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11, background: shellSurfaceSoft }} placeholder="Search collections..." value={collectionSearch} onChange={e => setCollectionSearch(e.target.value)} />
                     </div>
                 )}
 
@@ -773,20 +842,20 @@ const APIsPage: React.FC = () => {
             </div>
 
             {/* ─── Main Content ─────────────────── */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", zIndex: 10, minWidth: 0, border: `1px solid ${shellBorder}`, borderRadius: 24, overflow: "hidden", background: shellSurface }}>
+            <div className="api-main" style={{ flex: 1, display: "flex", flexDirection: "column", zIndex: 10, minWidth: 0, border: `1px solid ${shellBorder}`, borderRadius: 14, overflow: "hidden", background: shellSurface }}>
                 {/* URL Bar */}
-                <div style={{ padding: "16px 24px", background: shellSurface, borderBottom: `1px solid ${shellBorder}`, backdropFilter: "blur(12px)", flexShrink: 0 }}>
-                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <select value={method} onChange={e => setMethod(e.target.value)} style={{ ...inputStyle, width: 100, fontWeight: 700, color: "white", cursor: "pointer", padding: "10px 12px" }}>
-                            {HTTP_METHODS.map(m => <option key={m} value={m} style={{ background: "var(--ide-bg)", color: "#fff" }}>{m}</option>)}
+                <div className="api-url-bar" style={{ padding: "10px 14px", background: shellSurface, borderBottom: `1px solid ${shellBorder}`, backdropFilter: "blur(12px)", flexShrink: 0 }}>
+                    <div className="api-url-row" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <select value={method} onChange={e => setMethod(e.target.value)} style={{ ...inputStyle, width: 84, fontWeight: 700, color: METHOD_COLORS[method] || "var(--ide-text)", cursor: "pointer", padding: "8px 10px" }}>
+                            {HTTP_METHODS.map(m => <option key={m} value={m} style={{ background: "var(--ide-bg, #0a0a0a)", color: METHOD_COLORS[m] || "var(--ide-text)" }}>{m}</option>)}
                         </select>
-                        <input ref={urlRef} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendRequest(); }} placeholder="Enter URL (e.g., https://api.example.com/data)" style={{ ...inputStyle, flex: 1, padding: "10px 16px", fontSize: 14 }} />
-                        <button onClick={() => setSaveCollOpen(true)} style={{ background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: "var(--ide-text)", cursor: "pointer", padding: "10px 14px", display: "flex", alignItems: "center" }} title="Save">SAVE</button>
-                        <button onClick={sendRequest} disabled={loading || !url.trim()} style={{
-                            background: loading ? shellSurfaceSoft : "rgba(255,255,255,0.1)",
-                            border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: "var(--ide-text)", cursor: loading || !url.trim() ? "default" : "pointer",
-                            padding: "0 28px", fontSize: 14, fontFamily: "'Space Mono', monospace", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
-                            boxShadow: loading ? "none" : "0 0 20px rgba(255,255,255,0.05)", height: 42, display: "flex", alignItems: "center", opacity: url.trim() ? 1 : 0.5
+                        <input ref={urlRef} value={url} onChange={e => setUrl(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendRequest(); }} placeholder="Enter URL (e.g., https://api.example.com/data)" style={{ ...inputStyle, flex: 1, padding: "8px 12px", fontSize: 13 }} />
+                        <button className="api-save-button" onClick={() => setSaveCollOpen(true)} style={{ background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 7, color: "var(--ide-text)", cursor: "pointer", padding: "8px 12px", display: "flex", alignItems: "center", fontFamily: "'Space Mono', monospace", fontSize: 10, fontWeight: 700 }} title="Save">SAVE</button>
+                        <button className="api-send-button" onClick={sendRequest} disabled={loading || !url.trim()} style={{
+                            background: loading ? shellSurfaceSoft : "var(--ide-accent, #3b82f6)",
+                            border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: "#ffffff", cursor: loading || !url.trim() ? "default" : "pointer",
+                            padding: "0 20px", fontSize: 12, fontFamily: "'Space Mono', monospace", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                            boxShadow: loading ? "none" : "0 4px 14px rgba(59,130,246,0.3)", height: 38, display: "flex", alignItems: "center", opacity: url.trim() ? 1 : 0.5
                         }}>
                             {loading ? "..." : "SEND"}
                         </button>
@@ -796,12 +865,12 @@ const APIsPage: React.FC = () => {
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     {/* Request Area */}
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", borderBottom: `1px solid ${shellBorder}`, background: shellSurfaceMuted }}>
-                        <div style={{ display: "flex", padding: "0 24px", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0 }}>
+                        <div style={{ display: "flex", padding: "0 14px", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0 }}>
                             {(["Params", "Headers", "Body", "Auth"] as const).map(t => (
                                 <TabButton key={t} active={reqTab === t} label={t} count={reqTabCounts[t as keyof typeof reqTabCounts]} onClick={() => setReqTab(t)} />
                             ))}
                         </div>
-                        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+                        <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
                             {reqTab === "Params" && <KVEditor pairs={params} onChange={setParams} keyPlaceholder="Query Parameter" valuePlaceholder="Value" />}
                             {reqTab === "Headers" && <KVEditor pairs={headers} onChange={setHeaders} keyPlaceholder="Header" valuePlaceholder="Value" />}
                             {reqTab === "Body" && (
@@ -845,7 +914,7 @@ const APIsPage: React.FC = () => {
                             </div>
                         ) : response ? (
                             <>
-                                <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 24px", borderBottom: `1px solid ${shellBorder}`, background: shellSurface }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 14px", borderBottom: `1px solid ${shellBorder}`, background: shellSurface, flexWrap: "wrap" }}>
                                     <span style={{ ...getStatusColor(response.status), padding: "4px 10px", borderRadius: 6, fontSize: 12, fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>
                                         {response.error ? "ERR" : response.status} {response.statusText}
                                     </span>
@@ -853,7 +922,7 @@ const APIsPage: React.FC = () => {
                                     <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)" }}>SIZE: {formatBytes(response.body)}</span>
                                     <button onClick={() => copyToClipboard(response.body, "Response")} style={{ marginLeft: "auto", background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 11, fontFamily: "'Space Mono', monospace", padding: "4px 10px", cursor: "pointer" }}>Copy</button>
                                 </div>
-                                <div style={{ display: "flex", padding: "0 24px", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0, alignItems: "center" }}>
+                                <div style={{ display: "flex", padding: "0 14px", borderBottom: `1px solid ${shellBorder}`, flexShrink: 0, alignItems: "center" }}>
                                     <TabButton active={resTab === "Body"} label="Body" onClick={() => setResTab("Body")} />
                                     <TabButton active={resTab === "Headers"} label="Headers" count={Object.keys(response.headers).length} onClick={() => setResTab("Headers")} />
                                     {/* Response controls */}
@@ -867,7 +936,7 @@ const APIsPage: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
-                                <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+                                <div style={{ flex: 1, overflowY: "auto", padding: "14px" }}>
                                     {resTab === "Body" ? (
                                         responseSearch.trim() && filteredResponseBody ? (
                                             <pre style={{ margin: 0, fontSize: 12, fontFamily: "'Space Mono', monospace", whiteSpace: responseWrap ? "pre-wrap" : "pre", wordBreak: responseWrap ? "break-all" : "normal", color: "var(--ide-text)" }}>{filteredResponseBody}</pre>
@@ -897,19 +966,19 @@ const APIsPage: React.FC = () => {
                 <ApiModal isOpen={codeGenOpen} onClose={() => setCodeGenOpen(false)} title="Generate Code" width="650px">
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     {(["curl", "fetch", "python"] as const).map(lang => (
-                        <button key={lang} onClick={() => setCodeGenLang(lang)} style={{ background: codeGenLang === lang ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)", border: `1px solid ${codeGenLang === lang ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, color: "white", padding: "6px 16px", fontSize: 12, fontFamily: "'Space Mono', monospace", cursor: "pointer" }}>{lang}</button>
+                        <button key={lang} onClick={() => setCodeGenLang(lang)} style={{ background: codeGenLang === lang ? "var(--ide-accent, #3b82f6)" : shellSurfaceSoft, border: `1px solid ${codeGenLang === lang ? "var(--ide-accent, #3b82f6)" : shellBorderStrong}`, borderRadius: 8, color: codeGenLang === lang ? "#ffffff" : "var(--ide-text)", padding: "6px 16px", fontSize: 12, fontFamily: "'Space Mono', monospace", fontWeight: 700, cursor: "pointer" }}>{lang}</button>
                     ))}
                 </div>
                 <div style={{ position: "relative" }}>
-                    <pre style={{ margin: 0, background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: 16, fontSize: 12, fontFamily: "'Space Mono', monospace", color: "white", whiteSpace: "pre-wrap" }}>{generatedCode}</pre>
-                    <button onClick={() => copyToClipboard(generatedCode, "Code")} style={{ position: "absolute", top: 8, right: 8, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6, color: "white", fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>Copy</button>
+                    <pre style={{ margin: 0, background: shellSurfaceMuted, border: `1px solid ${shellBorder}`, borderRadius: 8, padding: 16, fontSize: 12, fontFamily: "'Space Mono', monospace", color: "var(--ide-text)", whiteSpace: "pre-wrap" }}>{generatedCode}</pre>
+                    <button onClick={() => copyToClipboard(generatedCode, "Code")} style={{ position: "absolute", top: 8, right: 8, background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>Copy</button>
                 </div>
                 </ApiModal>
 
                 <ApiModal isOpen={importCurlOpen} onClose={() => setImportCurlOpen(false)} title="Import cURL" width="600px">
                 <textarea style={{ ...inputStyle, height: 160, resize: "none", marginBottom: 16 }} value={importCurlText} onChange={e => setImportCurlText(e.target.value)} placeholder="Paste cURL command..." autoFocus />
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                    <button onClick={handleImportCurl} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 20px", fontSize: 13, fontWeight: 600 }}>Import</button>
+                    <button onClick={handleImportCurl} style={{ background: "var(--ide-accent, #3b82f6)", border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: "#ffffff", cursor: "pointer", padding: "8px 20px", fontSize: 13, fontWeight: 700 }}>Import</button>
                 </div>
                 </ApiModal>
 
@@ -919,13 +988,13 @@ const APIsPage: React.FC = () => {
                 <label style={labelStyle}>Folder / Group</label>
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                     <select value={saveCollFolder} onChange={e => setSaveCollFolder(e.target.value)} style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
-                        <option value="" style={{ background: "#0a0a0a" }}>— No folder (ungrouped) —</option>
-                        {allFolderNames.map(f => <option key={f} value={f} style={{ background: "#0a0a0a" }}>{f}</option>)}
+                        <option value="" style={{ background: "var(--ide-bg, #0a0a0a)", color: "var(--ide-text)" }}>— No folder (ungrouped) —</option>
+                        {allFolderNames.map(f => <option key={f} value={f} style={{ background: "var(--ide-bg, #0a0a0a)", color: "var(--ide-text)" }}>{f}</option>)}
                     </select>
-                    <button onClick={() => { const name = prompt("New folder name:"); if (name?.trim()) setSaveCollFolder(name.trim()); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "white", fontSize: 11, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>+ New</button>
+                    <button onClick={() => { const name = prompt("New folder name:"); if (name?.trim()) setSaveCollFolder(name.trim()); }} style={{ background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 11, padding: "6px 10px", cursor: "pointer", whiteSpace: "nowrap" }}>+ New</button>
                 </div>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                    <button onClick={handleSaveToCollection} disabled={!saveCollName.trim()} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "white", cursor: saveCollName.trim() ? "pointer" : "default", padding: "8px 20px", fontSize: 13, fontWeight: 600 }}>Save</button>
+                    <button onClick={handleSaveToCollection} disabled={!saveCollName.trim()} style={{ background: saveCollName.trim() ? "var(--ide-accent, #3b82f6)" : shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: saveCollName.trim() ? "#ffffff" : "var(--ide-text-secondary)", cursor: saveCollName.trim() ? "pointer" : "default", padding: "8px 20px", fontSize: 13, fontWeight: 700 }}>Save</button>
                 </div>
                 </ApiModal>
 
@@ -934,35 +1003,35 @@ const APIsPage: React.FC = () => {
                 {/* Dynamic presets from project APIs */}
                 {collections.length > 0 && (
                     <>
-                        <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Your Endpoints ({collections.length})</div>
+                        <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Your Endpoints ({collections.length})</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 16 }}>
                             {collections.slice(0, 8).map((ep: any) => {
                                 const ms = getMethodStyle(ep.method);
                                 return (
-                                    <button key={ep.id} onClick={() => { loadFromEndpoint(ep); setPresetOpen(false); }} style={{ padding: "10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}>
+                                    <button key={ep.id} onClick={() => { loadFromEndpoint(ep); setPresetOpen(false); }} style={{ padding: "10px", background: shellSurfaceSoft, border: `1px solid ${shellBorder}`, borderRadius: 8, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = shellSurfaceMuted} onMouseLeave={e => e.currentTarget.style.background = shellSurfaceSoft}>
                                         <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
                                             <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: ms.bg, color: ms.text, border: `1px solid ${ms.border}` }}>{ep.method}</span>
-                                            <span style={{ fontSize: 11, fontWeight: 600, color: "white", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ep.name}</span>
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ide-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ep.name}</span>
                                         </div>
-                                        <div style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.3)" }}>{ep.path}</div>
+                                        <div style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)" }}>{ep.path}</div>
                                     </button>
                                 );
                             })}
                         </div>
                     </>
                 )}
-                {/* Static templates */}
-                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Templates</div>
+                {/* Standard Request Presets */}
+                <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Standard Requests</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                     {REQUEST_PRESETS.map(p => {
                         const ms = getMethodStyle(p.method);
                         return (
-                            <button key={p.label} onClick={() => applyPreset(p)} style={{ padding: "10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.12)"} onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}>
+                            <button key={p.label} onClick={() => applyPreset(p)} style={{ padding: "10px", background: shellSurfaceSoft, border: `1px solid ${shellBorder}`, borderRadius: 8, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = shellSurfaceMuted} onMouseLeave={e => e.currentTarget.style.background = shellSurfaceSoft}>
                                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
                                     <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: ms.bg, color: ms.text, border: `1px solid ${ms.border}` }}>{p.method}</span>
-                                    <span style={{ fontSize: 11, fontWeight: 600, color: "white" }}>{p.label}</span>
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ide-text)" }}>{p.label}</span>
                                 </div>
-                                <div style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.3)" }}>{p.path}</div>
+                                <div style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)" }}>{p.path}</div>
                             </button>
                         );
                     })}
@@ -973,14 +1042,14 @@ const APIsPage: React.FC = () => {
                 <ApiModal isOpen={githubImportOpen} onClose={() => { setGithubImportOpen(false); setGhFileTree(null); setGhPreview([]); }} title="Import from GitHub" width="620px">
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                     <input style={{ ...inputStyle, flex: 1 }} value={ghRepoInput} onChange={e => setGhRepoInput(e.target.value)} placeholder="owner/repo (e.g. expressjs/express)" onKeyDown={e => { if (e.key === "Enter") browseGhRepo(); }} />
-                    <button onClick={browseGhRepo} disabled={ghLoading} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 20px", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>{ghLoading ? "Loading..." : "Browse"}</button>
+                    <button onClick={browseGhRepo} disabled={ghLoading} style={{ background: "var(--ide-accent, #3b82f6)", border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: "#ffffff", cursor: "pointer", padding: "8px 20px", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>{ghLoading ? "Loading..." : "Browse"}</button>
                 </div>
 
                 {ghFileTree && (
                     <>
                         {/* Breadcrumbs */}
                         {ghBreadcrumbs.length > 0 && (
-                            <div style={{ display: "flex", gap: 4, marginBottom: 8, fontSize: 11, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.5)", flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", gap: 4, marginBottom: 8, fontSize: 11, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", flexWrap: "wrap" }}>
                                 <span onClick={() => browseGhDir("")} style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}>root</span>
                                 {ghBreadcrumbs.map((crumb, i) => (
                                     <React.Fragment key={i}>
@@ -991,14 +1060,14 @@ const APIsPage: React.FC = () => {
                             </div>
                         )}
                         {/* File tree */}
-                        <div style={{ maxHeight: 240, overflowY: "auto", border: `1px solid ${shellBorder}`, borderRadius: 8, padding: 8, marginBottom: 12, background: "rgba(0,0,0,0.2)" }}>
+                        <div style={{ maxHeight: 240, overflowY: "auto", border: `1px solid ${shellBorder}`, borderRadius: 8, padding: 8, marginBottom: 12, background: shellSurfaceMuted }}>
                             {ghFileTree.map((entry, i) => {
                                 const isApiFile = entry.type === "file" && API_FILE_EXTS.some(ex => entry.name.endsWith(ex));
                                 return (
-                                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 4, cursor: entry.type === "dir" ? "pointer" : "default", background: isApiFile ? "rgba(255,255,255,0.04)" : "transparent" }} onClick={() => { if (entry.type === "dir") browseGhDir(entry.path); }}>
-                                        <span style={{ fontSize: 11, color: entry.type === "dir" ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.4)", fontFamily: "'Space Mono', monospace" }}>{entry.type === "dir" ? "📁" : isApiFile ? "📄" : "  "}</span>
-                                        <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: entry.type === "dir" ? "white" : "var(--ide-text-secondary)" }}>{entry.name}</span>
-                                        {isApiFile && <span style={{ marginLeft: "auto", fontSize: 9, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.05)", padding: "1px 6px", borderRadius: 4, fontFamily: "'Space Mono', monospace" }}>API</span>}
+                                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 4, cursor: entry.type === "dir" ? "pointer" : "default", background: isApiFile ? shellSurfaceSoft : "transparent" }} onClick={() => { if (entry.type === "dir") browseGhDir(entry.path); }}>
+                                        <span style={{ fontSize: 9, fontFamily: "'Space Mono', monospace", fontWeight: 700, color: entry.type === "dir" ? "var(--ide-accent, #3b82f6)" : "var(--ide-text-secondary)" }}>{entry.type === "dir" ? "DIR" : "FILE"}</span>
+                                        <span style={{ fontSize: 12, fontFamily: "'Space Mono', monospace", color: entry.type === "dir" ? "var(--ide-text)" : "var(--ide-text-secondary)" }}>{entry.name}</span>
+                                        {isApiFile && <span style={{ marginLeft: "auto", fontSize: 9, color: "var(--ide-accent, #3b82f6)", background: shellSurfaceSoft, border: `1px solid ${shellBorder}`, padding: "1px 6px", borderRadius: 4, fontFamily: "'Space Mono', monospace", fontWeight: 700 }}>API</span>}
                                     </div>
                                 );
                             })}
@@ -1008,32 +1077,32 @@ const APIsPage: React.FC = () => {
 
                 {/* Loading / Scanning indicator */}
                 {ghLoading && (
-                    <div style={{ fontSize: 11, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "8px 0", marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", textAlign: "center", padding: "8px 0", marginBottom: 8 }}>
                         Scanning repo for API definitions...
                     </div>
                 )}
 
                 {/* Rescan button (always visible when modal is open) */}
-                <button onClick={scanGhFromRoot} disabled={ghLoading} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8, color: "white", cursor: "pointer", padding: "8px 16px", fontSize: 12, fontFamily: "'Space Mono', monospace", marginBottom: 12, width: "100%" }}>{ghLoading ? "Scanning..." : "Rescan Entire Repo"}</button>
+                <button onClick={scanGhFromRoot} disabled={ghLoading} style={{ background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 8, color: "var(--ide-text)", cursor: "pointer", padding: "8px 16px", fontSize: 12, fontFamily: "'Space Mono', monospace", marginBottom: 12, width: "100%", fontWeight: 600 }}>{ghLoading ? "Scanning..." : "Rescan Entire Repo"}</button>
 
                 {/* Preview */}
                 {ghPreview.length > 0 && (
-                    <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 12, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: 12, background: "rgba(0,0,0,0.2)" }}>
-                        <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Preview ({ghPreview.reduce((s, g) => s + g.endpoints.length, 0)} endpoints)</div>
+                    <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 12, border: `1px solid ${shellBorder}`, borderRadius: 8, padding: 12, background: shellSurfaceMuted }}>
+                        <div style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Preview ({ghPreview.reduce((s, g) => s + g.endpoints.length, 0)} endpoints)</div>
                         {ghPreview.map((group, gi) => (
                             <div key={gi} style={{ marginBottom: 8 }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: "white", fontFamily: "'Space Mono', monospace", marginBottom: 4 }}>{group.file}</div>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ide-text)", fontFamily: "'Space Mono', monospace", marginBottom: 4 }}>{group.file}</div>
                                 {group.endpoints.slice(0, 10).map((ep, ei) => (
                                     <div key={ei} style={{ display: "flex", gap: 6, alignItems: "center", padding: "2px 0" }}>
                                         <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "'Space Mono', monospace", padding: "1px 5px", borderRadius: 3, background: METHOD_COLORS[ep.method] + "15", color: METHOD_COLORS[ep.method], border: `1px solid ${METHOD_COLORS[ep.method]}40` }}>{ep.method}</span>
                                         <span style={{ fontSize: 10, fontFamily: "'Space Mono', monospace", color: "var(--ide-text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{ep.path}</span>
-                                        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{ep.name}</span>
+                                        <span style={{ fontSize: 9, color: "var(--ide-text-secondary)" }}>{ep.name}</span>
                                     </div>
                                 ))}
-                                {group.endpoints.length > 10 && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'Space Mono', monospace" }}>...and {group.endpoints.length - 10} more</div>}
+                                {group.endpoints.length > 10 && <div style={{ fontSize: 9, color: "var(--ide-text-secondary)", fontFamily: "'Space Mono', monospace" }}>...and {group.endpoints.length - 10} more</div>}
                             </div>
                         ))}
-                        <button onClick={importGhEndpoints} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "white", cursor: "pointer", padding: "10px 0", fontSize: 13, fontWeight: 600, width: "100%", marginTop: 8 }}>Import All Endpoints</button>
+                        <button onClick={importGhEndpoints} style={{ background: "var(--ide-accent, #3b82f6)", border: "none", borderRadius: 8, color: "#ffffff", cursor: "pointer", padding: "10px 0", fontSize: 13, fontWeight: 700, width: "100%", marginTop: 8 }}>Import All Endpoints</button>
                     </div>
                 )}
                 </ApiModal>
@@ -1042,16 +1111,16 @@ const APIsPage: React.FC = () => {
                 <ApiModal isOpen={envEditorOpen} onClose={() => setEnvEditorOpen(false)} title="Manage Environments" width="550px">
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {environments.map((env, i) => (
-                        <div key={i} style={{ padding: 12, background: "rgba(255,255,255,0.02)", border: `1px solid ${i === activeEnvIdx ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div key={i} style={{ padding: 12, background: shellSurfaceSoft, border: `1px solid ${i === activeEnvIdx ? "var(--ide-accent, #3b82f6)" : shellBorder}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
                             <div style={{ display: "flex", gap: 8 }}>
                                 <input style={{ ...inputStyle, flex: 1, padding: "5px 10px", fontSize: 12 }} value={env.name} onChange={e => { const u = [...environments]; const current = u[i]; if (current) { u[i] = { ...current, name: e.target.value }; setEnvironments(u); } }} placeholder="Name" />
-                                <button onClick={() => { if (environments.length > 1) setEnvironments(environments.filter((_, j) => j !== i)); }} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "rgba(255,255,255,0.6)", fontSize: 9, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>REMOVE</button>
+                                <button onClick={() => { if (environments.length > 1) setEnvironments(environments.filter((_, j) => j !== i)); }} style={{ background: shellSurfaceMuted, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text-secondary)", fontSize: 9, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontFamily: "'Space Mono', monospace" }}>REMOVE</button>
                             </div>
                             <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.baseUrl} onChange={e => { const u = [...environments]; const current = u[i]; if (current) { u[i] = { ...current, baseUrl: e.target.value }; setEnvironments(u); } }} placeholder="Base URL" />
                             <input style={{ ...inputStyle, padding: "5px 10px", fontSize: 11 }} value={env.token} onChange={e => { const u = [...environments]; const current = u[i]; if (current) { u[i] = { ...current, token: e.target.value }; setEnvironments(u); } }} placeholder="Bearer Token (optional)" type="password" />
                         </div>
                     ))}
-                    <button onClick={() => setEnvironments([...environments, { name: "New", baseUrl: "http://localhost:3000", token: "" }])} style={{ alignSelf: "flex-start", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "white", fontSize: 11, padding: "6px 14px", cursor: "pointer" }}>+ Add Environment</button>
+                    <button onClick={() => setEnvironments([...environments, { name: "New", baseUrl: "http://localhost:3000", token: "" }])} style={{ alignSelf: "flex-start", background: shellSurfaceSoft, border: `1px solid ${shellBorderStrong}`, borderRadius: 6, color: "var(--ide-text)", fontSize: 11, fontWeight: 600, padding: "6px 14px", cursor: "pointer" }}>+ Add Environment</button>
                 </div>
                 </ApiModal>
 

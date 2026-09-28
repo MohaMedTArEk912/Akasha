@@ -57,10 +57,32 @@ const ERDCanvas: React.FC = () => {
     const [generating, setGenerating] = useState(false);
     const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
     const [showAiMenu, setShowAiMenu] = useState(false);
+    const aiMenuRef = useRef<HTMLDivElement>(null);
     const [aiMode, setAiMode] = useState<"scratch" | "fix">("scratch");
     const [deleteModelTarget, setDeleteModelTarget] = useState<{ id: string; name: string } | null>(null);
     const [deleteFieldTarget, setDeleteFieldTarget] = useState<{ modelId: string; fieldId: string; fieldName: string } | null>(null);
     const [addFieldModelId, setAddFieldModelId] = useState<string | null>(null);
+
+    // Close AI menu on click outside or Escape
+    useEffect(() => {
+        if (!showAiMenu) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (aiMenuRef.current && !aiMenuRef.current.contains(event.target as Node)) {
+                setShowAiMenu(false);
+            }
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setShowAiMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        document.addEventListener("keydown", handleKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [showAiMenu]);
 
     // Relation state
     const [addRelationModelId, setAddRelationModelId] = useState<string | null>(null);
@@ -223,106 +245,82 @@ const ERDCanvas: React.FC = () => {
     return (
         <div className="flex-1 min-h-0 w-full flex flex-col bg-transparent">
             {/* ERD Toolbar */}
-            <div className="h-12 bg-black/20 backdrop-blur-md border-b border-white/5 flex items-center px-6 gap-3">
+            <div className="relative z-30 h-12 bg-white/70 dark:bg-black/30 backdrop-blur-xl border-b border-black/[0.08] dark:border-white/10 flex items-center px-6 gap-3">
                 <button
-                    className="btn-ghost flex items-center gap-1 text-sm font-medium hover:text-white transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-neutral-800 dark:text-neutral-200 hover:text-neutral-950 dark:hover:text-white px-3 py-1.5 rounded-lg bg-black/[0.04] dark:bg-white/5 border border-black/[0.08] dark:border-white/10 transition-all"
                     onClick={handleAddModel}
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Model
+                    + ADD MODEL
                 </button>
-                <div className="relative">
+                <div className="relative z-50" ref={aiMenuRef}>
                     <button
-                        className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md font-medium transition-all ${
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider transition-all ${
                             generating
-                                ? "bg-white/10 text-white cursor-wait"
-                                : "bg-white/5 text-white/70 hover:bg-white/15 hover:text-white border border-white/10"
+                                ? "bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 cursor-wait"
+                                : "bg-black/[0.04] dark:bg-white/5 text-neutral-700 dark:text-white/80 hover:bg-black/[0.08] dark:hover:bg-white/10 border border-black/[0.08] dark:border-white/10"
                         }`}
                         onClick={() => setShowAiMenu(!showAiMenu)}
                         disabled={generating}
                         title="AI assistant for your database schema"
                     >
-                        {generating ? (
-                            <>
-                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
-                                AI Thinking...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                                AI Help
-                                <svg className={`w-3 h-3 ml-0.5 transition-transform ${showAiMenu ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </>
-                        )}
+                        {generating ? "AI THINKING..." : `AI HELP ${showAiMenu ? "▲" : "▼"}`}
                     </button>
 
                     {showAiMenu && !generating && (
-                        <>
-                            <div className="fixed inset-0 z-40" onClick={() => setShowAiMenu(false)} />
-                            <div className="absolute top-full left-0 mt-2 w-64 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
-                                <button
-                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-500/10 flex items-center gap-2 group transition-colors"
-                                    onClick={() => {
-                                        setAiMode("scratch");
-                                        handleGenerateClick();
-                                        setShowAiMenu(false);
-                                    }}
-                                >
-                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/15">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div className="font-medium text-[var(--ide-text)]">Regenerate from Scratch</div>
-                                        <div className="text-[10px] text-[var(--ide-text-muted)]">Delete all models and start over</div>
-                                    </div>
-                                </button>
-                                <button
-                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 flex items-center gap-2 group transition-colors border-t border-white/5"
-                                    onClick={() => {
-                                        setAiMode("fix");
-                                        handleGenerateClick();
-                                        setShowAiMenu(false);
-                                    }}
-                                >
-                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/15">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div className="font-medium text-[var(--ide-text)]">Check and Fix Missing</div>
-                                        <div className="text-[10px] text-[var(--ide-text-muted)]">Improve current schema using AI</div>
-                                    </div>
-                                </button>
-                            </div>
-                        </>
+                        <div className="absolute top-full left-0 mt-2 w-64 bg-white/95 dark:bg-[#0c0d16]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/12 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] z-50 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                            <button
+                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-500/10 flex items-center gap-3 group transition-colors"
+                                onClick={() => {
+                                    setAiMode("scratch");
+                                    handleGenerateClick();
+                                    setShowAiMenu(false);
+                                }}
+                            >
+                                <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-400 group-hover:bg-purple-500/20">
+                                    SCRATCH
+                                </div>
+                                <div>
+                                    <div className="font-bold text-neutral-950 dark:text-white text-xs">Regenerate from Scratch</div>
+                                    <div className="text-[10px] text-neutral-500 dark:text-neutral-400">Delete all models and start over</div>
+                                </div>
+                            </button>
+                            <button
+                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-500/10 flex items-center gap-3 group transition-colors border-t border-black/[0.05] dark:border-white/5"
+                                onClick={() => {
+                                    setAiMode("fix");
+                                    handleGenerateClick();
+                                    setShowAiMenu(false);
+                                }}
+                            >
+                                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-[10px] font-black text-blue-600 dark:text-blue-400 group-hover:bg-blue-500/20">
+                                    FIX
+                                </div>
+                                <div>
+                                    <div className="font-bold text-neutral-950 dark:text-white text-xs">Check and Fix Missing</div>
+                                    <div className="text-[10px] text-neutral-500 dark:text-neutral-400">Improve current schema using AI</div>
+                                </div>
+                            </button>
+                        </div>
                     )}
                 </div>
-                <div className="w-px h-6 bg-[var(--ide-border)]" />
-                <button className="btn-ghost text-sm" onClick={() => setZoom(z => Math.min(z + 0.1, 2))}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                    </svg>
+                <div className="w-px h-6 bg-black/[0.08] dark:bg-white/10" />
+                <button
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black bg-black/[0.04] dark:bg-white/5 border border-black/[0.08] dark:border-white/10 text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.08] dark:hover:bg-white/10"
+                    onClick={() => setZoom(z => Math.min(z + 0.1, 2))}
+                    title="Zoom in"
+                >
+                    +
                 </button>
-                <span className="text-xs text-[var(--ide-text-muted)]">{Math.round(zoom * 100)}%</span>
-                <button className="btn-ghost text-sm" onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                    </svg>
+                <span className="text-xs font-mono font-bold text-neutral-600 dark:text-neutral-300 min-w-[40px] text-center">{Math.round(zoom * 100)}%</span>
+                <button
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black bg-black/[0.04] dark:bg-white/5 border border-black/[0.08] dark:border-white/10 text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.08] dark:hover:bg-white/10"
+                    onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}
+                    title="Zoom out"
+                >
+                    -
                 </button>
                 <div className="flex-1" />
-                <span className="text-xs text-[var(--ide-text-muted)]">{models.length} models</span>
+                <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">{models.length} models</span>
             </div>
 
             {/* ── Modals ───────────────────────────────────────────────────────── */}
@@ -530,30 +528,28 @@ const ModelCard: React.FC<ModelCardProps> = ({
 }) => {
     return (
         <div
-            className={`w-72 rounded-xl border overflow-hidden bg-black/40 backdrop-blur-xl transition-all cursor-pointer shadow-2xl ${
-                selected ? "border-white/40 shadow-white/5" : "border-white/10 hover:border-white/30"
+            className={`w-72 rounded-2xl border overflow-hidden bg-white/75 dark:bg-black/60 backdrop-blur-2xl transition-all cursor-pointer shadow-xl ${
+                selected ? "border-blue-500/60 ring-2 ring-blue-500/20 shadow-blue-500/10" : "border-black/[0.08] dark:border-white/10 hover:border-black/[0.15] dark:hover:border-white/30"
             }`}
             onClick={onSelect}
         >
             {/* Header */}
-            <div className="bg-white/5 px-4 py-3 pb-2.5 border-b border-white/5 flex items-center gap-2">
-                <svg className="w-5 h-5 text-[var(--ide-text)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                </svg>
-                <span className="font-semibold text-[var(--ide-text)] flex-1">{model.name}</span>
+            <div className="bg-black/[0.03] dark:bg-white/5 px-4 py-3 pb-2.5 border-b border-black/[0.06] dark:border-white/5 flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    TBL
+                </span>
+                <span className="font-bold text-sm text-neutral-900 dark:text-white flex-1 truncate">{model.name}</span>
                 <button
-                    className="p-1 text-white/60 hover:text-red-300 transition-colors rounded"
+                    className="px-2 py-0.5 text-[10px] font-bold text-red-500/70 hover:text-red-600 transition-colors rounded uppercase"
                     title="Delete model"
                     onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    DEL
                 </button>
             </div>
 
             {/* Fields */}
-            <div className="divide-y divide-white/5">
+            <div className="divide-y divide-black/[0.04] dark:divide-white/5">
                 {model.fields.length > 0 ? (
                     model.fields.map((field) => (
                         <FieldRow
@@ -563,17 +559,17 @@ const ModelCard: React.FC<ModelCardProps> = ({
                         />
                     ))
                 ) : (
-                    <div className="px-4 py-3 text-xs text-[var(--ide-text-muted)] italic">No fields defined</div>
+                    <div className="px-4 py-3 text-xs text-neutral-400 dark:text-neutral-500 italic">No fields defined</div>
                 )}
             </div>
 
             {/* Relations section */}
             {model.relations && model.relations.length > 0 && (
-                <div className="border-t border-white/[0.06]">
-                    <div className="px-4 py-1.5 text-[10px] font-bold text-white/30 uppercase tracking-widest">
+                <div className="border-t border-black/[0.06] dark:border-white/[0.06]">
+                    <div className="px-4 py-1.5 text-[10px] font-bold text-neutral-400 dark:text-white/30 uppercase tracking-widest">
                         Relations
                     </div>
-                    <div className="divide-y divide-white/5">
+                    <div className="divide-y divide-black/[0.04] dark:divide-white/5">
                         {model.relations.map((rel) => (
                             <RelationRow
                                 key={rel.id}
@@ -587,35 +583,31 @@ const ModelCard: React.FC<ModelCardProps> = ({
             )}
 
             {/* Footer */}
-            <div className="px-4 py-2 bg-black/20 flex items-center justify-between border-t border-white/5">
+            <div className="px-4 py-2 bg-black/[0.02] dark:bg-black/30 flex items-center justify-between border-t border-black/[0.06] dark:border-white/5">
                 <span className="flex items-center gap-1 flex-wrap">
                     {model.timestamps && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40">timestamps</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/5 text-neutral-500 dark:text-white/40">timestamps</span>
                     )}
                     {model.soft_delete && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40">soft delete</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/5 text-neutral-500 dark:text-white/40">soft-del</span>
                     )}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                     {/* Add Relation button */}
                     <button
-                        className="p-1 text-white/40 hover:text-[#a78bfa] transition-colors rounded"
+                        className="px-1.5 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors rounded uppercase"
                         title="Add relation"
                         onClick={(e) => { e.stopPropagation(); onRequestAddRelation(); }}
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />
-                        </svg>
+                        + REL
                     </button>
                     {/* Add Field button */}
                     <button
-                        className="p-1 text-white/40 hover:text-white transition-colors rounded"
+                        className="px-1.5 py-0.5 text-[10px] font-bold text-neutral-700 dark:text-white/70 hover:bg-black/[0.04] dark:hover:bg-white/10 transition-colors rounded uppercase"
                         title="Add field"
                         onClick={(e) => { e.stopPropagation(); onRequestAddField(); }}
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
+                        + FLD
                     </button>
                 </div>
             </div>
@@ -631,42 +623,42 @@ interface FieldRowProps {
 }
 
 const FIELD_TYPE_COLORS: Record<string, string> = {
-    string: "text-emerald-400/70",
-    text: "text-emerald-400/70",
-    int: "text-blue-400/70",
-    float: "text-cyan-400/70",
-    boolean: "text-amber-400/70",
-    datetime: "text-purple-400/70",
-    uuid: "text-pink-400/70",
+    string: "text-emerald-600 dark:text-emerald-400",
+    text: "text-emerald-600 dark:text-emerald-400",
+    int: "text-blue-600 dark:text-blue-400",
+    float: "text-cyan-600 dark:text-cyan-400",
+    boolean: "text-amber-600 dark:text-amber-400",
+    datetime: "text-purple-600 dark:text-purple-400",
+    uuid: "text-pink-600 dark:text-pink-400",
 };
 
 const FieldRow: React.FC<FieldRowProps> = ({ field, onRequestDelete }) => {
-    const typeColor = FIELD_TYPE_COLORS[field.field_type?.toLowerCase()] ?? "text-white/45";
+    const typeColor = FIELD_TYPE_COLORS[field.field_type?.toLowerCase()] ?? "text-neutral-500 dark:text-white/45";
 
     return (
-        <div className="px-4 py-2 flex items-center gap-2 hover:bg-white/[0.03] transition-colors group">
+        <div className="px-4 py-2 flex items-center gap-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.03] transition-colors group">
             {field.primary_key && (
-                <svg className="w-3 h-3 text-amber-400/70 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12.65 10A5.99 5.99 0 006 5c-3.31 0-6 2.69-6 6s2.68 6 6 6a5.99 5.99 0 006.65-5H18v4h4v-4h2v-2H12.65zM6 15c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" />
-                </svg>
+                <span className="text-[9px] font-black font-mono px-1 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex-shrink-0">
+                    PK
+                </span>
             )}
-            <span className="text-sm text-[var(--ide-text)] flex-1 truncate">
+            <span className="text-sm font-medium text-neutral-900 dark:text-white flex-1 truncate">
                 {field.name}
-                {!field.required && <span className="text-[var(--ide-text-muted)]">?</span>}
+                {!field.required && <span className="text-neutral-400 dark:text-neutral-500">?</span>}
             </span>
-            <span className={`text-xs font-mono flex-shrink-0 ${typeColor}`}>{field.field_type}</span>
+            <span className={`text-xs font-mono font-medium flex-shrink-0 ${typeColor}`}>{field.field_type}</span>
             {field.unique && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-white/5 text-white/40 flex-shrink-0">unique</span>
+                <span className="text-[9px] font-bold font-mono px-1 py-0.5 rounded bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/50 flex-shrink-0">
+                    UQ
+                </span>
             )}
             {!field.primary_key && (
                 <button
-                    className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all flex-shrink-0"
+                    className="opacity-0 group-hover:opacity-100 text-[11px] font-bold text-neutral-400 hover:text-red-500 transition-all flex-shrink-0 px-1"
                     title="Delete field"
                     onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
                 >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    ✕
                 </button>
             )}
         </div>
@@ -687,7 +679,7 @@ const RelationRow: React.FC<RelationRowProps> = ({ relation, allModels, onReques
     const label = relationLabel(relation.relation_type);
 
     return (
-        <div className="px-4 py-2 flex items-center gap-2 hover:bg-white/[0.03] transition-colors group">
+        <div className="px-4 py-2 flex items-center gap-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.03] transition-colors group">
             {/* Relation type badge */}
             <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
@@ -696,20 +688,18 @@ const RelationRow: React.FC<RelationRowProps> = ({ relation, allModels, onReques
                 {label}
             </span>
             {/* Relation name */}
-            <span className="text-sm text-[var(--ide-text)] flex-1 truncate">{relation.name}</span>
+            <span className="text-sm font-medium text-neutral-900 dark:text-white flex-1 truncate">{relation.name}</span>
             {/* Target model */}
-            <span className="text-xs text-white/40 flex-shrink-0 truncate max-w-[80px]">
+            <span className="text-xs text-neutral-500 dark:text-white/40 flex-shrink-0 truncate max-w-[80px]">
                 → {targetModel?.name ?? "Unknown"}
             </span>
             {/* Delete */}
             <button
-                className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all flex-shrink-0"
+                className="opacity-0 group-hover:opacity-100 text-[11px] font-bold text-neutral-400 hover:text-red-500 transition-all flex-shrink-0 px-1"
                 title="Delete relation"
                 onClick={(e) => { e.stopPropagation(); onRequestDelete(); }}
             >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                ✕
             </button>
         </div>
     );
@@ -740,75 +730,50 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
     return (
         <div className="h-full flex items-center justify-center p-8">
             <div className="text-center max-w-sm w-full">
-                <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-lg">
-                    <svg className="w-10 h-10 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                    </svg>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/80 dark:bg-white/[0.05] border border-black/[0.08] dark:border-white/10 flex items-center justify-center shadow-md">
+                    <span className="text-xl font-black tracking-widest text-neutral-700 dark:text-white/70">ERD</span>
                 </div>
-                <h3 className="text-lg font-semibold text-[var(--ide-text)] mb-2">Database Designer</h3>
-                <p className="text-sm text-[var(--ide-text-muted)] mb-6">
+                <h3 className="text-lg font-bold text-neutral-950 dark:text-white mb-2">Database Designer</h3>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
                     Design your database schema visually. Create models, add fields, and set up 1:1, 1:N, and N:N relations.
                 </p>
                 <div className="flex flex-col gap-3 items-center">
-                    <div className="relative" ref={aiHelpRef}>
+                    <div className="relative w-full z-30" ref={aiHelpRef}>
                         <button
-                            className={`px-5 py-2.5 bg-white/10 border border-white/20 text-white font-bold rounded-xl shadow-lg hover:bg-white/15 hover:-translate-y-0.5 transition-all outline-none flex items-center gap-2 pr-2 ${generating ? "opacity-70 cursor-not-allowed" : ""}`}
+                            className={`w-full py-2.5 px-4 bg-neutral-900 dark:bg-white/10 border border-neutral-900 dark:border-white/20 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-neutral-800 dark:hover:bg-white/15 transition-all outline-none flex items-center justify-center gap-2 ${generating ? "opacity-70 cursor-not-allowed" : ""}`}
                             onClick={() => !generating && setAiHelpOpen(!aiHelpOpen)}
                         >
-                            {generating ? (
-                                <>
-                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    AI Working...
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                                    </svg>
-                                    AI Help
-                                    <div className="ml-1 w-px h-4 bg-white/20 mx-1" />
-                                    <svg className={`w-3.5 h-3.5 transition-transform ${aiHelpOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </>
-                            )}
+                            {generating ? "AI WORKING..." : `AI HELP ${aiHelpOpen ? "▲" : "▼"}`}
                         </button>
 
                         {aiHelpOpen && (
-                            <div className="absolute bottom-full mb-3 left-0 w-64 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-scale-in">
-                                <div className="p-1 px-3 py-2 border-b border-white/[0.06]">
-                                    <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">AI Assistance</span>
+                            <div className="absolute bottom-full mb-3 left-0 right-0 bg-white/95 dark:bg-[#0c0d16]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/12 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.6)] overflow-hidden animate-scale-in z-50">
+                                <div className="p-1 px-3 py-2 border-b border-black/[0.06] dark:border-white/[0.06]">
+                                    <span className="text-[10px] font-bold text-neutral-400 dark:text-white/40 uppercase tracking-widest">AI Assistance</span>
                                 </div>
-                                <div className="p-1.5">
+                                <div className="p-1.5 flex flex-col gap-1">
                                     <button
                                         onClick={() => { onGenerate("scratch"); setAiHelpOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-white/5 rounded-lg transition-all text-left group"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-neutral-900 dark:text-white hover:bg-purple-500/10 rounded-xl transition-all text-left group"
                                     >
-                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:scale-110 transition-all">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
+                                        <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-600 dark:text-purple-400 group-hover:bg-purple-500/20">
+                                            NEW
                                         </div>
                                         <div>
-                                            <div className="font-bold text-sm">Regenerate from Scratch</div>
-                                            <div className="text-[10px] text-[var(--ide-text-muted)] font-normal mt-0.5">Wipe current schema and restart</div>
+                                            <div className="font-bold text-xs">Regenerate from Scratch</div>
+                                            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-normal">Wipe current schema and restart</div>
                                         </div>
                                     </button>
                                     <button
                                         onClick={() => { onGenerate("fix"); setAiHelpOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-[var(--ide-text)] hover:bg-white/5 rounded-lg transition-all text-left group mt-1"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-medium text-neutral-900 dark:text-white hover:bg-blue-500/10 rounded-xl transition-all text-left group"
                                     >
-                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:scale-110 transition-all">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
+                                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-[10px] font-black text-blue-600 dark:text-blue-400 group-hover:bg-blue-500/20">
+                                            FIX
                                         </div>
                                         <div>
-                                            <div className="font-bold text-sm">Check and Fix Schema</div>
-                                            <div className="text-[10px] text-[var(--ide-text-muted)] font-normal mt-0.5">Add missing fields or fix errors</div>
+                                            <div className="font-bold text-xs">Check and Fix Schema</div>
+                                            <div className="text-[10px] text-neutral-500 dark:text-neutral-400 font-normal">Add missing fields or fix errors</div>
                                         </div>
                                     </button>
                                 </div>
@@ -816,12 +781,12 @@ const EmptyERDState: React.FC<EmptyERDStateProps> = ({ onAdd, onGenerate, genera
                         )}
                     </div>
                     <div className="flex items-center gap-4 w-full justify-center">
-                        <div className="h-px bg-white/5 flex-1" />
-                        <span className="text-[11px] text-[var(--ide-text-muted)] uppercase tracking-widest font-semibold">or</span>
-                        <div className="h-px bg-white/5 flex-1" />
+                        <div className="h-px bg-black/[0.08] dark:bg-white/10 flex-1" />
+                        <span className="text-[10px] text-neutral-400 uppercase tracking-widest font-bold">OR</span>
+                        <div className="h-px bg-black/[0.08] dark:bg-white/10 flex-1" />
                     </div>
                     <button
-                        className="px-6 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 hover:border-white/20 transition-all text-sm shadow-xl mt-1 w-full"
+                        className="px-6 py-2.5 bg-black/[0.04] dark:bg-white/5 border border-black/[0.08] dark:border-white/10 text-neutral-900 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-black/[0.08] dark:hover:bg-white/10 transition-all shadow-sm w-full"
                         onClick={onAdd}
                     >
                         Create First Model

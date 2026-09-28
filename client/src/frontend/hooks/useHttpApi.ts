@@ -14,11 +14,11 @@ import {
   RelationSchema,
 } from "../types/api";
 import type { UiBuilderGenerateRequest, UiBuilderGenerateResponse } from "../types/uiBuilder";
-import { getSampleProjectTemplateJson } from "../utils/projectImportTemplate";
+import { getCleanProjectSpecificationJson } from "../utils/projectImportTemplate";
 
 const API_BASE_URL = "/api/akasha";
 
-const client = axios.create({
+export const client = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
 });
@@ -33,12 +33,19 @@ client.interceptors.request.use((config) => {
     const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
     const token = (localStorage.getItem("akasha_token") || localStorage.getItem("token"))?.trim();
     const ghSession = localStorage.getItem("gh_session")?.trim();
+    const ghToken = (localStorage.getItem("gh_pat_token") || localStorage.getItem("gh_token"))?.trim();
     
     if (apiKey) config.headers["x-ai-api-key"] = apiKey;
     if (model) config.headers["x-ai-model"] = model;
     if (apiBaseUrl) config.headers["x-ai-api-base-url"] = apiBaseUrl;
     if (token) config.headers["Authorization"] = `Bearer ${token}`;
-    if (ghSession) config.headers["x-gh-session"] = ghSession;
+    if (ghSession) {
+      config.headers["x-gh-session"] = ghSession;
+      config.headers["x-github-session"] = ghSession;
+    }
+    if (ghToken) {
+      config.headers["x-github-token"] = ghToken;
+    }
   }
   return config;
 });
@@ -89,9 +96,7 @@ export const httpApi = {
   getProjectImportTemplate: async (
     name?: string,
   ): Promise<Record<string, unknown>> => {
-    // Keep sample JSON local-first so the create flow works even if the backend
-    // template route is unavailable or the server has not been restarted yet.
-    return JSON.parse(getSampleProjectTemplateJson(name));
+    return JSON.parse(getCleanProjectSpecificationJson(name));
   },
   renameProject: async (name: string, projectId?: string): Promise<ProjectSchema> => {
     const targetId = projectId || activeProjectId;
@@ -416,32 +421,96 @@ export const httpApi = {
   generateDatabase: async () => ({ files: [] }),
   downloadZip: async () => new Blob([], { type: "application/zip" }),
 
-  // ─── File System ────────────────────────────────
-  listDirectory: async (path?: string) => ({
-    path: path || "",
-    entries: [] as FileEntry[],
-  }),
-  createFile: async (path: string, _content?: string) => ({
-    name: "",
-    path,
-    is_directory: false,
-  }),
-  createFolder: async (path: string) => ({
-    name: "",
-    path,
-    is_directory: true,
-  }),
-  renameFile: async (_oldPath: string, newPath: string) => ({
-    name: "",
-    path: newPath,
-    is_directory: false,
-  }),
-  deleteFile: async (_path: string) => true,
-  readFileContent: async (path: string) => ({ content: "", path }),
-  writeFileContent: async (path: string, content: string) => ({
-    content,
-    path,
-  }),
+  // ─── File System (MongoDB Cloud Storage) ────────
+  listDirectory: async (dirPath?: string) => {
+    if (!activeProjectId) {
+      return { path: dirPath || "", entries: [] as FileEntry[] };
+    }
+    const res = await client.get("/storage/files", {
+      params: { projectId: activeProjectId, path: dirPath || "" },
+    });
+    return res.data as { path: string; entries: FileEntry[] };
+  },
+  createFile: async (filePath: string, content?: string) => {
+    if (!activeProjectId) throw new Error("No active project");
+    const res = await client.post("/storage/file", {
+      projectId: activeProjectId,
+      path: filePath,
+      content: content || "",
+    });
+    return {
+      name: filePath.split("/").pop() || "",
+      path: filePath,
+      is_directory: false,
+      ...res.data,
+    };
+  },
+  createFolder: async (folderPath: string) => {
+    if (!activeProjectId) throw new Error("No active project");
+    const res = await client.post("/storage/folder", {
+      projectId: activeProjectId,
+      path: folderPath,
+    });
+    return {
+      name: folderPath.split("/").pop() || "",
+      path: folderPath,
+      is_directory: true,
+      ...res.data,
+    };
+  },
+  renameFile: async (oldPath: string, newPath: string) => {
+    if (!activeProjectId) throw new Error("No active project");
+    const old = await httpApi.readFileContent(oldPath);
+    await httpApi.writeFileContent(newPath, old.content);
+    await httpApi.deleteFile(oldPath);
+    return {
+      name: newPath.split("/").pop() || "",
+      path: newPath,
+      is_directory: false,
+    };
+  },
+  deleteFile: async (filePath: string) => {
+    if (!activeProjectId) return true;
+    await client.delete("/storage/file", {
+      data: { projectId: activeProjectId, path: filePath },
+    });
+    return true;
+  },
+  readFileContent: async (filePath: string) => {
+    if (!activeProjectId) return { content: "", path: filePath };
+    const res = await client.get("/storage/file", {
+      params: { projectId: activeProjectId, path: filePath },
+    });
+    return { content: res.data.content, path: filePath };
+  },
+  writeFileContent: async (filePath: string, content: string) => {
+    if (!activeProjectId) throw new Error("No active project");
+    await client.post("/storage/file", {
+      projectId: activeProjectId,
+      path: filePath,
+      content,
+    });
+    return {
+      content,
+      path: filePath,
+    };
+  },
+  uploadStorageFile: async (targetDir: string, file: File) => {
+    if (!activeProjectId) throw new Error("No active project");
+    const formData = new FormData();
+    formData.append("projectId", activeProjectId);
+    formData.append("path", targetDir);
+    formData.append("file", file);
+    const res = await client.post("/storage/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  },
+  syncStorageProject: async () => {
+    if (!activeProjectId) return false;
+    await client.post("/storage/sync", { projectId: activeProjectId });
+    return true;
+  },
   installDependencies: async () => ({ success: true, steps: [] }),
 
   // ─── Components ─────────────────────────────────
@@ -673,9 +742,9 @@ export const httpApi = {
     const res = await client.get("/github/status");
     return res.data;
   },
-  githubRepos: async (page?: number, perPage?: number) => {
+  githubRepos: async (page?: number, perPage?: number, type?: string) => {
     const res = await client.get("/github/repos", {
-      params: { page: page || 1, per_page: perPage || 30, sort: "updated" },
+      params: { page: page || 1, per_page: perPage || 100, sort: "updated", ...(type ? { type } : {}) },
     });
     return res.data;
   },
@@ -705,6 +774,44 @@ export const httpApi = {
   },
   githubDisconnect: async () => {
     const res = await client.post("/github/disconnect");
+    return res.data;
+  },
+  githubCommitFile: async (
+    owner: string,
+    repo: string,
+    payload: {
+      path: string;
+      content: string;
+      message?: string;
+      branch?: string;
+      sha?: string;
+    }
+  ) => {
+    const res = await client.post(`/github/repos/${owner}/${repo}/commit-file`, payload);
+    return res.data;
+  },
+  githubIngest: async (payload: {
+    owner?: string;
+    repo?: string;
+    branch?: string;
+    url?: string;
+    apiKey?: string;
+    model?: string;
+    apiBaseUrl?: string;
+  }) => {
+    const res = await client.post("/github/ingest", payload);
+    return res.data;
+  },
+  githubSyncTasks: async (owner: string, repo: string, projectId: string, branch?: string) => {
+    const res = await client.post(`/github/repos/${owner}/${repo}/sync-tasks`, { projectId, branch });
+    return res.data;
+  },
+  githubSyncProjectTasks: async (projectId: string, branch?: string) => {
+    const res = await client.post(`/github/projects/${projectId}/sync-tasks`, { branch });
+    return res.data;
+  },
+  githubCheckProjectAutoSync: async (projectId: string, branch?: string) => {
+    const res = await client.post(`/github/projects/${projectId}/auto-sync-check`, { branch });
     return res.data;
   },
   getProjectRole: async (projectId: string) => {

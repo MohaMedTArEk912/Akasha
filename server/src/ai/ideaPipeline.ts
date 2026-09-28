@@ -1,22 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { getLLMProvider } from '../lib/llmProvider.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// --- 1. Load Templates ---
-let templates: Record<string, any> = {};
-try {
-    const templatePath = path.join(__dirname, 'templates', 'domainTemplates.json');
-    const rawData = fs.readFileSync(templatePath, 'utf-8');
-    templates = JSON.parse(rawData);
-} catch (err) {
-    console.error('Failed to load domain templates:', err);
-}
-
-// --- 2. Extract JSON helper ---
+// --- 1. Extract JSON helper ---
 function extractJsonObject(raw: string): string {
     let text = raw.trim();
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -28,38 +12,32 @@ function extractJsonObject(raw: string): string {
     return text.slice(start, end + 1);
 }
 
-// --- 3. Category Detection ---
+// --- 2. Dynamic Domain Classification ---
 export function detectCategories(idea: string): string[] {
     const text = idea.toLowerCase();
-    const matchedCategories: string[] = [];
+    const categories: string[] = [];
 
-    for (const [category, data] of Object.entries(templates)) {
-        const keywords = data.keywords as string[];
+    const domainIndicators: Record<string, string[]> = {
+        identity_security: ["login", "auth", "security", "permissions", "roles", "sso", "mfa", "rbac", "identity"],
+        ecommerce: ["shop", "store", "buy", "sell", "cart", "checkout", "product", "inventory", "payment"],
+        healthcare: ["patient", "doctor", "health", "hospital", "clinic", "medical", "appointment", "prescription"],
+        ai_productivity: ["ai", "bot", "assistant", "generate", "smart", "summarize", "automation", "workflow", "copilot"],
+        data_analytics: ["analytics", "dashboard", "metric", "telemetry", "report", "kpi", "pipeline", "chart"],
+        collaboration: ["team", "chat", "message", "project", "workspace", "task", "board", "collaborate"]
+    };
+
+    for (const [category, keywords] of Object.entries(domainIndicators)) {
         for (const kw of keywords) {
-            // Using word boundary regex for precise keyword matching
-            if (new RegExp('\\b' + kw.toLowerCase() + '\\b').test(text)) {
-                matchedCategories.push(category);
-                break; // One keyword match is enough for this category
+            if (new RegExp('\\b' + kw + '\\b').test(text)) {
+                categories.push(category);
+                break;
             }
         }
     }
-    return matchedCategories;
+    return categories.length > 0 ? categories : ["general_application"];
 }
 
-// --- 4. Template Features Aggregation ---
-export function collectTemplateFeatures(categories: string[]): string[] {
-    const allFeatures = new Set<string>();
-    for (const cat of categories) {
-        if (templates[cat] && Array.isArray(templates[cat].features)) {
-            for (const f of templates[cat].features) {
-                allFeatures.add(f);
-            }
-        }
-    }
-    return Array.from(allFeatures);
-}
-
-// --- 5. Light Idea Scoring (Pipeline Step 1 replacement) ---
+// --- 3. Light Idea Scoring (Pipeline Step 1 replacement) ---
 export async function lightScoreIdea(idea: string, options?: { apiKey?: string; model?: string; apiBaseUrl?: string }) {
     const prompt = `You are a professional innovation evaluator.
 Evaluate the startup idea for Feasibility (1-10), Innovation (1-10), MarketPotential (1-10), and Complexity (1-10).
@@ -117,22 +95,19 @@ ${idea}`;
     }
 }
 
-// --- 6. Full Pipeline Implementation ---
+// --- 4. Full Pipeline Implementation ---
 export async function runFullPipeline(idea: string, options?: { apiKey?: string; model?: string; apiBaseUrl?: string }) {
     const llmProvider = getLLMProvider();
 
-    // Stage 1 & 2 & 4: Deep Extraction & Merging
-    // (We merge these conceptually to save LLM calls)
+    // Stage 1 & 2: First-principles Feature Extraction
     const categories = detectCategories(idea);
-    const templateFeatures = collectTemplateFeatures(categories);
 
     const featurePrompt = `You are an enterprise system architect.
-I have a startup idea. I have also matched it to domain templates and extracted some baseline features.
-Combine the AI-extracted specialized features with the template features, remove duplicates, and categorize them.
+Perform a first-principles architectural decomposition of this startup/system idea.
+Extract comprehensive core, secondary, and administrative capabilities tailored specifically to this domain.
 
 IDEA: ${idea}
-MATCHED DOMAINS: ${categories.join(', ')}
-TEMPLATE FEATURES: ${templateFeatures.join(', ')}
+CATEGORIES: ${categories.join(', ')}
 
 Return ONLY valid JSON:
 {
@@ -152,11 +127,14 @@ Return ONLY valid JSON:
         });
         mergedFeatures = JSON.parse(extractJsonObject(res));
     } catch (e) {
-        console.warn("Feature extraction failed, falling back to templates", e);
-        mergedFeatures.core = templateFeatures;
+        console.warn("Feature extraction failed, extracting dynamic baseline", e);
+        const words = idea.split(/[\s,.-]+/).filter(w => w.length > 3).slice(0, 4);
+        mergedFeatures.core = words.map(w => `${w.charAt(0).toUpperCase() + w.slice(1)} Management Engine`);
+        mergedFeatures.secondary = ["Audit Logging & Telemetry", "User Access Governance"];
+        mergedFeatures.admin = ["System Configuration", "API Key Management"];
     }
 
-    // Stage 5 & 6: Requirements & Use Cases
+    // Stage 3: Requirements & Use Cases
     const reqPrompt = `Based on this idea and these mapped features, generate system requirements and use cases.
 IDEA: ${idea}
 FEATURES: ${JSON.stringify(mergedFeatures)}
@@ -186,10 +164,10 @@ Return ONLY valid JSON:
         console.warn("Requirements gen failed", e);
     }
 
-    // Stage 7: Verification Loop
+    // Stage 4: Verification Loop
     let isComplete = false;
     let loopCount = 0;
-    const MAX_LOOPS = 2; // Keep loop small to save time/tokens
+    const MAX_LOOPS = 2;
     
     let currentSpec = {
         idea,
@@ -226,19 +204,15 @@ ${JSON.stringify(currentSpec)}`;
             if (verification.is_complete) {
                 isComplete = true;
             } else {
-                // In a real advanced system, we'd feed this back to generate additions.
-                // Here we just append the missing lists for simplicity so the human can see it.
                 if (verification.missing_features?.length) {
                     currentSpec.features.core.push(...verification.missing_features.slice(0, 3));
                 }
                 if (verification.missing_requirements?.length) {
                     currentSpec.requirements.functional.push(...verification.missing_requirements.slice(0, 3));
                 }
-                // we break to avoid infinite loops if it refuses to true the boolean,
-                // but we incremented loop count so it will naturally terminate.
             }
         } catch (e) {
-            isComplete = true; // Bail out on error
+            isComplete = true;
         }
         loopCount++;
     }

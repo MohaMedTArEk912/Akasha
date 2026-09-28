@@ -49,9 +49,7 @@ const LayersPanel: React.FC = () => {
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--ide-bg-sidebar)]">
             <div className="p-4 border-b border-[var(--ide-border)] shrink-0">
                 <div className="text-[10px] text-[var(--ide-text-secondary)] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
+                    <span className="font-mono text-[9px] font-black text-[var(--ide-accent)] px-1 py-0.5 rounded bg-white/5 border border-white/10">TREE</span>
                     <span>Layers</span>
                 </div>
             </div>

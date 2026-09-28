@@ -1,5 +1,5 @@
 import './env.js';
-import { MongoClient, ObjectId } from 'mongodb';
+import { MongoClient, ObjectId, Db } from 'mongodb';
 import * as path from 'node:path';
 
 type Dict = Record<string, any>;
@@ -40,6 +40,8 @@ export type PrismaLikeClient = {
 	useCase: ModelDelegate;
 	apiRequest: ModelDelegate;
 	diagram: ModelDelegate;
+	file: ModelDelegate;
+	folder: ModelDelegate;
 	team: ModelDelegate;
 	teamMember: ModelDelegate;
 	joinRequest: ModelDelegate;
@@ -88,6 +90,20 @@ const MODEL_CONFIG: Record<string, ModelConfig> = {
 	useCase: { collection: 'UseCase', idField: 'id', relations: {} },
 	apiRequest: { collection: 'ApiRequest', idField: 'id', relations: {} },
 	diagram: { collection: 'Diagram', idField: 'id', relations: {} },
+	file: {
+		collection: 'files',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	folder: {
+		collection: 'folders',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
 	team: {
 		collection: 'Team',
 		idField: 'id',
@@ -291,7 +307,7 @@ const globalMongo = globalThis as unknown as {
 	__akashaMongoReady?: Promise<MongoClient>;
 };
 
-function getClient(): Promise<MongoClient> {
+export async function getClient(): Promise<MongoClient> {
 	if (globalMongo.__akashaMongoClient) {
 		return Promise.resolve(globalMongo.__akashaMongoClient);
 	}
@@ -300,10 +316,20 @@ function getClient(): Promise<MongoClient> {
 		globalMongo.__akashaMongoReady = client.connect().then((connected) => {
 			globalMongo.__akashaMongoClient = connected;
 			return connected;
+		}).catch((err) => {
+			delete globalMongo.__akashaMongoReady;
+			throw err;
 		});
 	}
 	return globalMongo.__akashaMongoReady;
 }
+
+export async function getDb(): Promise<Db> {
+	const client = await getClient();
+	return client.db(dbName);
+}
+
+export { dbName };
 
 function buildPrismaLikeClient(): PrismaLikeClient {
 	const client = {} as PrismaLikeClient;

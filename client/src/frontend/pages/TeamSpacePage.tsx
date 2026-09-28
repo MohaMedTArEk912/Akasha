@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
-import { updateProjectSettings } from "../stores/projectStore";
+import { updateProjectSettings, syncGitHubTasksForCurrentProject } from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
 import { TeamTask } from "../types/api";
+import { LiquidCard, LiquidPill } from "../components/ui/LiquidGlass";
+import { Sparkles, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import GlassSelect from "../components/ui/GlassSelect";
 
 interface Member {
     id?: string;
@@ -96,6 +99,26 @@ export default function TeamSpacePage() {
 
     const [taskSearch, setTaskSearch] = useState("");
     const [taskSort, setTaskSort] = useState<'created' | 'priority' | 'dueDate'>('created');
+
+    // GitHub Commit Sync & External Agent Prompt Inspection
+    const [syncingCommits, setSyncingCommits] = useState(false);
+    const [promptModalTask, setPromptModalTask] = useState<TeamTask | null>(null);
+
+    const handleSyncCommits = async () => {
+        setSyncingCommits(true);
+        try {
+            const res = await syncGitHubTasksForCurrentProject();
+            if (res?.newlyCompletedCount > 0) {
+                toast.showToast(`🎉 ${res.newlyCompletedCount} task(s) auto-completed from GitHub commits!`, "success");
+            } else {
+                toast.showToast("No new matching commits found for open tasks", "info");
+            }
+        } catch (err: any) {
+            toast.showToast(`Sync failed: ${err.message || err}`, "error");
+        } finally {
+            setSyncingCommits(false);
+        }
+    };
 
     // Get session ID
     const sessionId = localStorage.getItem("akasha_user_session") || "akasha_user_temp";
@@ -560,53 +583,64 @@ export default function TeamSpacePage() {
             <div className="max-w-6xl mx-auto space-y-8 pb-16">
                 
                 {/* ━━ PAGE HEADER ━━ */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/[0.08] dark:border-white/10">
                     <div>
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${soloMode ? "text-emerald-400" : "text-indigo-400"}`}>
-                            {soloMode ? "Planning" : "Workspace"}
+                        <span className={`text-[10px] font-bold uppercase tracking-widest ${soloMode ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"}`}>
+                            {soloMode ? "Planning & Milestones" : "Team Space"}
                         </span>
-                        <h1 className="text-2xl font-black text-white tracking-tight mt-1">
+                        <h1 className="text-xl font-bold text-neutral-950 dark:text-white tracking-tight mt-0.5">
                             {soloMode ? "Roadmap & Tasks" : "Team Space"}
                         </h1>
-                        <p className="text-xs text-white/30 mt-1">
-                            {soloMode ? "Plan your project milestones and track your progress." : "Manage team roles and track project milestone deliverables."}
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
+                            {soloMode ? "Plan your project milestones and track execution progress." : "Manage team roles and track project milestone deliverables."}
                         </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button
+                    <div className="flex items-center gap-2.5">
+                        {project?.settings?.github_repo && (
+                            <button
+                                type="button"
+                                disabled={syncingCommits}
+                                onClick={handleSyncCommits}
+                                className="
+                                    flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold
+                                    bg-neutral-900 text-white dark:bg-white dark:text-neutral-950
+                                    hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all shadow-sm cursor-pointer
+                                "
+                                title={`Sync commits from ${project.settings.github_repo.full_name}`}
+                            >
+                                <RefreshCw className={`w-3.5 h-3.5 ${syncingCommits ? "animate-spin text-cyan-400" : ""}`} />
+                                <span>{syncingCommits ? "Checking Commits..." : "Sync GitHub Commits"}</span>
+                            </button>
+                        )}
+                        <LiquidPill
+                            variant="primary"
+                            size="sm"
                             onClick={handleGenerateMilestones}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] border ${soloMode ? "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-[0_4px_20px_rgba(16,185,129,0.25)] border-emerald-400/20" : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-[0_4px_20px_rgba(99,102,241,0.25)] border-indigo-400/20"}`}
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                            </svg>
                             Generate Milestones
-                        </button>
-                        <button
+                        </LiquidPill>
+                        <LiquidPill
+                            variant="secondary"
+                            size="sm"
                             onClick={() => setShowAddTask(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white border border-white/5 rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.02]"
                         >
-                            <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
-                            </svg>
-                            Add Task
-                        </button>
+                            + Add Task
+                        </LiquidPill>
                     </div>
                 </div>
 
                 {/* ━━ METRICS & COMPLETION PROGRESS ━━ */}
                 {totalCount > 0 && (
-                    <div className={`relative overflow-hidden rounded-2xl p-6 backdrop-blur-xl border ${soloMode ? "bg-[#0f1a14]/60 border-emerald-500/10" : "bg-[#11131c]/60 border-white/5"}`}>
-                        <div className={`absolute top-0 left-0 h-[2px] transition-all duration-500 ${soloMode ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"}`} style={{ width: `${completionRate}%` }} />
+                    <LiquidCard variant="glass" className="p-6 relative overflow-hidden">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="space-y-1">
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-black text-white tabular-nums">{completionRate}%</span>
-                                    <span className="text-xs text-white/45 uppercase font-black tracking-wider">
+                                    <span className="text-2xl font-black text-neutral-950 dark:text-white tabular-nums">{completionRate}%</span>
+                                    <span className="text-xs text-neutral-500 dark:text-neutral-400 uppercase font-bold tracking-wider">
                                         {soloMode ? "Complete" : "Milestones Completed"}
                                     </span>
                                 </div>
-                                <div className="text-[10px] text-white/30">
+                                <div className="text-[10px] text-neutral-500 dark:text-neutral-400">
                                     {soloMode
                                         ? `${totalCount} task${totalCount !== 1 ? "s" : ""} planned · ${completedCount} done`
                                         : `Track project delivery status across ${members.length} team members.`
@@ -615,37 +649,35 @@ export default function TeamSpacePage() {
                             </div>
                             <div className="grid grid-cols-3 gap-6 sm:gap-12">
                                 <div className="text-center sm:text-left">
-                                    <div className={`text-sm font-black tabular-nums ${soloMode ? "text-emerald-400" : "text-indigo-400"}`}>{todoCount}</div>
-                                    <div className="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-0.5">To Do</div>
+                                    <div className="text-sm font-black tabular-nums text-blue-600 dark:text-blue-400">{todoCount}</div>
+                                    <div className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mt-0.5">To Do</div>
                                 </div>
                                 <div className="text-center sm:text-left">
-                                    <div className="text-sm font-black text-amber-400 tabular-nums">{inProgressCount}</div>
-                                    <div className="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-0.5">In Progress</div>
+                                    <div className="text-sm font-black text-amber-600 dark:text-amber-400 tabular-nums">{inProgressCount}</div>
+                                    <div className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mt-0.5">In Progress</div>
                                 </div>
                                 <div className="text-center sm:text-left">
-                                    <div className="text-sm font-black text-emerald-400 tabular-nums">{completedCount}</div>
-                                    <div className="text-[9px] font-bold text-white/30 uppercase tracking-widest mt-0.5">Completed</div>
+                                    <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{completedCount}</div>
+                                    <div className="text-[9px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mt-0.5">Completed</div>
                                 </div>
                             </div>
                         </div>
-                        <div className="w-full bg-[#0f111a] h-1.5 rounded-full mt-4 overflow-hidden border border-white/5">
+                        <div className="w-full bg-black/[0.05] dark:bg-white/[0.08] h-1.5 rounded-full mt-4 overflow-hidden border border-black/[0.05] dark:border-white/5">
                             <div 
-                                className={`h-full rounded-full transition-all duration-500 ease-out ${soloMode ? "bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" : "bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500"}`}
+                                className="h-full rounded-full transition-all duration-500 ease-out bg-gradient-to-r from-blue-500 to-emerald-500"
                                 style={{ width: `${completionRate}%` }}
                             />
                         </div>
-                    </div>
+                    </LiquidCard>
                 )}
 
                 {/* ━━ SOLO MODE: ROADMAP ━━ */}
                 {soloMode && (
-                    <div className="bg-[#0f1a14]/60 border border-emerald-500/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-3xl rounded-full" />
-                        
-                        <div className="flex items-center justify-between mb-6">
+                    <LiquidCard variant="glass" className="p-6 relative overflow-hidden">
+                        <div className="flex items-center justify-between mb-6 pb-2 border-b border-black/[0.06] dark:border-white/10">
                             <div>
-                                <h2 className="text-xs font-black text-emerald-400 uppercase tracking-widest">Project Roadmap</h2>
-                                <p className="text-[10px] text-white/30 mt-0.5">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Project Roadmap</span>
+                                <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
                                     Milestones and tasks for your project journey.
                                 </p>
                             </div>
@@ -653,14 +685,13 @@ export default function TeamSpacePage() {
 
                         {/* Timeline */}
                         {totalCount === 0 ? (
-                            <div className="py-12 flex flex-col items-center gap-3 text-center">
-                                <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                    </svg>
-                                </div>
-                                <p className="text-sm text-white/40 font-semibold">No milestones yet</p>
-                                <p className="text-[11px] text-white/20 max-w-xs">Generate milestones with AI or add your first task to build your project roadmap.</p>
+                            <div className="py-10 flex flex-col items-center gap-2 text-center">
+                                <span className="text-xs font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+                                    No Milestones Yet
+                                </span>
+                                <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-sm">
+                                    Click "Generate Milestones" above or add your first task to build your project roadmap.
+                                </p>
                             </div>
                         ) : (
                             <div className="relative">
@@ -684,6 +715,8 @@ export default function TeamSpacePage() {
                                                     onEdit={() => openEditTask(task)}
                                                     onDelete={() => handleDeleteTask(task.id)}
                                                     onMove={(s) => handleMoveTask(task.id, s)}
+                                                    onViewPrompt={(t) => setPromptModalTask(t)}
+                                                    onCopyPromptToast={() => toast.showToast("Copied external AI agent prompt for Cursor / Claude / Copilot!", "success")}
                                                 />
                                             ))}
                                         </div>
@@ -707,6 +740,8 @@ export default function TeamSpacePage() {
                                                     onEdit={() => openEditTask(task)}
                                                     onDelete={() => handleDeleteTask(task.id)}
                                                     onMove={(s) => handleMoveTask(task.id, s)}
+                                                    onViewPrompt={(t) => setPromptModalTask(t)}
+                                                    onCopyPromptToast={() => toast.showToast("Copied external AI agent prompt for Cursor / Claude / Copilot!", "success")}
                                                 />
                                             ))}
                                         </div>
@@ -717,13 +752,14 @@ export default function TeamSpacePage() {
                                 {doneTasks.length > 0 && (
                                     <div>
                                         <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-6 h-6 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center flex-shrink-0 z-10 relative">
-                                                <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                </svg>
+                                            <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[9px] font-black font-mono text-emerald-500">
+                                                DONE
                                             </div>
-                                            <h3 className="text-xs font-black text-emerald-400 uppercase tracking-wider">Completed</h3>
-                                            <span className="text-[10px] font-bold text-white/30 tabular-nums">{doneTasks.length} task{doneTasks.length !== 1 ? "s" : ""}</span>
+                                            <h3 className="text-xs font-black text-emerald-500 dark:text-emerald-400 uppercase tracking-wider">Completed</h3>
+                                            <span className="text-[10px] font-bold text-neutral-400 dark:text-white/30 tabular-nums">{doneTasks.length} task{doneTasks.length !== 1 ? "s" : ""}</span>
+                                            <button onClick={handleClearCompleted} className="ml-auto text-[10px] font-bold uppercase tracking-wider text-red-500/70 hover:text-red-500 transition-colors">
+                                                CLEAR ALL
+                                            </button>
                                         </div>
                                         <div className="space-y-2 ml-10">
                                             {doneTasks.map((task: TeamTask) => (
@@ -732,6 +768,8 @@ export default function TeamSpacePage() {
                                                     onEdit={() => openEditTask(task)}
                                                     onDelete={() => handleDeleteTask(task.id)}
                                                     onMove={(s) => handleMoveTask(task.id, s)}
+                                                    onViewPrompt={(t) => setPromptModalTask(t)}
+                                                    onCopyPromptToast={() => toast.showToast("Copied external AI agent prompt for Cursor / Claude / Copilot!", "success")}
                                                 />
                                             ))}
                                         </div>
@@ -739,7 +777,7 @@ export default function TeamSpacePage() {
                                 )}
                             </div>
                         )}
-                    </div>
+                    </LiquidCard>
                 )}
 
                 {/* ━━ TEAM MODE: TEAM MEMBERS ━━ */}
@@ -786,12 +824,10 @@ export default function TeamSpacePage() {
                                 {!orgMembers.some(o => o.username.toLowerCase() === m.username.toLowerCase()) && dbMembers.length === 0 && m.username !== "You" && (
                                     <button
                                         onClick={() => handleRemoveMember(m.username)}
-                                        className="absolute top-3 right-3 text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        className="absolute top-3 right-3 text-[10px] font-bold text-neutral-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                         title="Remove Member"
                                     >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        DEL
                                     </button>
                                 )}
                                 <div className="flex items-center gap-3 mb-3">
@@ -812,15 +848,11 @@ export default function TeamSpacePage() {
                                     )}
                                 </div>
                                 <div className="relative mb-2">
-                                    <select
+                                    <GlassSelect
                                         value={m.role}
-                                        onChange={(e) => handleUpdateRole(m.username, e.target.value)}
-                                        className="w-full bg-[#0f111a] border border-white/5 text-[11px] rounded-lg px-2.5 py-1.5 text-white/50 hover:text-white focus:outline-none focus:border-indigo-500/40 cursor-pointer font-medium transition-all"
-                                    >
-                                        {ROLE_OPTIONS.map(role => (
-                                            <option key={role} value={role}>{role}</option>
-                                        ))}
-                                    </select>
+                                        onChange={(val) => handleUpdateRole(m.username, val)}
+                                        options={ROLE_OPTIONS.map(role => ({ value: role, label: role }))}
+                                    />
                                 </div>
                                 {/* Mini stats bar */}
                                 {stats && (
@@ -878,35 +910,31 @@ export default function TeamSpacePage() {
                         </div>
                         <div className="flex items-center gap-3">
                             {/* Search */}
-                            <div className="relative">
-                                <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                                <input
-                                    type="text"
-                                    value={taskSearch}
-                                    onChange={e => setTaskSearch(e.target.value)}
-                                    placeholder="Search tasks..."
-                                    className="w-36 lg:w-44 bg-[#0f111a] border border-white/5 rounded-lg pl-7 pr-2.5 py-1.5 text-[11px] text-white/70 placeholder-white/20 focus:outline-none focus:border-indigo-500/40 transition-all"
-                                />
-                            </div>
+                            <input
+                                type="text"
+                                value={taskSearch}
+                                onChange={e => setTaskSearch(e.target.value)}
+                                placeholder="Search tasks..."
+                                className="w-36 lg:w-44 bg-white/95 dark:bg-white/[0.08] border border-black/[0.1] dark:border-white/15 rounded-xl px-3 py-1.5 text-[11px] text-neutral-950 dark:text-white placeholder:text-neutral-500 dark:placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+                            />
                             {/* Sort */}
-                            <select
+                            <GlassSelect
                                 value={taskSort}
-                                onChange={e => setTaskSort(e.target.value as any)}
-                                className="bg-[#0f111a] border border-white/5 text-[10px] rounded-lg px-2.5 py-1.5 text-white/50 hover:text-white focus:outline-none focus:border-indigo-500/40 cursor-pointer font-medium uppercase tracking-wider transition-all"
-                            >
-                                <option value="created">Newest</option>
-                                <option value="priority">Priority</option>
-                                <option value="dueDate">Due Date</option>
-                            </select>
-                            <span className="text-[10px] text-white/30 font-semibold uppercase tracking-wider tabular-nums whitespace-nowrap">
+                                onChange={v => setTaskSort(v as any)}
+                                options={[
+                                    { value: "created", label: "Newest" },
+                                    { value: "priority", label: "Priority" },
+                                    { value: "dueDate", label: "Due Date" },
+                                ]}
+                                className="w-28"
+                            />
+                            <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-bold uppercase tracking-wider tabular-nums whitespace-nowrap">
                                 {filteredTasks.length}/{tasks.length}
                             </span>
                         </div>
                     </div>
 
-                    {/* Columns grid */}
+                    {/* Columns grid (Apple Liquid Glass) */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         
                         {/* COLUMN: TO DO */}
@@ -914,19 +942,23 @@ export default function TeamSpacePage() {
                             onDragOver={(e) => { e.preventDefault(); setDraggedOverColumn('todo'); }}
                             onDragLeave={() => setDraggedOverColumn(null)}
                             onDrop={(e) => { handleDrop(e, 'todo'); setDraggedOverColumn(null); }}
-                            className={`flex flex-col h-[550px] border rounded-2xl p-4 backdrop-blur-md transition-all duration-300 ${draggedOverColumn === 'todo' ? "bg-indigo-500/5 border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.05)]" : "bg-[#11131c]/40 border-white/5"}`}
+                            className={`flex flex-col h-[550px] border rounded-2xl p-4 backdrop-blur-[24px] saturate-[210%] transition-all duration-300 ${
+                                draggedOverColumn === 'todo'
+                                    ? "bg-blue-500/10 border-blue-500/40 shadow-xs"
+                                    : "bg-white/70 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 shadow-xs"
+                            }`}
                         >
-                            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4 flex-shrink-0">
+                            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/10 mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full animate-pulse ${soloMode ? "bg-emerald-500" : "bg-indigo-500"}`} />
-                                    <h3 className="text-xs font-black text-white uppercase tracking-wider">To Do</h3>
+                                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                    <h3 className="text-xs font-bold text-neutral-950 dark:text-white uppercase tracking-wider">To Do</h3>
                                 </div>
-                                <span className="text-[10px] font-black bg-white/5 text-white/40 px-2 py-0.5 rounded-full tabular-nums">{todoTasks.length}</span>
+                                <span className="text-[10px] font-bold bg-black/[0.05] dark:bg-white/[0.1] text-neutral-700 dark:text-neutral-300 px-2 py-0.5 rounded-full tabular-nums">{todoTasks.length}</span>
                             </div>
                             
                             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                                 {todoTasks.length === 0 ? (
-                                    <div className="h-28 border border-dashed border-white/5 rounded-xl flex items-center justify-center text-xs text-white/20 italic">No tasks in To Do</div>
+                                    <div className="h-28 border border-dashed border-black/10 dark:border-white/10 rounded-xl flex items-center justify-center text-xs text-neutral-400 dark:text-neutral-500 font-medium">No tasks in To Do</div>
                                 ) : (
                                     todoTasks.map((task: TeamTask) => (
                                         <KanbanCard
@@ -938,6 +970,8 @@ export default function TeamSpacePage() {
                                             onDelete={() => handleDeleteTask(task.id)}
                                             onEdit={() => openEditTask(task)}
                                             onDragStart={(e) => handleDragStart(e, task.id)}
+                                            onViewPrompt={(t) => setPromptModalTask(t)}
+                                            onCopyPromptToast={() => toast.showToast("Copied external AI agent prompt for Cursor / Claude / Copilot!", "success")}
                                         />
                                     ))
                                 )}
@@ -949,19 +983,23 @@ export default function TeamSpacePage() {
                             onDragOver={(e) => { e.preventDefault(); setDraggedOverColumn('in_progress'); }}
                             onDragLeave={() => setDraggedOverColumn(null)}
                             onDrop={(e) => { handleDrop(e, 'in_progress'); setDraggedOverColumn(null); }}
-                            className={`flex flex-col h-[550px] border rounded-2xl p-4 backdrop-blur-md transition-all duration-300 ${draggedOverColumn === 'in_progress' ? "bg-amber-500/5 border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]" : "bg-[#11131c]/40 border-white/5"}`}
+                            className={`flex flex-col h-[550px] border rounded-2xl p-4 backdrop-blur-[24px] saturate-[210%] transition-all duration-300 ${
+                                draggedOverColumn === 'in_progress'
+                                    ? "bg-amber-500/10 border-amber-500/40 shadow-xs"
+                                    : "bg-white/70 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 shadow-xs"
+                            }`}
                         >
-                            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4 flex-shrink-0">
+                            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/10 mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                    <h3 className="text-xs font-black text-white uppercase tracking-wider">In Progress</h3>
+                                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                                    <h3 className="text-xs font-bold text-neutral-950 dark:text-white uppercase tracking-wider">In Progress</h3>
                                 </div>
-                                <span className="text-[10px] font-black bg-white/5 text-white/40 px-2 py-0.5 rounded-full tabular-nums">{inProgressTasks.length}</span>
+                                <span className="text-[10px] font-bold bg-black/[0.05] dark:bg-white/[0.1] text-neutral-700 dark:text-neutral-300 px-2 py-0.5 rounded-full tabular-nums">{inProgressTasks.length}</span>
                             </div>
 
                             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                                 {inProgressTasks.length === 0 ? (
-                                    <div className="h-28 border border-dashed border-white/5 rounded-xl flex items-center justify-center text-xs text-white/20 italic">No tasks in progress</div>
+                                    <div className="h-28 border border-dashed border-black/10 dark:border-white/10 rounded-xl flex items-center justify-center text-xs text-neutral-400 dark:text-neutral-500 font-medium">No tasks in progress</div>
                                 ) : (
                                     inProgressTasks.map((task: TeamTask) => (
                                         <KanbanCard
@@ -973,6 +1011,8 @@ export default function TeamSpacePage() {
                                             onDelete={() => handleDeleteTask(task.id)}
                                             onEdit={() => openEditTask(task)}
                                             onDragStart={(e) => handleDragStart(e, task.id)}
+                                            onViewPrompt={(t) => setPromptModalTask(t)}
+                                            onCopyPromptToast={() => toast.showToast("Copied external AI agent prompt for Cursor / Claude / Copilot!", "success")}
                                         />
                                     ))
                                 )}
@@ -984,30 +1024,23 @@ export default function TeamSpacePage() {
                             onDragOver={(e) => { e.preventDefault(); setDraggedOverColumn('done'); }}
                             onDragLeave={() => setDraggedOverColumn(null)}
                             onDrop={(e) => { handleDrop(e, 'done'); setDraggedOverColumn(null); }}
-                            className={`flex flex-col h-[550px] border rounded-2xl p-4 backdrop-blur-md transition-all duration-300 ${draggedOverColumn === 'done' ? "bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.05)]" : "bg-[#11131c]/40 border-white/5"}`}
+                            className={`flex flex-col h-[550px] border rounded-2xl p-4 backdrop-blur-[24px] saturate-[210%] transition-all duration-300 ${
+                                draggedOverColumn === 'done'
+                                    ? "bg-emerald-500/10 border-emerald-500/40 shadow-xs"
+                                    : "bg-white/70 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 shadow-xs"
+                            }`}
                         >
-                            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-4 flex-shrink-0">
+                            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06] dark:border-white/10 mb-4 flex-shrink-0">
                                 <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${soloMode ? "bg-emerald-500" : "bg-emerald-500"}`} />
-                                    <h3 className="text-xs font-black text-white uppercase tracking-wider">Completed</h3>
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    <h3 className="text-xs font-bold text-neutral-950 dark:text-white uppercase tracking-wider">Completed</h3>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {doneTasks.length > 0 && (
-                                        <button
-                                            onClick={handleClearCompleted}
-                                            className="text-[9px] font-black text-white/40 hover:text-red-400 uppercase tracking-wider bg-white/5 px-2 py-0.5 rounded transition-all"
-                                            title="Clear Completed Tasks"
-                                        >
-                                            Clear
-                                        </button>
-                                    )}
-                                    <span className="text-[10px] font-black bg-white/5 text-white/40 px-2 py-0.5 rounded-full tabular-nums">{doneTasks.length}</span>
-                                </div>
+                                <span className="text-[10px] font-bold bg-black/[0.05] dark:bg-white/[0.1] text-neutral-700 dark:text-neutral-300 px-2 py-0.5 rounded-full tabular-nums">{doneTasks.length}</span>
                             </div>
 
                             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                                 {doneTasks.length === 0 ? (
-                                    <div className="h-28 border border-dashed border-white/5 rounded-xl flex items-center justify-center text-xs text-white/20 italic">No completed tasks</div>
+                                    <div className="h-28 border border-dashed border-black/10 dark:border-white/10 rounded-xl flex items-center justify-center text-xs text-neutral-400 dark:text-neutral-500 font-medium">No completed tasks</div>
                                 ) : (
                                     doneTasks.map((task: TeamTask) => (
                                         <KanbanCard
@@ -1019,6 +1052,8 @@ export default function TeamSpacePage() {
                                             onDelete={() => handleDeleteTask(task.id)}
                                             onEdit={() => openEditTask(task)}
                                             onDragStart={(e) => handleDragStart(e, task.id)}
+                                            onViewPrompt={(t) => setPromptModalTask(t)}
+                                            onCopyPromptToast={() => toast.showToast("Copied external AI agent prompt for Cursor / Claude / Copilot!", "success")}
                                         />
                                     ))
                                 )}
@@ -1093,27 +1128,29 @@ export default function TeamSpacePage() {
 
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-white/40 uppercase">Assignee</label>
-                            <select
+                            <GlassSelect
                                 value={newTaskAssignee}
-                                onChange={(e) => setNewTaskAssignee(e.target.value)}
-                                className="w-full bg-[#0f111a] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
-                            >
-                                <option value="All">All (Whole Team)</option>
-                                {members.map(m => (
-                                    <option key={m.username} value={m.username}>{m.username} ({m.role})</option>
-                                ))}
-                            </select>
+                                onChange={v => setNewTaskAssignee(v)}
+                                options={[
+                                    { value: "All", label: "All (Whole Team)" },
+                                    ...members.map(m => ({ value: m.username, label: `${m.username} (${m.role})` })),
+                                ]}
+                            />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-white/40 uppercase">Priority</label>
-                                <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)} className="w-full bg-[#0f111a] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
-                                    <option value="critical">Critical</option>
-                                    <option value="high">High</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="low">Low</option>
-                                </select>
+                                <GlassSelect
+                                    value={newTaskPriority}
+                                    onChange={v => setNewTaskPriority(v as any)}
+                                    options={[
+                                        { value: "critical", label: "Critical" },
+                                        { value: "high", label: "High" },
+                                        { value: "medium", label: "Medium" },
+                                        { value: "low", label: "Low" },
+                                    ]}
+                                />
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-white/40 uppercase">Due Date</label>
@@ -1149,20 +1186,16 @@ export default function TeamSpacePage() {
                             {/* Header */}
                             <div className="flex items-center justify-between px-6 pt-5 pb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${soloMode ? "bg-emerald-500/15 text-emerald-400" : "bg-indigo-500/15 text-indigo-400"}`}>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
+                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-mono font-bold text-xs ${soloMode ? "bg-emerald-500/15 text-emerald-500" : "bg-indigo-500/15 text-indigo-500"}`}>
+                                        EDIT
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-bold text-white tracking-wide">Edit Milestone Task</h3>
-                                        <p className="text-[10px] text-white/35 mt-0.5">Update details for this task</p>
+                                        <h3 className="text-sm font-bold text-neutral-900 dark:text-white tracking-wide">Edit Milestone Task</h3>
+                                        <p className="text-[10px] text-neutral-500 dark:text-white/35 mt-0.5">Update details for this task</p>
                                     </div>
                                 </div>
-                                <button type="button" onClick={() => { setShowEditTask(false); setEditingTask(null); }} className={`w-7 h-7 rounded-lg flex items-center justify-center ${soloMode ? "hover:bg-emerald-500/10 hover:text-emerald-400" : "hover:bg-indigo-500/10 hover:text-indigo-400"} text-white/40 transition-all`}>
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                <button type="button" onClick={() => { setShowEditTask(false); setEditingTask(null); }} className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm ${soloMode ? "hover:bg-emerald-500/10 text-neutral-400 hover:text-emerald-500" : "hover:bg-indigo-500/10 text-neutral-400 hover:text-indigo-500"} transition-all`}>
+                                    ✕
                                 </button>
                             </div>
 
@@ -1189,22 +1222,26 @@ export default function TeamSpacePage() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Assignee</label>
-                                        <select value={editTaskAssignee} onChange={(e) => setEditTaskAssignee(e.target.value)}
-                                            className={`w-full bg-[#0f111a] border ${soloMode ? "border-emerald-500/10 focus:border-emerald-500/50" : "border-white/5 focus:border-indigo-500/50"} rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none cursor-pointer transition-all`}>
-                                            <option value="All">All (Whole Team)</option>
-                                            {members.map(m => (
-                                                <option key={m.username} value={m.username}>{m.displayName || m.username} ({m.role})</option>
-                                            ))}
-                                        </select>
+                                        <GlassSelect
+                                            value={editTaskAssignee}
+                                            onChange={v => setEditTaskAssignee(v)}
+                                            options={[
+                                                { value: "All", label: "All (Whole Team)" },
+                                                ...members.map(m => ({ value: m.username, label: `${m.displayName || m.username} (${m.role})` })),
+                                            ]}
+                                        />
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Status</label>
-                                        <select value={editTaskStatus} onChange={e => setEditTaskStatus(e.target.value as any)}
-                                            className={`w-full bg-[#0f111a] border ${soloMode ? "border-emerald-500/10 focus:border-emerald-500/50" : "border-white/5 focus:border-indigo-500/50"} rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none cursor-pointer transition-all`}>
-                                            <option value="todo">To Do</option>
-                                            <option value="in_progress">In Progress</option>
-                                            <option value="done">Completed</option>
-                                        </select>
+                                        <GlassSelect
+                                            value={editTaskStatus}
+                                            onChange={v => setEditTaskStatus(v as any)}
+                                            options={[
+                                                { value: "todo", label: "To Do" },
+                                                { value: "in_progress", label: "In Progress" },
+                                                { value: "done", label: "Completed" },
+                                            ]}
+                                        />
                                     </div>
                                 </div>
 
@@ -1212,13 +1249,16 @@ export default function TeamSpacePage() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Priority</label>
-                                        <select value={editTaskPriority} onChange={e => setEditTaskPriority(e.target.value as any)}
-                                            className={`w-full bg-[#0f111a] border ${soloMode ? "border-emerald-500/10 focus:border-emerald-500/50" : "border-white/5 focus:border-indigo-500/50"} rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none cursor-pointer transition-all`}>
-                                            <option value="critical">Critical</option>
-                                            <option value="high">High</option>
-                                            <option value="medium">Medium</option>
-                                            <option value="low">Low</option>
-                                        </select>
+                                        <GlassSelect
+                                            value={editTaskPriority}
+                                            onChange={v => setEditTaskPriority(v as any)}
+                                            options={[
+                                                { value: "critical", label: "Critical" },
+                                                { value: "high", label: "High" },
+                                                { value: "medium", label: "Medium" },
+                                                { value: "low", label: "Low" },
+                                            ]}
+                                        />
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Due Date</label>
@@ -1260,6 +1300,93 @@ export default function TeamSpacePage() {
                 </div>
             )}
 
+            {/* MODAL: VIEW / COPY EXTERNAL AI AGENT PROMPT */}
+            {promptModalTask && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in"
+                    onClick={() => setPromptModalTask(null)}
+                >
+                    <div
+                        className="relative w-full max-w-xl bg-white dark:bg-[#161822] border border-black/10 dark:border-white/10 rounded-2xl shadow-2xl p-6 space-y-4 animate-scale-up"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between pb-3 border-b border-black/[0.08] dark:border-white/10">
+                            <div className="flex items-center gap-2">
+                                <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                                    <Sparkles className="w-4 h-4" />
+                                </span>
+                                <div>
+                                    <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
+                                        External AI Agent Prompt
+                                    </h3>
+                                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
+                                        Paste into Cursor Composer, Claude Code, GitHub Copilot, or Antigravity
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPromptModalTask(null)}
+                                className="text-xs text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold p-1 cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Task Title & Affected Files */}
+                        <div className="space-y-1.5 bg-black/[0.02] dark:bg-white/[0.03] p-3 rounded-xl border border-black/[0.05] dark:border-white/10 text-xs">
+                            <div className="font-bold text-neutral-900 dark:text-white">
+                                {promptModalTask.title}
+                            </div>
+                            {promptModalTask.affectedFiles && promptModalTask.affectedFiles.length > 0 && (
+                                <div className="text-[11px] font-mono text-cyan-600 dark:text-cyan-400">
+                                    Target Files: {promptModalTask.affectedFiles.join(", ")}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Prompt Box */}
+                        <div className="relative">
+                            <textarea
+                                readOnly
+                                rows={10}
+                                value={promptModalTask.agentPrompt || ""}
+                                className="w-full bg-neutral-950 text-cyan-300 font-mono text-xs p-3.5 rounded-xl border border-white/10 focus:outline-none resize-none leading-relaxed select-all"
+                            />
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                                Commit your change to GitHub and Akasha will auto-mark this task as DONE!
+                            </span>
+                            <div className="flex gap-2">
+                                <LiquidPill
+                                    type="button"
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={() => setPromptModalTask(null)}
+                                >
+                                    Close
+                                </LiquidPill>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (promptModalTask.agentPrompt) {
+                                            navigator.clipboard.writeText(promptModalTask.agentPrompt);
+                                            toast.showToast("Prompt copied to clipboard!", "success");
+                                        }
+                                    }}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white cursor-pointer shadow-md"
+                                >
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Copy Full Prompt</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1273,9 +1400,11 @@ interface KanbanCardProps {
     onDelete: () => void;
     onEdit: () => void;
     onDragStart: (e: React.DragEvent) => void;
+    onViewPrompt?: (task: TeamTask) => void;
+    onCopyPromptToast?: () => void;
 }
 
-function KanbanCard({ task, solo, onToggleDone, onMove, onDelete, onEdit, onDragStart }: KanbanCardProps) {
+function KanbanCard({ task, solo, onToggleDone, onMove, onDelete, onEdit, onDragStart, onViewPrompt, onCopyPromptToast }: KanbanCardProps) {
     const isDone = task.status === "done";
     const pc = PRIORITY_CONFIG[task.priority || 'medium'];
     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done";
@@ -1286,113 +1415,160 @@ function KanbanCard({ task, solo, onToggleDone, onMove, onDelete, onEdit, onDrag
             onDragStart={onDragStart}
             onClick={(e) => {
                 const target = e.target as HTMLElement;
-                if (target.closest('button') || target.closest('select') || target.closest('input')) return;
+                if (target.closest('button') || target.closest('select') || target.closest('input') || target.closest('a')) return;
                 onEdit();
             }}
-            className={`p-4 rounded-xl border bg-[#161822]/90 flex flex-col justify-between gap-3 group relative cursor-grab active:cursor-grabbing transition-all duration-300 hover:scale-[1.01] ${isDone ? "border-emerald-500/10 opacity-60 hover:opacity-100" : "border-white/5"} ${solo ? "hover:border-emerald-500/30" : "hover:border-indigo-500/30"}`}
+            className={`p-4 rounded-xl border bg-white/95 dark:bg-white/[0.06] flex flex-col justify-between gap-3 group relative cursor-grab active:cursor-grabbing transition-all duration-300 hover:scale-[1.01] shadow-xs ${
+                isDone ? "border-emerald-500/20 opacity-60 hover:opacity-100" : "border-black/[0.08] dark:border-white/10"
+            } hover:border-blue-500/40`}
         >
             {/* Priority stripe */}
-            <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-xl ${pc?.bg || "bg-white/5"}`} />
+            <div className={`absolute top-0 left-0 right-0 h-[3px] rounded-t-xl ${pc?.bg || "bg-black/5 dark:bg-white/5"}`} />
 
-            {/* Action buttons */}
-            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className={`p-1 hover:bg-white/5 text-white/20 rounded transition-colors ${solo ? "hover:text-emerald-400" : "hover:text-indigo-400"}`} title="Edit Task">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
+            {/* Action buttons (Typography Only) */}
+            <div className="absolute top-2.5 right-2.5 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                <button
+                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.16] text-neutral-700 dark:text-neutral-300 transition-colors"
+                >
+                    Edit
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 hover:bg-white/5 text-white/20 hover:text-red-400 rounded transition-colors" title="Delete Task">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors"
+                >
+                    Del
                 </button>
             </div>
 
             {/* Checkbox + Title/Desc */}
-            <div className="flex items-start gap-3 pr-10">
+            <div className="flex items-start gap-2.5 pr-14">
                 <button
                     onClick={(e) => { e.stopPropagation(); onToggleDone(); }}
-                    className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-md border flex items-center justify-center transition-all ${isDone ? "bg-emerald-500 border-emerald-500 text-white" : `border-white/20 ${solo ? "hover:border-emerald-400/60" : "hover:border-indigo-400/60"}`}`}
+                    className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-md border text-[10px] font-bold flex items-center justify-center transition-all ${
+                        isDone ? "bg-emerald-500 border-emerald-500 text-white" : "border-black/20 dark:border-white/20 hover:border-emerald-500"
+                    }`}
                 >
-                    {isDone && (
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5" d="M5 13l4 4L19 7" />
-                        </svg>
-                    )}
+                    {isDone ? "✓" : ""}
                 </button>
                 <div className="min-w-0 flex-1">
-                    <h4 className={`text-xs font-bold text-white tracking-wide ${isDone ? "line-through text-white/40" : ""}`}>{task.title}</h4>
+                    <h4 className={`text-xs font-bold text-neutral-950 dark:text-white tracking-tight ${isDone ? "line-through text-neutral-400 dark:text-neutral-500" : ""}`}>
+                        {task.title}
+                    </h4>
                     {task.description && (
-                        <p className={`text-[10px] text-white/35 leading-normal mt-1.5 line-clamp-2 ${isDone ? "line-through text-white/25" : ""}`}>{task.description}</p>
+                        <p className={`text-[11px] text-neutral-600 dark:text-neutral-300 leading-normal mt-1 line-clamp-2 ${isDone ? "line-through text-neutral-400 dark:text-neutral-500" : ""}`}>
+                            {task.description}
+                        </p>
                     )}
                     {/* Priority badge + Labels row */}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         {pc && (
-                            <span className={`inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${pc.bg} ${pc.text} ${pc.border} border`}>
+                            <span className={`inline-block text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${pc.bg} ${pc.text} ${pc.border} border`}>
                                 {pc.label}
                             </span>
                         )}
                         {(task.labels || []).slice(0, 3).map(label => (
-                            <span key={label} className="inline-block text-[8px] font-medium text-white/40 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                            <span key={label} className="inline-block text-[8px] font-medium text-neutral-600 dark:text-neutral-400 bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 rounded border border-black/[0.06] dark:border-white/5">
                                 {label}
                             </span>
                         ))}
-                        {(task.labels || []).length > 3 && (
-                            <span className="text-[8px] text-white/20">+{task.labels!.length - 3}</span>
+
+                        {/* Resolved by Commit Badge */}
+                        {task.githubCommitSha && (
+                            <a
+                                href={task.githubCommitUrl || "#"}
+                                target={task.githubCommitUrl ? "_blank" : undefined}
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 hover:underline"
+                                title={task.githubCommitMessage ? `Commit: ${task.githubCommitMessage}` : "Auto-completed from GitHub commit"}
+                            >
+                                <span>✓ #{task.githubCommitSha}</span>
+                                <ExternalLink className="w-2 h-2 opacity-70" />
+                            </a>
                         )}
                     </div>
+
+                    {/* External AI Agent Prompt Badge & Actions */}
+                    {task.agentPrompt && (
+                        <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                <span>Agent Prompt</span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (task.agentPrompt) {
+                                        navigator.clipboard.writeText(task.agentPrompt);
+                                        onCopyPromptToast && onCopyPromptToast();
+                                    }
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 text-[8px] font-bold uppercase tracking-wider transition-colors flex items-center gap-0.5 cursor-pointer"
+                                title="Copy external AI agent prompt (for Cursor, Claude, Copilot)"
+                            >
+                                <Copy className="w-2 h-2" />
+                                <span>Copy Prompt</span>
+                            </button>
+                            {onViewPrompt && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onViewPrompt(task);
+                                    }}
+                                    className="px-1 py-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white text-[8px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                    title="View Prompt Details"
+                                >
+                                    Inspect
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Bottom row: assignee + meta + move controls */}
-            <div className="flex items-center justify-between border-t border-white/5 pt-3">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between border-t border-black/[0.06] dark:border-white/10 pt-2.5 text-[10px]">
+                <div className="flex items-center gap-1.5">
                     {!solo && (
-                    <>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[9px] border ${getMemberAvatarStyle(task.assignedTo)}`}>
-                        {getInitials(task.assignedTo)}
-                    </div>
-                    <span className="text-[9px] font-bold text-white/50 group-hover:text-white/80 transition-colors truncate max-w-[80px]">
-                        {task.assignedTo === 'All' ? 'Whole Team' : task.assignedTo}
-                    </span>
-                    </>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                    {/* Due date */}
-                    {task.dueDate && (
-                        <span className={`text-[8px] font-bold font-mono ${isOverdue ? "text-red-400" : "text-white/30"}`}>
-                            {isOverdue ? "OVERDUE " : ""}{new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        <span className="text-[9px] font-semibold text-neutral-600 dark:text-neutral-400 truncate max-w-[90px]">
+                            {task.assignedTo === 'All' ? 'Whole Team' : task.assignedTo}
                         </span>
                     )}
-                    {/* Story points */}
-                    {task.storyPoints && (
-                        <span className="text-[8px] font-bold text-white/20 bg-white/5 px-1.5 py-0.5 rounded font-mono">{task.storyPoints}pt</span>
+                    {task.dueDate && (
+                        <span className={`text-[9px] font-bold ${isOverdue ? "text-rose-600 dark:text-rose-400" : "text-neutral-500 dark:text-neutral-400"}`}>
+                            {isOverdue ? "Due: " : ""}{new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
                     )}
-                    {/* Movement arrows */}
-                    <div className="flex items-center gap-1 ml-1">
-                        {task.status !== "todo" && (
-                            <button onClick={(e) => { e.stopPropagation(); onMove(task.status === "done" ? "in_progress" : "todo"); }} className="p-1 hover:bg-white/5 text-white/30 hover:text-white rounded transition-colors" title="Move back">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                                </svg>
-                            </button>
-                        )}
-                        {task.status !== "done" && (
-                            <button onClick={(e) => { e.stopPropagation(); onMove(task.status === "todo" ? "in_progress" : "done"); }} className="p-1 hover:bg-white/5 text-white/30 hover:text-white rounded transition-colors" title="Move forward">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                                </svg>
-                            </button>
-                        )}
-                    </div>
+                </div>
+                <div className="flex items-center gap-1">
+                    {task.status !== "todo" && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onMove(task.status === "done" ? "in_progress" : "todo"); }}
+                            className="px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.16] text-neutral-700 dark:text-neutral-300 font-bold text-[10px]"
+                            title="Move back"
+                        >
+                            ←
+                        </button>
+                    )}
+                    {task.status !== "done" && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onMove(task.status === "todo" ? "in_progress" : "done"); }}
+                            className="px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.16] text-neutral-700 dark:text-neutral-300 font-bold text-[10px]"
+                            title="Move forward"
+                        >
+                            →
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-/* ROADMAP CARD SUB-COMPONENT (Solo Mode Timeline) */
+/* ROADMAP CARD SUB-COMPONENT */
 interface RoadmapCardProps {
     task: TeamTask;
     accent: 'indigo' | 'amber' | 'emerald';
@@ -1400,73 +1576,132 @@ interface RoadmapCardProps {
     onEdit: () => void;
     onDelete: () => void;
     onMove: (status: 'todo' | 'in_progress' | 'done') => void;
+    onViewPrompt?: (task: TeamTask) => void;
+    onCopyPromptToast?: () => void;
 }
 
-function RoadmapCard({ task, accent, onToggleDone, onEdit, onDelete, onMove }: RoadmapCardProps) {
+function RoadmapCard({ task, accent: _accent, onToggleDone, onEdit, onDelete, onMove, onViewPrompt, onCopyPromptToast }: RoadmapCardProps) {
     const pc = PRIORITY_CONFIG[task.priority || 'medium'];
     const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "done";
-    const borderColor = accent === 'emerald' ? 'border-emerald-500/20 hover:border-emerald-500/40'
-        : accent === 'amber' ? 'border-amber-500/20 hover:border-amber-500/40'
-        : 'border-indigo-500/20 hover:border-indigo-500/40';
 
     return (
         <div
             onClick={() => onEdit()}
-            className={`bg-[#161822]/80 border ${borderColor} rounded-xl p-3.5 flex items-start gap-3 transition-all hover:bg-[#161822] cursor-pointer group`}
+            className="bg-white/95 dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/10 rounded-xl p-3.5 flex items-start gap-3 transition-all hover:scale-[1.005] cursor-pointer group shadow-xs"
         >
             <button
                 onClick={(e) => { e.stopPropagation(); onToggleDone(); }}
-                className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-md border flex items-center justify-center transition-all ${task.status === "done" ? "bg-emerald-500 border-emerald-500 text-white" : "border-white/20 hover:border-emerald-400/60"}`}
+                className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded-md border text-[10px] font-bold flex items-center justify-center transition-all ${
+                    task.status === "done" ? "bg-emerald-500 border-emerald-500 text-white" : "border-black/20 dark:border-white/20 hover:border-emerald-500"
+                }`}
             >
-                {task.status === "done" && (
-                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5" d="M5 13l4 4L19 7" />
-                    </svg>
-                )}
+                {task.status === "done" ? "✓" : ""}
             </button>
             <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className={`text-sm font-bold text-white ${task.status === "done" ? "line-through text-white/40" : ""}`}>{task.title}</h4>
+                    <h4 className={`text-xs font-bold text-neutral-950 dark:text-white ${task.status === "done" ? "line-through text-neutral-400 dark:text-neutral-500" : ""}`}>
+                        {task.title}
+                    </h4>
                     {pc && (
-                        <span className={`text-[7px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${pc.bg} ${pc.text} border`}>{pc.label}</span>
+                        <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${pc.bg} ${pc.text} border`}>{pc.label}</span>
                     )}
-                    {task.storyPoints && (
-                        <span className="text-[8px] font-mono font-bold text-white/20">({task.storyPoints}pt)</span>
+
+                    {/* Resolved by Commit Badge */}
+                    {task.githubCommitSha && (
+                        <a
+                            href={task.githubCommitUrl || "#"}
+                            target={task.githubCommitUrl ? "_blank" : undefined}
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 hover:underline"
+                            title={task.githubCommitMessage ? `Commit: ${task.githubCommitMessage}` : "Auto-completed from GitHub commit"}
+                        >
+                            <span>✓ #{task.githubCommitSha}</span>
+                            <ExternalLink className="w-2 h-2 opacity-70" />
+                        </a>
                     )}
                 </div>
                 {task.description && (
-                    <p className={`text-[10px] text-white/30 leading-relaxed mt-1 line-clamp-2 ${task.status === "done" ? "line-through text-white/20" : ""}`}>{task.description}</p>
+                    <p className={`text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed mt-1 line-clamp-2 ${task.status === "done" ? "line-through text-neutral-400 dark:text-neutral-500" : ""}`}>
+                        {task.description}
+                    </p>
                 )}
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-2.5 mt-2 flex-wrap">
                     {(task.labels || []).slice(0, 3).map(label => (
-                        <span key={label} className="text-[8px] font-medium text-white/30 bg-white/5 px-1.5 py-0.5 rounded">{label}</span>
+                        <span key={label} className="text-[8px] font-medium text-neutral-600 dark:text-neutral-400 bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 rounded">
+                            {label}
+                        </span>
                     ))}
                     {task.dueDate && (
-                        <span className={`text-[8px] font-bold font-mono ${isOverdue ? "text-red-400" : "text-white/25"}`}>
+                        <span className={`text-[8px] font-bold ${isOverdue ? "text-rose-600 dark:text-rose-400" : "text-neutral-500 dark:text-neutral-400"}`}>
                             {isOverdue ? "OVERDUE " : ""}{new Date(task.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </span>
                     )}
+
+                    {/* External AI Agent Prompt Badge & Actions */}
+                    {task.agentPrompt && (
+                        <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                <span>Agent Prompt</span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (task.agentPrompt) {
+                                        navigator.clipboard.writeText(task.agentPrompt);
+                                        onCopyPromptToast && onCopyPromptToast();
+                                    }
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 text-[8px] font-bold uppercase tracking-wider transition-colors flex items-center gap-0.5 cursor-pointer"
+                                title="Copy external AI agent prompt (for Cursor, Claude, Copilot)"
+                            >
+                                <Copy className="w-2 h-2" />
+                                <span>Copy Prompt</span>
+                            </button>
+                            {onViewPrompt && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onViewPrompt(task);
+                                    }}
+                                    className="px-1 py-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white text-[8px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                    title="View Prompt Details"
+                                >
+                                    Inspect
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 {task.status !== "todo" && (
-                    <button onClick={(e) => { e.stopPropagation(); onMove(task.status === "done" ? "in_progress" : "todo"); }} className="p-1 hover:bg-white/10 text-white/30 hover:text-white rounded transition-colors" title="Move back">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                        </svg>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onMove(task.status === "done" ? "in_progress" : "todo"); }}
+                        className="px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.16] text-neutral-700 dark:text-neutral-300 font-bold text-[10px]"
+                        title="Move back"
+                    >
+                        ←
                     </button>
                 )}
                 {task.status !== "done" && (
-                    <button onClick={(e) => { e.stopPropagation(); onMove(task.status === "todo" ? "in_progress" : "done"); }} className="p-1 hover:bg-white/10 text-white/30 hover:text-white rounded transition-colors" title="Move forward">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                        </svg>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onMove(task.status === "todo" ? "in_progress" : "done"); }}
+                        className="px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.16] text-neutral-700 dark:text-neutral-300 font-bold text-[10px]"
+                        title="Move forward"
+                    >
+                        →
                     </button>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 hover:bg-white/10 text-white/20 hover:text-red-400 rounded transition-colors" title="Delete">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 transition-colors"
+                    title="Delete"
+                >
+                    Del
                 </button>
             </div>
         </div>

@@ -9,6 +9,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useApi } from "../../../hooks/useApi";
 import type { GitHubRepo } from "./RepoSelector";
+import { Sparkles } from "lucide-react";
+import ReadmeStudioModal from "./ReadmeStudioModal";
 
 interface FileItem {
     name: string;
@@ -89,6 +91,9 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
     const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
     const [fileContent, setFileContent] = useState<string | null>(null);
     const [fileLoading, setFileLoading] = useState(false);
+
+    // AI README Studio modal
+    const [readmeModalOpen, setReadmeModalOpen] = useState(false);
 
     /* ── Load file tree ─────────────────────────────── */
     const loadFiles = useCallback(async (path: string = "", branch: string = activeBranch) => {
@@ -226,30 +231,28 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
     return (
         <div className="h-full w-full flex flex-col overflow-hidden">
             {/* Top bar */}
-            <div className="h-12 px-4 flex items-center gap-3 border-b border-white/[0.06] flex-shrink-0 bg-white/[0.01]">
+            <div className="h-12 px-4 flex items-center gap-3 border-b border-black/[0.08] dark:border-white/[0.06] flex-shrink-0 bg-neutral-100/50 dark:bg-white/[0.01]">
                 {/* Repo info */}
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <svg className="w-4 h-4 text-white/30 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                    </svg>
-                    <span className="text-xs text-white/40">{repo.owner.login}</span>
-                    <span className="text-white/20">/</span>
+                    <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 uppercase">
+                        GH
+                    </span>
+                    <span className="text-xs text-neutral-500 dark:text-white/40 font-mono">{repo.owner.login}</span>
+                    <span className="text-neutral-400 dark:text-white/20">/</span>
                     <div className="relative min-w-0">
                         <button
                             onClick={() => setRepoDropOpen(!repoDropOpen)}
-                            className={`text-sm font-bold truncate flex items-center gap-1.5 transition-colors ${connectedRepos.length > 1 ? "text-white hover:text-emerald-300" : "text-white"}`}
+                            className={`text-sm font-bold truncate flex items-center gap-1.5 transition-colors ${connectedRepos.length > 1 ? "text-neutral-950 dark:text-white hover:text-emerald-500" : "text-neutral-950 dark:text-white"}`}
                             title={connectedRepos.length > 1 ? "Switch repository" : repo.full_name}
                         >
                             <span className="truncate max-w-[220px]">{repo.name}</span>
                             {connectedRepos.length > 1 && (
-                                <svg className="w-3 h-3 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                </svg>
+                                <span className="text-[9px] font-mono text-neutral-400">▼</span>
                             )}
                         </button>
 
                         {repoDropOpen && connectedRepos.length > 1 && (
-                            <div className="absolute left-0 top-8 w-72 bg-[#181820] border border-white/[0.1] rounded-xl shadow-2xl z-50 py-1 max-h-64 overflow-y-auto">
+                            <div className="absolute left-0 top-8 w-72 bg-white dark:bg-[#181820] border border-black/10 dark:border-white/[0.1] rounded-xl shadow-2xl z-50 py-1 max-h-64 overflow-y-auto">
                                 {connectedRepos.map(r => (
                                     <button
                                         key={r.full_name}
@@ -259,12 +262,12 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                                                 onRepoSwitch(r);
                                             }
                                         }}
-                                        className={`w-full text-left px-3 py-2 hover:bg-white/[0.06] transition-colors ${
-                                            r.full_name === repo.full_name ? "text-emerald-400" : "text-white/70"
+                                        className={`w-full text-left px-3 py-2 hover:bg-black/5 dark:hover:bg-white/[0.06] transition-colors ${
+                                            r.full_name === repo.full_name ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-neutral-700 dark:text-white/70"
                                         }`}
                                     >
-                                        <div className="text-[11px] font-semibold truncate">{r.name}</div>
-                                        <div className="text-[10px] text-white/35 truncate">{r.full_name}</div>
+                                        <div className="text-[11px] font-semibold truncate font-mono">{r.name}</div>
+                                        <div className="text-[10px] text-neutral-400 dark:text-white/35 truncate font-mono">{r.full_name}</div>
                                     </button>
                                 ))}
                             </div>
@@ -281,31 +284,23 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                         apiRef.current.githubRepoBranches(repo.owner.login, repo.name).then(setBranches).catch(() => setBranches([]));
                     }}
                     title="Refresh Repo"
-                    className="h-7 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-white/60 hover:text-white hover:border-white/20 transition-all flex items-center gap-1.5 ml-2"
+                    className="h-7 px-2.5 rounded-lg border border-black/10 dark:border-white/[0.08] bg-neutral-200/60 dark:bg-white/[0.03] text-[10px] font-bold font-mono uppercase text-neutral-700 dark:text-white/60 hover:text-neutral-950 dark:hover:text-white hover:bg-neutral-300 dark:hover:bg-white/[0.08] transition-all ml-2"
                 >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Refresh
+                    REFRESH
                 </button>
 
                 {/* Branch selector */}
                 <div className="relative">
                     <button
                         onClick={() => setBranchDropOpen(!branchDropOpen)}
-                        className="h-7 px-3 rounded-lg border border-white/[0.08] bg-white/[0.03] text-[11px] font-semibold text-white/60 hover:text-white hover:border-white/20 transition-all flex items-center gap-2"
+                        className="h-7 px-2.5 rounded-lg border border-black/10 dark:border-white/[0.08] bg-neutral-200/60 dark:bg-white/[0.03] text-[10px] font-bold font-mono uppercase text-neutral-700 dark:text-white/60 hover:text-neutral-950 dark:hover:text-white transition-all flex items-center gap-1.5"
                     >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                        </svg>
-                        {activeBranch}
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <span>BRANCH: {activeBranch}</span>
+                        <span className="text-[8px]">▼</span>
                     </button>
 
                     {branchDropOpen && (
-                        <div className="absolute right-0 top-9 w-48 bg-[#181820] border border-white/[0.1] rounded-xl shadow-2xl z-50 py-1 max-h-60 overflow-y-auto">
+                        <div className="absolute right-0 top-9 w-48 bg-white dark:bg-[#181820] border border-black/10 dark:border-white/[0.1] rounded-xl shadow-2xl z-50 py-1 max-h-60 overflow-y-auto">
                             {branches.map(b => (
                                 <button
                                     key={b.name}
@@ -316,14 +311,12 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                                         setFileContent(null);
                                         setBranchDropOpen(false);
                                     }}
-                                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/[0.06] transition-colors flex items-center gap-2 ${
-                                        b.name === activeBranch ? "text-emerald-400 font-bold" : "text-white/60"
+                                    className={`w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-black/5 dark:hover:bg-white/[0.06] transition-colors flex items-center gap-2 ${
+                                        b.name === activeBranch ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-neutral-600 dark:text-white/60"
                                     }`}
                                 >
                                     {b.name === activeBranch && (
-                                        <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                                        </svg>
+                                        <span className="text-emerald-600 dark:text-emerald-400">✓</span>
                                     )}
                                     {b.name}
                                 </button>
@@ -333,15 +326,15 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                 </div>
 
                 {/* Tabs */}
-                <div className="flex items-center rounded-lg border border-white/[0.06] overflow-hidden ml-2">
+                <div className="flex items-center rounded-lg border border-black/10 dark:border-white/[0.06] overflow-hidden ml-2 font-mono">
                     {(["files", "commits"] as const).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`h-7 px-3 text-[10px] font-bold uppercase tracking-wider transition-all ${
                                 activeTab === tab
-                                    ? "bg-white/[0.08] text-white"
-                                    : "text-white/30 hover:text-white/60"
+                                    ? "bg-neutral-950 text-white dark:bg-white/[0.15] dark:text-white"
+                                    : "text-neutral-500 dark:text-white/30 hover:text-neutral-950 dark:hover:text-white/60"
                             }`}
                         >
                             {tab}
@@ -349,17 +342,24 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                     ))}
                 </div>
 
+                {/* AI README Studio Button */}
+                <button
+                    onClick={() => setReadmeModalOpen(true)}
+                    title="Generate, preview, and commit the best GitHub README with AI"
+                    className="h-7 px-3 rounded-lg border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-cyan-500/15 hover:from-emerald-500/25 hover:to-cyan-500/25 text-emerald-300 hover:text-white text-[10px] font-bold font-mono uppercase transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.2)] ml-2 cursor-pointer active:scale-95"
+                >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                    <span>AI README</span>
+                </button>
+
                 {/* Settings / Disconnect */}
-                <div className="w-[1px] h-4 bg-white/[0.06] ml-2" />
+                <div className="w-[1px] h-4 bg-black/10 dark:bg-white/[0.06] ml-2" />
                 <button
                     onClick={onSettings}
                     title="Repository Settings"
-                    className="w-7 h-7 ml-1 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+                    className="h-7 px-2.5 ml-1 rounded-lg border border-black/10 dark:border-white/[0.08] bg-neutral-200/60 dark:bg-white/[0.03] text-[10px] font-bold font-mono uppercase text-neutral-700 dark:text-white/40 hover:text-neutral-950 dark:hover:text-white transition-colors"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                    CONFIG
                 </button>
             </div>
 
@@ -389,6 +389,28 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
 
                             {/* File list */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                {/* No README banner prompt if in root directory */}
+                                {!filesLoading && currentPath === "" && !files.some(f => f.name.toLowerCase() === "readme.md") && (
+                                    <div className="m-2.5 p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-transparent border border-emerald-500/30 flex flex-col gap-2 shadow-xs">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">📄</span>
+                                                <span className="text-[11px] font-bold text-emerald-300">No README.md found</span>
+                                            </div>
+                                            <button
+                                                onClick={() => setReadmeModalOpen(true)}
+                                                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[9px] font-bold font-mono uppercase transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                                            >
+                                                <Sparkles className="w-3 h-3 text-emerald-300" />
+                                                <span>Create Best README</span>
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-neutral-400 leading-relaxed">
+                                            Synthesize a comprehensive, production-ready README with live architecture diagrams, schema models, and REST endpoints.
+                                        </p>
+                                    </div>
+                                )}
+
                                 {filesLoading ? (
                                     <div className="flex items-center justify-center h-32">
                                         <div className="w-5 h-5 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" />
@@ -399,36 +421,33 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                                         {currentPath && (
                                             <button
                                                 onClick={navigateUp}
-                                                className="w-full text-left px-3 py-1.5 flex items-center gap-2.5 text-[11px] text-white/40 hover:bg-white/[0.04] transition-colors border-b border-white/[0.03]"
+                                                className="w-full text-left px-3 py-1.5 flex items-center gap-2 text-[11px] font-mono text-neutral-500 dark:text-white/40 hover:bg-black/5 dark:hover:bg-white/[0.04] transition-colors border-b border-black/[0.04] dark:border-white/[0.03]"
                                             >
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-                                                </svg>
-                                                ..
+                                                <span className="font-bold">.. [UP]</span>
                                             </button>
                                         )}
                                         {files.map(file => (
                                             <button
                                                 key={file.sha}
                                                 onClick={() => file.type === "dir" ? navigateToDir(file.path) : openFile(file)}
-                                                className={`w-full text-left px-3 py-1.5 flex items-center gap-2.5 text-[11px] hover:bg-white/[0.04] transition-colors border-b border-white/[0.02] ${
-                                                    selectedFile?.sha === file.sha ? "bg-white/[0.06]" : ""
+                                                className={`w-full text-left px-3 py-1.5 flex items-center gap-2 text-[11px] font-mono hover:bg-black/5 dark:hover:bg-white/[0.04] transition-colors border-b border-black/[0.03] dark:border-white/[0.02] ${
+                                                    selectedFile?.sha === file.sha ? "bg-black/5 dark:bg-white/[0.06]" : ""
                                                 }`}
                                             >
                                                 {file.type === "dir" ? (
-                                                    <svg className="w-3.5 h-3.5 text-blue-400/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                                    </svg>
+                                                    <span className="font-mono text-[9px] font-bold text-blue-600 dark:text-blue-400 px-1 py-0.2 rounded bg-blue-500/10">
+                                                        DIR
+                                                    </span>
                                                 ) : (
-                                                    <svg className={`w-3.5 h-3.5 flex-shrink-0 ${getFileColor(file.name)}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                    </svg>
+                                                    <span className={`font-mono text-[9px] font-bold ${getFileColor(file.name)} px-1 py-0.2 rounded bg-neutral-200/60 dark:bg-white/[0.06]`}>
+                                                        FILE
+                                                    </span>
                                                 )}
-                                                <span className={`truncate ${file.type === "dir" ? "text-white/70 font-medium" : "text-white/55"}`}>
+                                                <span className={`truncate ${file.type === "dir" ? "text-neutral-900 dark:text-white/80 font-bold" : "text-neutral-700 dark:text-white/60"}`}>
                                                     {file.name}
                                                 </span>
                                                 {file.type === "file" && file.size > 0 && (
-                                                    <span className="ml-auto text-[9px] text-white/20 flex-shrink-0">
+                                                    <span className="ml-auto text-[9px] text-neutral-400 dark:text-white/20 flex-shrink-0">
                                                         {file.size > 1024 ? `${(file.size / 1024).toFixed(1)}kb` : `${file.size}b`}
                                                     </span>
                                                 )}
@@ -443,22 +462,33 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                         {selectedFile && (
                             <div className="flex-1 flex flex-col overflow-hidden animate-fade-in">
                                 {/* File header */}
-                                <div className="h-9 px-4 flex items-center justify-between border-b border-white/[0.04] flex-shrink-0 bg-white/[0.01]">
+                                <div className="h-9 px-4 flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.04] flex-shrink-0 bg-neutral-100/50 dark:bg-white/[0.01]">
                                     <div className="flex items-center gap-2 min-w-0">
-                                        <svg className={`w-3.5 h-3.5 flex-shrink-0 ${getFileColor(selectedFile.name)}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        <span className="text-[11px] font-semibold text-white/70 truncate">{selectedFile.name}</span>
-                                        <span className="text-[9px] text-white/20 font-mono">{selectedFile.path}</span>
+                                        <span className={`font-mono text-[9px] font-bold ${getFileColor(selectedFile.name)} px-1 py-0.2 rounded bg-neutral-200/60 dark:bg-white/[0.06]`}>
+                                            FILE
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-neutral-900 dark:text-white/80 truncate font-mono">{selectedFile.name}</span>
+                                        <span className="text-[9px] text-neutral-400 dark:text-white/25 font-mono">{selectedFile.path}</span>
                                     </div>
-                                    <button
-                                        onClick={() => { setSelectedFile(null); setFileContent(null); }}
-                                        className="w-6 h-6 rounded-md flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-colors"
-                                    >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        {selectedFile.name.toLowerCase() === "readme.md" && (
+                                            <button
+                                                onClick={() => setReadmeModalOpen(true)}
+                                                className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                                title="Upgrade with AI README Studio"
+                                            >
+                                                <Sparkles className="w-3 h-3 text-emerald-400" />
+                                                <span>Upgrade with AI</span>
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => { setSelectedFile(null); setFileContent(null); }}
+                                            className="font-mono text-xs px-2 py-0.5 rounded text-neutral-400 hover:text-neutral-950 dark:hover:text-white transition-colors"
+                                            title="Close"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Content */}
@@ -532,6 +562,18 @@ const RepoBrowser: React.FC<RepoBrowserProps> = ({ repo, connectedRepos, onRepoS
                     </div>
                 )}
             </div>
+
+            {/* AI README Studio Modal */}
+            <ReadmeStudioModal
+                isOpen={readmeModalOpen}
+                onClose={() => setReadmeModalOpen(false)}
+                repo={repo}
+                activeBranch={activeBranch}
+                onCommitted={() => {
+                    loadFiles(currentPath, activeBranch);
+                    loadCommits(activeBranch);
+                }}
+            />
         </div>
     );
 };

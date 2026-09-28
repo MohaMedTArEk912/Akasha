@@ -54,12 +54,12 @@ const FIELD_TYPES: { value: FieldType; label: string; icon: string; color: strin
     { value: "string", label: "String", icon: "T", color: "text-white" },
     { value: "integer", label: "Integer", icon: "#", color: "text-white/80" },
     { value: "number", label: "Float", icon: ".", color: "text-white/80" },
-    { value: "boolean", label: "Boolean", icon: "⊘", color: "text-white/60" },
+    { value: "boolean", label: "Boolean", icon: "B", color: "text-white/60" },
     { value: "object", label: "Object", icon: "{}", color: "text-white/70" },
     { value: "array", label: "Array", icon: "[]", color: "text-white/70" },
-    { value: "enum", label: "Enum", icon: "≡", color: "text-white/50" },
-    { value: "date", label: "Date", icon: "📅", color: "text-white/80" },
-    { value: "datetime", label: "DateTime", icon: "🕐", color: "text-white/80" },
+    { value: "enum", label: "Enum", icon: "E", color: "text-white/50" },
+    { value: "date", label: "Date", icon: "D", color: "text-white/80" },
+    { value: "datetime", label: "DateTime", icon: "DT", color: "text-white/80" },
 ];
 
 const STORAGE_KEY = "akasha_json_schemas";
@@ -173,55 +173,59 @@ const JsonHighlight: React.FC<{ json: string }> = ({ json }) => {
     const highlighted = useMemo(() => {
         return json.replace(
             /("(?:\\.|[^"\\])*")\s*:/g,
-            '<span class="text-white/90">$1</span>:'
+            '<span class="text-neutral-950 dark:text-white font-bold">$1</span>:'
         ).replace(
             /:\s*("(?:\\.|[^"\\])*")/g,
-            ': <span class="text-white/50">$1</span>'
+            ': <span class="text-emerald-700 dark:text-emerald-300 font-medium">$1</span>'
         ).replace(
             /:\s*(\d+\.?\d*)/g,
-            ': <span class="text-white/70">$1</span>'
+            ': <span class="text-blue-700 dark:text-blue-300 font-mono font-medium">$1</span>'
         ).replace(
             /:\s*(true|false)/g,
-            ': <span class="text-white/40">$1</span>'
+            ': <span class="text-purple-700 dark:text-purple-300 font-bold">$1</span>'
         ).replace(
             /:\s*(null)/g,
-            ': <span class="text-white/30">$1</span>'
+            ': <span class="text-neutral-500 dark:text-neutral-400 italic">$1</span>'
         );
     }, [json]);
 
-    return <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words select-text" dangerouslySetInnerHTML={{ __html: highlighted }} />;
+    return <pre className="text-xs font-mono leading-relaxed whitespace-pre-wrap break-words select-text text-neutral-800 dark:text-neutral-200" dangerouslySetInnerHTML={{ __html: highlighted }} />;
 };
 
 /* ━━━ Sub-Components ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* Toolbar Helpers */
-const ToolbarButton: React.FC<{ icon: string; label: string; onClick: () => void; danger?: boolean; accent?: boolean }> = ({ icon, label, onClick, danger, accent }) => (
+/* Toolbar Action Button */
+const ToolbarButton: React.FC<{
+    icon?: string;
+    label: string;
+    onClick: () => void;
+    danger?: boolean;
+    accent?: boolean;
+}> = ({ label, onClick, danger, accent }) => (
     <button
         onClick={onClick}
         title={label}
-        className={`p-1.5 rounded-md transition-all ${danger
-            ? "text-[var(--ide-text-muted)] hover:text-white hover:bg-white/10"
+        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-all ${danger
+            ? "text-red-500 hover:bg-red-500/10 border border-red-500/20"
             : accent
-                ? "text-white hover:bg-white/15"
-                : "text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-white/[0.04]"
+                ? "text-neutral-900 dark:text-white bg-black/[0.05] dark:bg-white/10 hover:bg-black/[0.08] dark:hover:bg-white/15 border border-black/[0.08] dark:border-white/10"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-white hover:bg-black/[0.04] dark:hover:bg-white/5 border border-transparent"
             }`}
     >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={icon} />
-        </svg>
+        {label}
     </button>
 );
 
-const ToolbarDivider: React.FC = () => <div className="w-px h-5 bg-[var(--ide-border)]/50 mx-0.5" />;
+const ToolbarDivider: React.FC = () => <div className="w-px h-5 bg-black/[0.08] dark:bg-white/10 mx-0.5" />;
 
 /* Toggle Switch */
 const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; size?: "sm" | "xs" }> = ({ checked, onChange, label, size = "sm" }) => (
     <label className="flex items-center gap-1.5 cursor-pointer select-none group">
         <div
-            className={`relative rounded-full transition-all duration-200 ${checked ? "bg-white" : "bg-white/10"} ${size === "xs" ? "w-7 h-3.5" : "w-8 h-4"}`}
+            className={`relative rounded-full transition-all duration-200 ${checked ? "bg-neutral-900 dark:bg-white" : "bg-black/10 dark:bg-white/10"} ${size === "xs" ? "w-7 h-3.5" : "w-8 h-4"}`}
             onClick={() => onChange(!checked)}
         >
-            <div className={`absolute top-0.5 rounded-full bg-black transition-all duration-200 shadow-sm ${checked ? (size === "xs" ? "left-3.5" : "left-4") : "left-0.5"} ${size === "xs" ? "w-2.5 h-2.5" : "w-3 h-3"}`} />
+            <div className={`absolute top-0.5 rounded-full bg-white dark:bg-black transition-all duration-200 shadow-sm ${checked ? (size === "xs" ? "left-3.5" : "left-4") : "left-0.5"} ${size === "xs" ? "w-2.5 h-2.5" : "w-3 h-3"}`} />
         </div>
         <span className={`font-medium text-[var(--ide-text-muted)] group-hover:text-[var(--ide-text)] transition-colors ${size === "xs" ? "text-[9px]" : "text-[10px]"}`}>{label}</span>
     </label>
@@ -233,9 +237,7 @@ const Collapsible: React.FC<{ title: string; children: React.ReactNode; defaultO
     return (
         <div className="border-t border-[var(--ide-border)]/30 mt-2 pt-2">
             <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors w-full">
-                <svg className={`w-3 h-3 transition-transform ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
+                <span className="text-[9px] font-bold">{open ? "▼" : "▶"}</span>
                 {title}
             </button>
             {open && <div className="mt-2 space-y-2">{children}</div>}
@@ -279,24 +281,20 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                 className={`flex items-center gap-2 px-3 py-2 group rounded-lg transition-all hover:bg-white/[0.02] ${depth > 0 ? "ml-" + Math.min(depth * 6, 18) : ""}`}
                 style={{ marginLeft: depth > 0 ? `${depth * 24}px` : undefined }}
             >
-                {/* Drag Handle (visual only for now) */}
-                <div className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab text-[var(--ide-text-muted)]">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-12a2 2 0 10.001 4.001A2 2 0 0013 2zm0 6a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z" />
-                    </svg>
-                </div>
+                {/* Drag Handle */}
+                <span className="opacity-0 group-hover:opacity-40 transition-opacity cursor-grab text-[10px] font-mono text-[var(--ide-text-muted)] select-none">
+                    ::
+                </span>
 
                 {/* Collapse toggle for nested */}
                 {hasChildren ? (
-                    <button onClick={() => setCollapsed(!collapsed)} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
-                        <svg className={`w-3 h-3 transition-transform ${collapsed ? "" : "rotate-90"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                        </svg>
+                    <button onClick={() => setCollapsed(!collapsed)} className="text-[10px] font-bold text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors px-0.5">
+                        {collapsed ? "▶" : "▼"}
                     </button>
                 ) : <div className="w-3" />}
 
                 {/* Type Icon */}
-                <span className={`text-[10px] font-bold font-mono w-5 h-5 flex items-center justify-center rounded ${typeInfo.color} bg-white/[0.04] border border-white/[0.06]`}>
+                <span className={`text-[10px] font-bold font-mono w-5 h-5 flex items-center justify-center rounded ${typeInfo.color} bg-black/[0.04] dark:bg-white/[0.04] border border-black/[0.08] dark:border-white/[0.06]`}>
                     {typeInfo.icon}
                 </span>
 
@@ -306,7 +304,7 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                     value={field.name}
                     onChange={e => onUpdate(field.id, { name: e.target.value.replace(/[^a-zA-Z0-9_-]/g, '') })}
                     placeholder="fieldName"
-                    className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--ide-border)]/40 focus:border-white/60 px-1 py-0.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/30 focus:outline-none transition-all"
+                    className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-[var(--ide-border)]/40 focus:border-neutral-900 dark:focus:border-white/60 px-1 py-0.5 text-xs font-mono text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)]/30 focus:outline-none transition-all"
                 />
 
                 {/* Type Selector */}
@@ -335,12 +333,10 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                 {/* Delete */}
                 <button
                     onClick={() => onRemove(field.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-[var(--ide-text-muted)] hover:text-white hover:bg-white/10 rounded transition-all"
+                    className="opacity-0 group-hover:opacity-100 px-1.5 py-0.5 text-[10px] font-bold text-red-500 hover:bg-red-500/10 rounded transition-all"
                     title="Remove field"
                 >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    DEL
                 </button>
             </div>
 
@@ -367,48 +363,52 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                                         const updated = (field.enumValues || [""]).filter((_, idx) => idx !== i);
                                         onUpdate(field.id, { enumValues: updated.length > 0 ? updated : [""] });
                                     }}
-                                    className="text-[var(--ide-text-muted)]/40 hover:text-red-400 transition-colors"
+                                    className="text-[10px] font-bold text-neutral-400 hover:text-red-500 transition-colors px-1"
                                 >
-                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    ✕
                                 </button>
                             </div>
                         ))}
                         <button
                             onClick={() => onUpdate(field.id, { enumValues: [...(field.enumValues || [""]), ""] })}
-                            className="text-[10px] text-white/60 hover:text-white font-medium transition-colors"
-                        >+ add</button>
+                            className="text-[10px] text-neutral-900 dark:text-white font-bold transition-colors"
+                        >+ ADD</button>
                     </div>
                 </div>
             )}
 
             {/* Advanced Options */}
             <div style={{ marginLeft: `${(depth + 1) * 24 + 20}px` }} className="px-3">
-                <Collapsible title="Advanced options">
-                    <div className="grid grid-cols-2 gap-2">
-                        <MiniInput label="Title" value={field.title || ""} onChange={v => onUpdate(field.id, { title: v || undefined })} placeholder="Display title" />
-                        <MiniInput label="Default" value={field.defaultValue || ""} onChange={v => onUpdate(field.id, { defaultValue: v || undefined })} placeholder="Default value" />
+                <Collapsible title="Validation & Metadata">
+                    <div className="space-y-2 py-1">
+                        <div className="flex gap-2">
+                            <MiniInput label="Title" value={field.title || ""} onChange={v => onUpdate(field.id, { title: v || undefined })} placeholder="Human-readable title" />
+                            <MiniInput label="Description" value={field.description || ""} onChange={v => onUpdate(field.id, { description: v || undefined })} placeholder="Field description" />
+                        </div>
+                        <div className="flex gap-2">
+                            <MiniInput label="Default" value={field.defaultValue || ""} onChange={v => onUpdate(field.id, { defaultValue: v || undefined })} placeholder="Default value" />
+                            <MiniInput label="Example" value={field.example || ""} onChange={v => onUpdate(field.id, { example: v || undefined })} placeholder='e.g. "value"' />
+                        </div>
+                        {(field.type === "string" || field.type === "date" || field.type === "datetime") && (
+                            <div className="flex gap-2">
+                                <MiniInput label="Min Length" value={field.minLength?.toString() || ""} onChange={v => onUpdate(field.id, { minLength: v ? parseInt(v) : undefined })} placeholder="0" type="number" />
+                                <MiniInput label="Max Length" value={field.maxLength?.toString() || ""} onChange={v => onUpdate(field.id, { maxLength: v ? parseInt(v) : undefined })} placeholder="255" type="number" />
+                                <MiniInput label="Pattern (Regex)" value={field.pattern || ""} onChange={v => onUpdate(field.id, { pattern: v || undefined })} placeholder="^[a-z]+$" />
+                            </div>
+                        )}
+                        {(field.type === "number" || field.type === "integer") && (
+                            <div className="flex gap-2">
+                                <MiniInput label="Minimum" value={field.minimum?.toString() || ""} onChange={v => onUpdate(field.id, { minimum: v ? parseFloat(v) : undefined })} placeholder="min" type="number" />
+                                <MiniInput label="Maximum" value={field.maximum?.toString() || ""} onChange={v => onUpdate(field.id, { maximum: v ? parseFloat(v) : undefined })} placeholder="max" type="number" />
+                            </div>
+                        )}
                     </div>
-                    <MiniInput label="Description" value={field.description || ""} onChange={v => onUpdate(field.id, { description: v || undefined })} placeholder="Field description" />
-                    <MiniInput label="Example" value={field.example || ""} onChange={v => onUpdate(field.id, { example: v || undefined })} placeholder='e.g. "john@example.com"' />
-                    {(field.type === "string" || field.type === "date" || field.type === "datetime") && (
-                        <div className="grid grid-cols-3 gap-2">
-                            <MiniInput label="Min Length" value={field.minLength?.toString() || ""} onChange={v => onUpdate(field.id, { minLength: v ? parseInt(v) : undefined })} type="number" />
-                            <MiniInput label="Max Length" value={field.maxLength?.toString() || ""} onChange={v => onUpdate(field.id, { maxLength: v ? parseInt(v) : undefined })} type="number" />
-                            <MiniInput label="Pattern" value={field.pattern || ""} onChange={v => onUpdate(field.id, { pattern: v || undefined })} placeholder="^[a-z]+$" />
-                        </div>
-                    )}
-                    {(field.type === "integer" || field.type === "number") && (
-                        <div className="grid grid-cols-2 gap-2">
-                            <MiniInput label="Minimum" value={field.minimum?.toString() || ""} onChange={v => onUpdate(field.id, { minimum: v ? parseFloat(v) : undefined })} type="number" />
-                            <MiniInput label="Maximum" value={field.maximum?.toString() || ""} onChange={v => onUpdate(field.id, { maximum: v ? parseFloat(v) : undefined })} type="number" />
-                        </div>
-                    )}
                 </Collapsible>
             </div>
 
-            {/* Children (for object/array types) */}
+            {/* Nested Children (for objects/arrays) */}
             {hasChildren && !collapsed && (
-                <div className="mt-1">
+                <div className="border-l border-black/[0.08] dark:border-white/[0.04] mt-0.5" style={{ marginLeft: `${depth * 24 + 18}px` }}>
                     {(field.children || []).map(child => (
                         <FieldRowComponent
                             key={child.id}
@@ -421,13 +421,10 @@ const FieldRowComponent: React.FC<FieldRowProps> = ({ field, depth, onUpdate, on
                     ))}
                     <button
                         onClick={() => onAddChild(field.id)}
-                        className="flex items-center gap-1.5 text-[10px] font-semibold text-white/60 hover:text-white transition-colors py-1.5 px-3"
+                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-700 dark:text-white/70 hover:text-neutral-950 dark:hover:text-white transition-colors py-1.5 px-3"
                         style={{ marginLeft: `${(depth + 1) * 24 + 20}px` }}
                     >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Add Property to {field.name || "object"}
+                        + ADD PROPERTY TO {field.name || "OBJECT"}
                     </button>
                 </div>
             )}
@@ -465,8 +462,8 @@ const SchemaManagerModal: React.FC<{
             <div className="relative bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-scale-in w-[90%] max-w-lg" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--ide-border)]">
                     <h3 className="text-sm font-bold text-[var(--ide-text)]">{mode === "save" ? "Save Schema" : "Load Schema"}</h3>
-                    <button onClick={onClose} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button onClick={onClose} className="text-xs font-bold text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors px-1">
+                        ✕
                     </button>
                 </div>
                 <div className="p-5">
@@ -485,7 +482,7 @@ const SchemaManagerModal: React.FC<{
                                 <button
                                     onClick={() => { if (saveName.trim()) { onSave?.(saveName.trim()); onClose(); } }}
                                     disabled={!saveName.trim()}
-                                    className="px-4 py-2 text-sm bg-white text-black hover:bg-white/90 rounded-lg font-semibold disabled:opacity-40 transition-all"
+                                    className="px-4 py-2 text-sm bg-neutral-900 dark:bg-white text-white dark:text-black rounded-lg font-semibold disabled:opacity-40 transition-all"
                                 >Save</button>
                             </div>
                         </div>
@@ -496,16 +493,16 @@ const SchemaManagerModal: React.FC<{
                                     <p>No saved schemas yet.</p>
                                 </div>
                             ) : schemas.map(s => (
-                                <div key={s.name} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/[0.03] transition-colors group">
+                                <div key={s.name} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors group">
                                     <div className="flex-1 cursor-pointer" onClick={() => { onLoad?.(s); onClose(); }}>
                                         <div className="text-sm font-medium text-[var(--ide-text)]">{s.name}</div>
                                         <div className="text-[10px] text-[var(--ide-text-muted)]">{s.fields.length} fields · Saved {new Date(s.savedAt).toLocaleDateString()}</div>
                                     </div>
                                     <button
                                         onClick={() => { onDelete?.(s.name); setSchemas(prev => prev.filter(x => x.name !== s.name)); }}
-                                        className="opacity-0 group-hover:opacity-100 text-[var(--ide-text-muted)] hover:text-red-400 transition-all"
+                                        className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-red-500 transition-all px-1.5"
                                     >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        DEL
                                     </button>
                                 </div>
                             ))}
@@ -535,8 +532,8 @@ const ImportModelModal: React.FC<{
             <div className="relative bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-scale-in w-[90%] max-w-md" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--ide-border)]">
                     <h3 className="text-sm font-bold text-[var(--ide-text)]">Import from Data Model</h3>
-                    <button onClick={onClose} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button onClick={onClose} className="text-xs font-bold text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors px-1">
+                        ✕
                     </button>
                 </div>
                 <div className="p-5 space-y-1.5 max-h-80 overflow-y-auto custom-scrollbar">
@@ -560,13 +557,11 @@ const ImportModelModal: React.FC<{
                                 onImport(fields);
                                 onClose();
                             }}
-                            className="w-full text-left px-4 py-3 rounded-lg hover:bg-white/[0.04] transition-colors"
+                            className="w-full text-left px-4 py-3 rounded-lg hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors"
                         >
                             <div className="flex items-center gap-2">
-                                <span className="text-purple-400 text-sm">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                                    </svg>
+                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                    MDL
                                 </span>
                                 <span className="font-semibold text-sm text-[var(--ide-text)]">{model.name}</span>
                                 <span className="text-[10px] text-[var(--ide-text-muted)] ml-auto">{model.fields.length} fields</span>
@@ -597,8 +592,8 @@ const ApplyToApiModal: React.FC<{
             <div className="relative bg-[var(--ide-bg-sidebar)] rounded-xl border border-[var(--ide-border)] shadow-2xl animate-scale-in w-[90%] max-w-md" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--ide-border)]">
                     <h3 className="text-sm font-bold text-[var(--ide-text)]">Apply Schema to API Endpoint</h3>
-                    <button onClick={onClose} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button onClick={onClose} className="text-xs font-bold text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors px-1">
+                        ✕
                     </button>
                 </div>
                 <div className="p-5">
@@ -889,31 +884,28 @@ const JsonSchemaBuilder: React.FC = () => {
                             /* Empty State */
                             <div className="h-full flex items-center justify-center p-8">
                                 <div className="text-center max-w-sm w-full">
-                                    <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-[#28d89c]/20 to-teal-500/20 flex items-center justify-center shadow-lg shadow-[#28d89c]/10">
-                                        <svg className="w-10 h-10 text-[#28d89c]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
+                                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shadow-lg shadow-teal-500/5">
+                                        <span className="text-lg font-black tracking-widest text-teal-600 dark:text-teal-400">JSON</span>
                                     </div>
-                                    <h3 className="text-lg font-semibold text-[var(--ide-text)] mb-2">
+                                    <h3 className="text-lg font-bold text-neutral-950 dark:text-white mb-2">
                                         JSON Schema Builder
                                     </h3>
-                                    <p className="text-sm text-[var(--ide-text-muted)] mb-5">
+                                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
                                         Visually define your API request/response schemas. Add fields, set types, nest objects, and export as JSON Schema.
                                     </p>
                                     <div className="flex items-center justify-center gap-2">
                                         <button 
-                                            className="px-5 py-2 bg-[#28d89c] text-teal-950 font-bold rounded-lg shadow-lg shadow-[#28d89c]/20 hover:bg-[#2dc7b2] hover:-translate-y-0.5 transition-all flex items-center gap-2" 
+                                            className="px-4 py-2 bg-teal-600 dark:bg-teal-500 text-white dark:text-neutral-950 font-bold text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-teal-700 transition-all flex items-center gap-1.5" 
                                             onClick={addRootField}
                                         >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                            </svg>
-                                            Add First Field
+                                            + ADD FIRST FIELD
                                         </button>
                                         <button
-                                            className="px-4 py-2 text-sm text-[var(--ide-text-muted)] hover:text-[#28d89c] border border-white/10 rounded-lg hover:border-[#28d89c]/50 transition-all"
+                                            className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-300 hover:text-teal-600 dark:hover:text-teal-400 border border-black/[0.08] dark:border-white/10 rounded-xl hover:border-teal-500/40 transition-all"
                                             onClick={() => setImportModelOpen(true)}
-                                        >Import from Model</button>
+                                        >
+                                            IMPORT MODEL
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -922,42 +914,32 @@ const JsonSchemaBuilder: React.FC = () => {
 
                     {/* Bottom: Add New Field Button */}
                     {fields.length > 0 && (
-                        <div className="flex-shrink-0 border-t border-[var(--ide-border)]">
+                        <div className="flex-shrink-0 border-t border-black/[0.06] dark:border-white/[0.06] bg-black/[0.01] dark:bg-white/[0.01]">
                             <button
                                 onClick={addRootField}
-                                className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-semibold text-[#2dc7b2] hover:text-[#28d89c] hover:bg-[#28d89c]/10 transition-all"
+                                className="w-full py-2.5 flex items-center justify-center gap-1.5 text-xs font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 transition-all"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                </svg>
-                                Add New Field
+                                + ADD NEW FIELD
                             </button>
                         </div>
                     )}
                 </div>
 
                 {/* Right: JSON Preview Panel */}
-                <div className={`flex flex-col bg-black/20 backdrop-blur-sm transition-all duration-200 border-l border-white/5 ${previewCollapsed ? "w-10" : "w-[380px]"}`}>
+                <div className={`flex flex-col bg-black/[0.02] dark:bg-black/20 backdrop-blur-sm transition-all duration-200 border-l border-black/[0.08] dark:border-white/5 ${previewCollapsed ? "w-10" : "w-[380px]"}`}>
                     {/* Preview Header */}
-                    <div className="h-10 flex items-center px-3 border-b border-[var(--ide-border)] flex-shrink-0 gap-2">
-                        <button onClick={() => setPreviewCollapsed(!previewCollapsed)} className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors">
-                            <svg className={`w-4 h-4 transition-transform ${previewCollapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                            </svg>
+                    <div className="h-10 flex items-center px-3 border-b border-black/[0.06] dark:border-white/[0.06] flex-shrink-0 gap-2">
+                        <button onClick={() => setPreviewCollapsed(!previewCollapsed)} className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors px-1">
+                            {previewCollapsed ? "◀" : "▶"}
                         </button>
                         {!previewCollapsed && (
                             <>
-                                <span className="text-xs font-bold text-[var(--ide-text)] uppercase tracking-wider flex-1">JSON Schema</span>
-                                <button onClick={copyToClipboard} className="p-1.5 text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all" title="Copy">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="2" />
-                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" />
-                                    </svg>
+                                <span className="text-xs font-bold text-neutral-900 dark:text-white uppercase tracking-wider flex-1">JSON Schema</span>
+                                <button onClick={copyToClipboard} className="px-2 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all" title="Copy">
+                                    COPY
                                 </button>
-                                <button onClick={downloadSchema} className="p-1.5 text-[var(--ide-text-muted)] hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all" title="Download">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
+                                <button onClick={downloadSchema} className="px-2 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all" title="Download">
+                                    DL
                                 </button>
                             </>
                         )}

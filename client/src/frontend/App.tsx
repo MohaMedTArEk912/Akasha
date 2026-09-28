@@ -23,47 +23,56 @@ import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { DragDropProvider } from "./context/DragDropContext";
 import { SettingsProvider } from "./context/SettingsContext";
+import { BackgroundLoadingProvider } from "./context/BackgroundLoadingContext";
 
-const App: React.FC = () => {
-  const { project, isDashboardActive, activePage } = useProjectStore();
+import { handleAddLibraryFromUrlIfPresent } from "./utils/excalidrawLibrarySync";
+
+const AppContent: React.FC = () => {
+  const { project, isDashboardActive } = useProjectStore();
   useKeyboardShortcuts();
 
-  // Initialize workspace and try to load any existing project on mount
+  // Initialize workspace, restore project, and handle library imports
   useEffect(() => {
     const initialize = async () => {
       try {
         await initWorkspace();
+        // Check if page loaded with #addLibrary=<url>
+        await handleAddLibraryFromUrlIfPresent();
       } catch (err) {
         console.error("Initialization failed:", err);
       }
     };
     initialize();
+
+    const handleHash = () => {
+      void handleAddLibraryFromUrlIfPresent();
+    };
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
   // Main navigation logic
   if (isDashboardActive || !project) {
-    return (
-      <ErrorBoundary>
-        <SettingsProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <DashboardLanding />
-            </ToastProvider>
-          </ThemeProvider>
-        </SettingsProvider>
-      </ErrorBoundary>
-    );
+    return <DashboardLanding />;
   }
 
+  return (
+    <DragDropProvider>
+      <IDELayout />
+      <FloatingBot />
+    </DragDropProvider>
+  );
+};
+
+const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <SettingsProvider>
         <ThemeProvider>
           <ToastProvider>
-            <DragDropProvider>
-              <IDELayout />
-              {activePage !== "idea" && <FloatingBot />}
-            </DragDropProvider>
+            <BackgroundLoadingProvider>
+              <AppContent />
+            </BackgroundLoadingProvider>
           </ToastProvider>
         </ThemeProvider>
       </SettingsProvider>

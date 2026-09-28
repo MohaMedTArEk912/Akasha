@@ -27,12 +27,10 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ tab, onTabChange, onBack }) =
                         if (onBack) onBack();
                         else setActivePage("ui");
                     }}
-                    className="h-full px-4 flex items-center gap-2 justify-center text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-white/5 transition-colors border-r border-[var(--ide-border)]"
+                    className="h-full px-4 flex items-center gap-1.5 justify-center text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-white/5 transition-colors border-r border-[var(--ide-border)]"
                     title="Back to UI Design"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
+                    <span className="font-mono text-[11px] font-bold">←</span>
                     <span className="text-[11px] font-bold tracking-wider uppercase">Back</span>
                 </button>
 

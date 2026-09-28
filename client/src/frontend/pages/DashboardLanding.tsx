@@ -1,22 +1,54 @@
 /**
- * DashboardLanding Component
+ * DashboardLanding — Apple Liquid Glass Minimalism (Zero Icons)
  *
- * Main landing screen to see all projects, search, create, delete, or import.
+ * Consolidated Architecture:
+ * - Single Floating Liquid Glass Command Island (merges Header + Search + Vision Launcher + Actions)
+ * - Pure Typography Minimalism: Zero icons, crisp Apple HIG hierarchy
+ * - Minimal words: Concise labels, no verbose explanations
+ * - 1-Click Streamlined Workflow: Type & Enter to create, live search, 1-click presets
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
 import { useSettings } from "../context/SettingsContext";
 import {
   createProject,
   deleteProject,
-  getProjectImportTemplate,
   importProject,
+  ingestGitHubProject,
   openProject,
+  initWorkspace,
 } from "../stores/projectStore";
+import { useApi } from "../hooks/useApi";
 import { useToast } from "../context/ToastContext";
-import { useTheme } from "../context/ThemeContext";
-import SettingsPage from "./SettingsPage";
+
+const SettingsPage = lazy(() => import("./SettingsPage"));
+import {
+  LiquidPill,
+  LiquidCard,
+} from "../components/ui/LiquidGlass";
+import {
+  Search,
+  Upload,
+  Settings as SettingsIcon,
+  X,
+  CornerDownLeft,
+  GitBranch,
+  Sparkles,
+  CheckCircle2,
+  Loader2,
+  ArrowRight,
+  ShieldCheck,
+  ChevronDown,
+  Lock,
+  Globe,
+  Check,
+  User,
+  Star,
+  Building2,
+  GitFork,
+  FolderGit2,
+} from "lucide-react";
 
 interface ProjectSummary {
   id: string;
@@ -24,831 +56,1243 @@ interface ProjectSummary {
   updated_at: string;
 }
 
-type CreateMode = "workshop" | "json";
+const PRESETS = [
+  { label: "SaaS", prompt: "SaaS Platform" },
+  { label: "Agent", prompt: "AI Assistant" },
+  { label: "Store", prompt: "Storefront" },
+  { label: "App", prompt: "Mobile App" },
+];
 
-const DashboardLanding: React.FC = () => {
-  const { projects, workspacePath } = useProjectStore();
-  const { theme } = useTheme();
+export const DashboardLanding: React.FC = () => {
+  const { projects } = useProjectStore();
+
   const { apiKey, noAi } = useSettings();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [projectName, setProjectName] = useState("");
-  const [projectJson, setProjectJson] = useState("");
-  const [createMode, setCreateMode] = useState<CreateMode>("workshop");
-  const [jsonLoading, setJsonLoading] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [showSettingsPage, setShowSettingsPage] = useState(false);
+  // Unified State
+  const api = useApi();
+  const [query, setQuery] = useState("");
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importTab, setImportTab] = useState<"github" | "json">("github");
+  
+  // GitHub Ingestion State
+  const [repoUrl, setRepoUrl] = useState("");
+  const [repoBranch, setRepoBranch] = useState("main");
+  const [ghConnected, setGhConnected] = useState(false);
+  const [ghUser, setGhUser] = useState<any>(null);
+  const [userRepos, setUserRepos] = useState<any[]>([]);
+  const [reposLoading, setReposLoading] = useState(false);
+  const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
+  const [repoFilterTab, setRepoFilterTab] = useState<"all" | "self" | "starred" | "org">("all");
+  const [repoSearchQuery, setRepoSearchQuery] = useState("");
+  const repoDropdownRef = useRef<HTMLDivElement>(null);
 
-  const filteredProjects = useMemo(
-    () =>
-      (projects || []).filter((project) =>
-        project.name.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
-    [projects, searchQuery],
-  );
-
-  const jsonError = useMemo(() => {
-    if (!projectJson.trim()) return "JSON template is empty.";
-
-    try {
-      JSON.parse(projectJson);
-      return null;
-    } catch (error) {
-      return error instanceof Error ? error.message : "Invalid JSON";
-    }
-  }, [projectJson]);
-
+  // Close dropdown on outside click or Escape key
   useEffect(() => {
-    if (!isCreateModalOpen || createMode !== "json" || projectJson.trim()) {
+    if (!repoDropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        repoDropdownRef.current &&
+        !repoDropdownRef.current.contains(e.target as Node)
+      ) {
+        setRepoDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setRepoDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [repoDropdownOpen]);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestStep, setIngestStep] = useState(1);
+
+  // JSON Import State
+  const [importJson, setImportJson] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const allProjects = useMemo(() => projects || [], [projects]);
+
+  // Refresh workspace projects on mount
+  useEffect(() => {
+    void initWorkspace();
+  }, []);
+
+  // Check GitHub status and repos when import modal opens
+  useEffect(() => {
+    if (isImportOpen && importTab === "github") {
+      void checkGhStatus();
+    }
+  }, [isImportOpen, importTab]);
+
+  // Re-check when window refocuses (e.g. after returning from GitHub OAuth popup)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isImportOpen && importTab === "github") {
+        void checkGhStatus();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [isImportOpen, importTab]);
+
+  const checkGhStatus = async () => {
+    try {
+      const status = await api.githubStatus();
+      setGhConnected(status.connected);
+      setGhUser(status.user);
+      if (status.connected) {
+        setReposLoading(true);
+        try {
+          const [allRepos, starredRepos] = await Promise.all([
+            api.githubRepos(1, 100).catch(() => []),
+            api.githubRepos(1, 100, "starred").catch(() => []),
+          ]);
+
+          const starredIds = new Set(
+            (Array.isArray(starredRepos) ? starredRepos : []).map((r: any) => r.id)
+          );
+
+          const reposMap = new Map<number, any>();
+
+          if (Array.isArray(allRepos)) {
+            for (const r of allRepos) {
+              reposMap.set(r.id, {
+                ...r,
+                isStarred: starredIds.has(r.id),
+              });
+            }
+          }
+
+          if (Array.isArray(starredRepos)) {
+            for (const r of starredRepos) {
+              if (reposMap.has(r.id)) {
+                reposMap.get(r.id).isStarred = true;
+              } else {
+                reposMap.set(r.id, {
+                  ...r,
+                  isStarred: true,
+                });
+              }
+            }
+          }
+
+          setUserRepos(Array.from(reposMap.values()));
+        } finally {
+          setReposLoading(false);
+        }
+      }
+    } catch {
+      setGhConnected(false);
+    }
+  };
+
+  const selectedRepo = useMemo(() => {
+    if (!repoUrl) return null;
+    return userRepos.find(
+      (r) =>
+        r.full_name?.toLowerCase() === repoUrl.toLowerCase() ||
+        r.html_url?.toLowerCase() === repoUrl.toLowerCase() ||
+        r.name?.toLowerCase() === repoUrl.toLowerCase()
+    );
+  }, [userRepos, repoUrl]);
+
+  const repoCounts = useMemo(() => {
+    let selfCount = 0;
+    let starredCount = 0;
+    let orgCount = 0;
+
+    for (const r of userRepos) {
+      const isSelf = Boolean(ghUser?.login && r.owner?.login?.toLowerCase() === ghUser.login.toLowerCase());
+      if (isSelf) {
+        selfCount++;
+      } else {
+        orgCount++;
+      }
+
+      if (r.isStarred || (typeof r.stargazers_count === "number" && r.stargazers_count > 0)) {
+        starredCount++;
+      }
+    }
+
+    return {
+      all: userRepos.length,
+      self: selfCount,
+      starred: starredCount,
+      org: orgCount,
+    };
+  }, [userRepos, ghUser]);
+
+  const filteredRepos = useMemo(() => {
+    return userRepos.filter((r) => {
+      // 1. Tab filter
+      if (repoFilterTab === "self") {
+        const isSelf = Boolean(ghUser?.login && r.owner?.login?.toLowerCase() === ghUser.login.toLowerCase());
+        if (!isSelf) return false;
+      } else if (repoFilterTab === "starred") {
+        const isStarred = Boolean(r.isStarred || (typeof r.stargazers_count === "number" && r.stargazers_count > 0));
+        if (!isStarred) return false;
+      } else if (repoFilterTab === "org") {
+        const isOrg = Boolean(
+          r.owner?.type === "Organization" ||
+          (ghUser?.login && r.owner?.login?.toLowerCase() !== ghUser.login.toLowerCase())
+        );
+        if (!isOrg) return false;
+      }
+
+      // 2. Search query filter
+      if (repoSearchQuery.trim()) {
+        const q = repoSearchQuery.toLowerCase().trim();
+        const nameMatch = r.name?.toLowerCase().includes(q);
+        const fullNameMatch = r.full_name?.toLowerCase().includes(q);
+        const descMatch = r.description?.toLowerCase().includes(q);
+        return Boolean(nameMatch || fullNameMatch || descMatch);
+      }
+
+      return true;
+    });
+  }, [userRepos, repoFilterTab, repoSearchQuery, ghUser]);
+
+  const handleGitHubIngest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = repoUrl.trim();
+    if (!target) {
+      toast.showToast("Please enter a repository (e.g. owner/repo or URL)", "error");
       return;
     }
+    setIsIngesting(true);
+    setIngestStep(1);
 
-    void loadJsonTemplate(projectName);
-  }, [createMode, isCreateModalOpen, projectJson, projectName]);
+    const timer1 = setTimeout(() => setIngestStep(2), 2500);
+    const timer2 = setTimeout(() => setIngestStep(3), 5500);
+    const timer3 = setTimeout(() => setIngestStep(4), 8500);
 
-  const ambientBackground =
-    theme === "light"
-      ? "radial-gradient(circle at 14% -8%, rgba(0, 0, 0, 0.05), transparent 40%), linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0))"
-      : "radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.03), transparent 40%), radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.01), transparent 40%)";
-
-  const createModeLabel = createMode === "workshop" ? "Guided flow" : "Structured import";
-
-  async function loadJsonTemplate(name?: string) {
-    setJsonLoading(true);
     try {
-      const template = await getProjectImportTemplate(name?.trim() || undefined);
-      setProjectJson(template);
-    } catch (error) {
-      toast.showToast(`Failed to load sample JSON: ${error}`, "error");
+      const res = await ingestGitHubProject({
+        url: target,
+        branch: repoBranch.trim() || undefined,
+        apiKey: apiKey || undefined,
+      });
+      setIngestStep(5);
+      toast.showToast(
+        `✨ Ingested ${res?.stats?.modelsCount || 0} models and ${res?.stats?.tasksCount || 0} tasks!`,
+        "success"
+      );
+      setIsImportOpen(false);
+      setRepoUrl("");
+    } catch (err: any) {
+      toast.showToast(`Ingestion failed: ${err.message || err}`, "error");
     } finally {
-      setJsonLoading(false);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      setIsIngesting(false);
     }
-  }
-
-  const openCreateModal = () => {
-    setIsCreateModalOpen(true);
-    setCreateMode("workshop");
-    setProjectJson("");
   };
 
-  const handleNextStep = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!projectName.trim()) return;
+  // Keyboard shortcut to focus search (Cmd/Ctrl + K or /)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (
+        e.key === "/" &&
+        document.activeElement?.tagName !== "INPUT" &&
+        document.activeElement?.tagName !== "TEXTAREA"
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
+  // Live filter matching projects
+  const filteredProjects = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allProjects;
+    return allProjects.filter((p) => p.name.toLowerCase().includes(q));
+  }, [allProjects, query]);
+
+  // Validate JSON for import
+  const jsonError = useMemo(() => {
+    if (!importJson.trim()) return "Empty";
     try {
-      await createProject(projectName.trim(), "");
-      setProjectName("");
-      setProjectJson("");
-      setIsCreateModalOpen(false);
-      toast.showToast("Project created successfully.", "success");
-    } catch (error) {
-      toast.showToast(`Failed to create project: ${error}`, "error");
+      JSON.parse(importJson);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Invalid JSON";
+    }
+  }, [importJson]);
+
+  // 1-Click / Enter Project Creation
+  const handleCreate = async (nameToCreate: string) => {
+    const finalName = nameToCreate.trim();
+    if (!finalName || isCreating) return;
+
+    setIsCreating(true);
+    try {
+      await createProject(finalName, "");
+      setQuery("");
+      toast.showToast("Created", "success");
+    } catch (err) {
+      toast.showToast(`Error: ${err}`, "error");
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleImportProject = async (event: React.FormEvent) => {
-    event.preventDefault();
-
+  // Import project
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (jsonError) {
       toast.showToast(`Invalid JSON: ${jsonError}`, "error");
       return;
     }
 
+    setIsImporting(true);
     try {
-      await importProject(projectJson);
-      setProjectName("");
-      setProjectJson("");
-      setCreateMode("workshop");
-      setIsCreateModalOpen(false);
-      toast.showToast("Project imported from JSON.", "success");
-    } catch (error) {
-      toast.showToast(`Failed to import project: ${error}`, "error");
+      await importProject(importJson);
+      setImportJson("");
+      setIsImportOpen(false);
+      toast.showToast("Imported", "success");
+    } catch (err) {
+      toast.showToast(`Import error: ${err}`, "error");
+    } finally {
+      setIsImporting(false);
     }
   };
 
-  const handleJsonFileSelected = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const nextJson = await file.text();
-      setProjectJson(nextJson);
-      setCreateMode("json");
-      toast.showToast(`${file.name} loaded into the editor.`, "success");
-    } catch (error) {
-      toast.showToast(`Failed to read JSON file: ${error}`, "error");
-    } finally {
-      event.target.value = "";
-    }
-  };
-
-  const handleCopyJson = async () => {
-    try {
-      await navigator.clipboard.writeText(projectJson);
-      toast.showToast("JSON copied to clipboard.", "success");
+      const text = await file.text();
+      setImportJson(text);
+      toast.showToast(`${file.name} loaded`, "success");
     } catch {
-      toast.showToast("Clipboard copy failed.", "error");
+      toast.showToast("File read failed", "error");
+    } finally {
+      e.target.value = "";
     }
-  };
-
-  const handleDownloadJson = () => {
-    const blob = new Blob([projectJson], {
-      type: "application/json;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${(projectName.trim() || "project-sample")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "project-sample"}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleCancelCreate = () => {
-    setIsCreateModalOpen(false);
-    setProjectName("");
-    setProjectJson("");
-    setCreateMode("workshop");
-    setJsonLoading(false);
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteProject(id, true);
       setConfirmDeleteId(null);
-    } catch (error) {
-      toast.showToast(`Failed to delete project: ${error}`, "error");
+      toast.showToast("Deleted", "success");
+    } catch (err) {
+      toast.showToast(`Delete error: ${err}`, "error");
     }
   };
 
-  if (showSettingsPage) {
+  // Fullscreen Settings View
+  if (showSettings) {
     return (
-      <div className="relative h-full w-full bg-[#050508] text-white flex flex-col overflow-hidden selection:bg-indigo-500/30">
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: ambientBackground }}
-        />
-        <SettingsPage onBack={() => setShowSettingsPage(false)} />
+      <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#f8fafc] dark:bg-[#07080c] text-neutral-900 dark:text-neutral-100">
+        <div className="relative z-10 flex-1 overflow-auto">
+          <Suspense fallback={<div className="h-full w-full flex items-center justify-center text-xs text-neutral-500">Loading settings...</div>}>
+            <SettingsPage onBack={() => setShowSettings(false)} />
+          </Suspense>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative h-full w-full bg-[#050508] text-white flex flex-col overflow-hidden selection:bg-indigo-500/30">
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ background: ambientBackground }}
-      />
+    <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-[#f8fafc] dark:bg-[#07080c] text-neutral-900 dark:text-neutral-100 selection:bg-blue-500/20">
+      {/* Iridescent fluid ambient mesh */}
+      {/* Main Canvas */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+        <div className="max-w-4xl mx-auto space-y-8">
 
-      <div className="relative z-10 flex-1 overflow-y-auto p-6 md:p-10 lg:p-12 pt-6 custom-scrollbar">
-        <div className="max-w-[1600px] mx-auto space-y-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 animate-fade-in group">
-            <div className="space-y-2">
-              <h1 className="text-4xl md:text-5xl font-black tracking-[-0.04em] uppercase italic flex items-center gap-3 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                PROJECTS <span className="text-white">.</span>
-              </h1>
-              <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
-                <span>WORKSPACE</span>
-                <span className="text-white/20">/</span>
-                <span className="text-white/70 truncate max-w-[200px] sm:max-w-xs md:max-w-md drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
-                  {workspacePath ? "CLOUD WORKSPACE" : "LOCAL WORKSPACE"}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setShowSettingsPage(true)}
-                  className="h-10 w-10 flex items-center justify-center rounded-xl text-white/40 hover:text-white transition-all border border-white/5 hover:border-white/20 hover:bg-white/5"
-                  title="IDE Settings"
+          {/* ===== STREAMLINED COMMAND BAR (Search, Import, Settings Only) ===== */}
+          <header className="w-full flex justify-center sticky top-0 z-30 pt-1 pb-2">
+            <div
+              className="
+                relative w-full max-w-2xl
+                rounded-full p-1.5 sm:p-2
+                backdrop-blur-2xl saturate-[190%]
+                bg-white/80 dark:bg-[#0c0d16]/80
+                border border-black/[0.08] dark:border-white/[0.14]
+                shadow-[0_12px_36px_-8px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.04),inset_0_1px_1px_0_rgba(255,255,255,0.7)]
+                dark:shadow-[0_18px_45px_-10px_rgba(0,0,0,0.65),0_1px_2px_rgba(0,0,0,0.4),inset_0_1px_1px_0_rgba(255,255,255,0.1)]
+                flex items-center gap-1.5 sm:gap-2
+                transition-all duration-300
+                hover:border-black/15 dark:hover:border-white/25
+              "
+            >
+              {/* Search & Create Command Input */}
+              <div className="flex-1 relative flex items-center min-w-0">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleCreate(query);
+                  }}
+                  className="w-full relative flex items-center"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <circle cx="12" cy="12" r="3" strokeWidth="2" />
-                  </svg>
-                </button>
+                  <Search className="absolute left-3 w-4 h-4 text-neutral-400 dark:text-neutral-500 pointer-events-none transition-colors" />
 
-                <div className="relative flex-1 sm:flex-initial group/search bg-[#111116] border border-white/5 rounded-2xl flex items-center transition-all hover:border-white/10 focus-within:ring-2 focus-within:ring-[#0ea5e9]/30 focus-within:border-[#0ea5e9]/50 w-full sm:w-56 md:w-64">
-                  <div className="pl-4 pr-3 flex items-center pointer-events-none">
-                    <svg
-                      className="w-4 h-4 text-white/30 group-focus-within/search:text-[#0ea5e9] transition-colors"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2.5"
-                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      />
-                    </svg>
-                  </div>
                   <input
+                    ref={searchInputRef}
                     type="text"
-                    placeholder="Search..."
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    className="bg-transparent h-10 w-full text-xs text-white placeholder:text-white/20 focus:outline-none"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search or create project..."
+                    className="
+                      w-full h-9 sm:h-10 pl-9 pr-24 rounded-full
+                      bg-black/[0.03] dark:bg-white/[0.05]
+                      hover:bg-black/[0.05] dark:hover:bg-white/[0.08]
+                      focus:bg-white/95 dark:focus:bg-[#151724]/95
+                      border border-black/[0.05] dark:border-white/[0.08]
+                      focus:border-blue-500/40 dark:focus:border-blue-400/40
+                      text-xs sm:text-sm font-medium text-neutral-950 dark:text-white
+                      placeholder:text-neutral-400 dark:placeholder:text-neutral-500
+                      focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20
+                      transition-all duration-200
+                    "
                   />
-                </div>
+
+                  {/* Inline Action or Shortcut */}
+                  <div className="absolute right-2 flex items-center gap-1">
+                    {query.trim() ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setQuery("")}
+                          className="p-1 rounded-full text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
+                          title="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isCreating}
+                          className="
+                            flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
+                            bg-blue-600 hover:bg-blue-500 text-white
+                            shadow-[0_2px_10px_rgba(37,99,235,0.35)]
+                            disabled:opacity-50 transition-all cursor-pointer active:scale-95
+                          "
+                        >
+                          <span>{isCreating ? "..." : "Create"}</span>
+                          <CornerDownLeft className="w-3 h-3 opacity-80" />
+                        </button>
+                      </>
+                    ) : (
+                      <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-neutral-400 dark:text-neutral-500 bg-black/[0.04] dark:bg-white/[0.06] rounded border border-black/[0.06] dark:border-white/10 select-none">
+                        ⌘K
+                      </kbd>
+                    )}
+                  </div>
+                </form>
               </div>
 
-              <button
-                onClick={openCreateModal}
-                className="h-10 px-6 rounded-xl bg-white text-black font-bold text-xs transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)] flex items-center justify-center gap-2 whitespace-nowrap"
-              >
-                New Project
-              </button>
-            </div>
-          </div>
+              {/* Subtle Hairline Divider */}
+              <div className="h-5 w-px bg-black/[0.08] dark:bg-white/12 flex-shrink-0 mx-0.5" />
 
-          {/* Onboarding Settings Redirect Banner */}
-          {!apiKey && !noAi && (
-            <div className="bg-gradient-to-r from-[#111116] to-[#141420] border border-amber-500/20 rounded-3xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.03)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-6 animate-fade-in relative overflow-hidden">
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute w-[300px] h-[300px] rounded-full opacity-[0.02] blur-[80px] bg-amber-500 -top-[50%] -left-[20%]" />
-              </div>
-              <div className="relative z-10 flex-1 space-y-1">
-                <h3 className="text-sm font-black text-amber-400 tracking-tight uppercase flex items-center gap-2">
-                  <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                  ⚠️ AI Credentials Required
-                </h3>
-                <p className="text-xs text-white/50 leading-relaxed max-w-2xl">
-                  To use Akasha's visual tools, code generation, and product workshop, please add your OpenRouter or Gemini API key.
-                </p>
-              </div>
-
+              {/* Import Action */}
               <button
                 type="button"
-                onClick={() => setShowSettingsPage(true)}
-                className="relative z-10 h-10 px-6 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(245,158,11,0.2)] shrink-0 flex items-center justify-center gap-2 font-bold"
+                onClick={() => setIsImportOpen(true)}
+                className="
+                  group flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold
+                  text-neutral-800 dark:text-neutral-200
+                  bg-black/[0.03] dark:bg-white/[0.06]
+                  hover:bg-black/[0.07] dark:hover:bg-white/[0.12]
+                  border border-black/[0.06] dark:border-white/12
+                  hover:border-black/12 dark:hover:border-white/20
+                  active:scale-[0.97] transition-all duration-200 flex-shrink-0 cursor-pointer
+                "
+                title="Import Project"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-                Configure API Key
+                <Upload className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 group-hover:scale-105 transition-transform" />
+                <span>Import</span>
               </button>
-            </div>
-          )}
 
-          <div className="flex items-center justify-between text-[11px] text-white/30 font-bold tracking-widest uppercase">
-            <span>
-              {filteredProjects.length} project
-              {filteredProjects.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          {filteredProjects.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in pb-12">
-              {filteredProjects.map((project, index) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  index={index}
-                  onOpen={() => openProject(project.id)}
-                  onDelete={() => setConfirmDeleteId(project.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex-1 min-h-[360px] flex flex-col items-center justify-center p-14 bg-[var(--ide-bg-elevated)] border-2 border-dashed border-[var(--ide-border)] rounded-3xl animate-fade-in transition-all">
-              <div className="w-20 h-20 rounded-3xl bg-[var(--ide-bg-panel)] border border-[var(--ide-border)] flex items-center justify-center mb-6 shadow-[var(--ide-shadow)]">
-                <svg
-                  className="w-9 h-9 text-[var(--ide-text-muted)]"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-black mb-3">Welcome to Akasha</h3>
-              <p className="text-[var(--ide-text-secondary)] text-sm text-center max-w-sm mb-8 leading-relaxed font-medium">
-                {searchQuery
-                  ? "No projects match your search criteria."
-                  : "Create your first project to start building with visual full-stack tools."}
-              </p>
+              {/* Settings Action */}
               <button
-                onClick={openCreateModal}
-                className="bg-white text-black h-12 px-12 rounded-xl font-bold text-xs hover:opacity-90 transition-all"
+                type="button"
+                onClick={() => setShowSettings(true)}
+                className="
+                  group relative flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold
+                  text-neutral-800 dark:text-neutral-200
+                  bg-black/[0.03] dark:bg-white/[0.06]
+                  hover:bg-black/[0.07] dark:hover:bg-white/[0.12]
+                  border border-black/[0.06] dark:border-white/12
+                  hover:border-black/12 dark:hover:border-white/20
+                  active:scale-[0.97] transition-all duration-200 flex-shrink-0 cursor-pointer
+                "
+                title="Settings"
               >
-                Create Project
+                <SettingsIcon className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 group-hover:rotate-45 transition-transform duration-300" />
+                <span>Settings</span>
+                {!apiKey && !noAi && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 ml-0.5 animate-pulse shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
+                )}
               </button>
             </div>
-          )}
+          </header>
+
+          {/* ===== PROJECTS CANVAS ===== */}
+          <main className="space-y-4">
+            {filteredProjects.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                {filteredProjects.map((project) => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    onOpen={() => openProject(project.id)}
+                    onDelete={() => setConfirmDeleteId(project.id)}
+                  />
+                ))}
+              </div>
+            ) : allProjects.length === 0 ? (
+              /* Ultra-minimalist empty state */
+              <div className="py-24 text-center flex flex-col items-center justify-center space-y-4">
+                <div className="space-y-1">
+                  <h2 className="text-sm font-semibold tracking-tight text-neutral-800 dark:text-neutral-200">
+                    No projects
+                  </h2>
+                  <p className="text-xs text-neutral-400 max-w-xs">
+                    Type above or pick a preset to begin.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 flex-wrap justify-center">
+                  {PRESETS.map((p) => (
+                    <LiquidPill
+                      key={p.label}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleCreate(p.prompt)}
+                    >
+                      {p.label}
+                    </LiquidPill>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Search no matches */
+              <div className="py-16 text-center space-y-2">
+                <p className="text-xs text-neutral-400">No matches</p>
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+          </main>
         </div>
 
-        {/* Settings modal removed to use the SettingsPage inline instead */}
-
-        {confirmDeleteId && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/55 backdrop-blur-md animate-fade-in"
-              onClick={() => setConfirmDeleteId(null)}
-            />
-            <div className="relative w-full max-w-sm bg-[var(--ide-bg-panel)] border border-[var(--ide-border-strong)] rounded-3xl shadow-[var(--ide-shadow)] p-8 animate-slide-up">
-              <h3 className="text-lg font-black text-[var(--ide-text)] mb-2">
-                Delete Project?
-              </h3>
-              <p className="text-sm text-[var(--ide-text-secondary)] mb-6">
-                This action cannot be undone. The project and all its data will
-                be permanently removed.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setConfirmDeleteId(null)}
-                  className="flex-1 py-3 rounded-xl border border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-bold text-xs uppercase tracking-wider hover:bg-[var(--ide-bg-elevated)] hover:text-[var(--ide-text)] transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDelete(confirmDeleteId)}
-                  className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-xs uppercase tracking-wider hover:bg-red-600 transition-all"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isCreateModalOpen && (
-          <div className="fixed inset-0 z-[100] bg-[rgba(5,5,8,0.94)] backdrop-blur-xl animate-fade-in">
-            <button
-              type="button"
-              aria-label="Close create project screen"
-              onClick={handleCancelCreate}
-              className="absolute inset-0 cursor-default"
-            />
-
-            <div className="relative z-10 flex h-full w-full flex-col">
-              <div className="flex items-center justify-between border-b border-white/10 bg-black/25 px-5 py-4 md:px-8">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-white/10 text-white border border-white/20 flex items-center justify-center shadow-xl flex-shrink-0">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/50">
-                      Project Setup
-                    </p>
-                    <h2 className="truncate text-xl md:text-2xl font-black leading-tight text-white">
-                      Start with a workshop or direct JSON import
-                    </h2>
-                  </div>
-                </div>
-
-                <div className="inline-flex rounded-2xl border border-white/10 bg-white/[0.03] p-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setCreateMode("workshop")}
-                    className={`h-10 px-4 rounded-xl text-[11px] font-black uppercase tracking-[0.22em] transition-all ${
-                      createMode === "workshop"
-                        ? "bg-white text-black shadow-lg"
-                        : "text-[var(--ide-text-secondary)] hover:text-white"
-                    }`}
-                  >
-                    Workshop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreateMode("json");
-                      if (!projectJson.trim()) {
-                        void loadJsonTemplate(projectName);
-                      }
-                    }}
-                    className={`h-10 px-4 rounded-xl text-[11px] font-black uppercase tracking-[0.22em] transition-all ${
-                      createMode === "json"
-                        ? "bg-white/10 text-white shadow-lg border border-white/20"
-                        : "text-[var(--ide-text-secondary)] hover:text-white"
-                    }`}
-                  >
-                    Direct JSON Import
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="grid h-full min-h-0 items-stretch lg:grid-cols-[360px_minmax(0,1fr)]">
-                  <aside className="h-full min-h-0 self-stretch overflow-auto border-b border-white/10 bg-black/20 px-5 py-5 md:px-8 lg:border-b-0 lg:border-r lg:px-6">
-                    <div className="flex h-full flex-col justify-between gap-5">
-                      <div className="space-y-3">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-white/70">
-                          <span className="h-2 w-2 rounded-full bg-white/60 shadow-[0_0_12px_rgba(255,255,255,0.4)]" />
-                          {createModeLabel}
-                        </div>
-                        <p className="max-w-md text-sm leading-6 text-[var(--ide-text-secondary)]">
-                          Start clean with a guided brief or skip the workshop entirely by importing JSON directly.
-                        </p>
-                      </div>
-
-                      <div className="rounded-[1.6rem] border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.22em] text-white/45">
-                          <span>Creation pipeline</span>
-                          <span>3 steps</span>
-                        </div>
-                        <div className="mt-4 grid gap-3">
-                          {[
-                            ["01", "Name the project", "Give the workspace a clear product identity."],
-                            ["02", "Choose the source", "Use workshop planning or direct JSON import."],
-                            ["03", "Move into build", "Continue into the visual builder with structure."],
-                          ].map(([index, title, description]) => (
-                            <div key={index} className="flex gap-3 rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
-                              <div className="mt-0.5 h-8 w-8 shrink-0 rounded-xl bg-white/[0.04] text-[10px] font-black text-white flex items-center justify-center">
-                                {index}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-[11px] font-black uppercase tracking-[0.2em] text-white">{title}</div>
-                                <p className="mt-1 text-xs leading-5 text-white/55">{description}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 space-y-4">
-                        <div>
-                          <label className="text-[10px] font-black uppercase tracking-[0.24em] text-white/55">
-                            Project Name
-                          </label>
-                          <input
-                            type="text"
-                            autoFocus
-                            value={projectName}
-                            onChange={(event) => setProjectName(event.target.value)}
-                            placeholder="e.g. Neo-Commerce"
-                            className="mt-3 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-base font-semibold text-white placeholder:text-white/25 focus:outline-none focus:ring-4 focus:ring-white/5 focus:border-white/40 transition-all"
-                            required={createMode === "workshop"}
-                          />
-                        </div>
-
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-                          <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">
-                            Recommended first step
-                          </div>
-                          <p className="mt-2 text-sm leading-6 text-[var(--ide-text-secondary)]">
-                            Use the workshop if you want the app to turn an idea into a product brief before implementation.
-                          </p>
-                        </div>
-
-                        {!apiKey && !noAi && (
-                          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.02] p-4 space-y-3">
-                            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-400 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              AI Credentials Required
-                            </div>
-                            <p className="text-[11px] leading-relaxed text-white/45">
-                              The guided workshop uses AI to design your project. Please set up your API Key in Settings to continue.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsCreateModalOpen(false);
-                                setShowSettingsPage(true);
-                              }}
-                              className="w-full h-9 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 font-bold"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                              </svg>
-                              Configure in Settings
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="hidden lg:block rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-[10px] uppercase tracking-[0.22em] text-white/35">
-                        Left panel stays full height for project setup context.
-                      </div>
-                    </div>
-                  </aside>
-
-                  {createMode === "workshop" ? (
-                    <form onSubmit={handleNextStep} className="h-full min-h-0 overflow-auto px-5 py-5 md:px-8 lg:px-8 lg:py-6">
-                      <div className="mx-auto flex max-w-5xl min-h-full flex-col justify-between gap-6">
-                        <div className="space-y-5">
-                          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/60">
-                                  Workshop Mode
-                                </div>
-                                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-                                  Turn the idea into a clear product brief, then continue into the visual builder with a stronger plan.
-                                </p>
-                              </div>
-                              <div className="hidden md:flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/80 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m0 7a9 9 0 11-6-16.19" />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                            {[
-                              ["Output", "Refined project brief"],
-                              ["Best for", "New ideas and discovery"],
-                              ["Includes", "AI-assisted planning"],
-                                ["Next step", "Visual Builder"],
-                            ].map(([label, value]) => (
-                              <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/35">{label}</div>
-                                <div className="mt-1 text-sm font-semibold text-white">{value}</div>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
-                                  Preview
-                                </div>
-                                <p className="mt-2 text-sm leading-6 text-[var(--ide-text-secondary)]">
-                                  A concise planning pass keeps the first build step focused and professional.
-                                </p>
-                              </div>
-                              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/55">
-                                PRD → Builder
-                              </div>
-                            </div>
-
-                            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                              {[
-                                ["Scope", "Capture the product intent."],
-                                ["Flow", "Map the experience before design."],
-                                ["Build", "Enter the builder with context."],
-                              ].map(([title, description]) => (
-                                <div key={title} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-white">{title}</div>
-                                  <p className="mt-2 text-xs leading-5 text-white/55">{description}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-3 sm:gap-4 pt-2">
-                          <button
-                            type="button"
-                            onClick={handleCancelCreate}
-                            className="flex-1 h-11 rounded-2xl border border-white/10 text-[11px] font-black uppercase tracking-[0.22em] text-[var(--ide-text-secondary)] hover:text-white hover:bg-white/[0.04] transition-all"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={!projectName.trim()}
-                            className="flex-1 h-11 rounded-2xl bg-white text-black font-black text-[11px] uppercase tracking-[0.22em] hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg"
-                          >
-                            Next: Workshop &rarr;
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleImportProject} className="h-full min-h-0 overflow-auto px-5 py-5 md:px-8 lg:px-8 lg:py-6">
-                      <div className="mx-auto flex max-w-5xl min-h-full flex-col">
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 lg:flex lg:flex-col lg:flex-1">
-                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                            <div className="space-y-2">
-                              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/50">
-                                Direct JSON Import
-                              </div>
-                              <p className="max-w-xl text-sm leading-6 text-[var(--ide-text-secondary)]">
-                                Paste or upload a project JSON file and import it directly. This path skips the workshop and refinement flow.
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void loadJsonTemplate(projectName)}
-                                className="h-10 px-4 rounded-xl border border-white/10 bg-white/[0.02] text-[11px] font-black uppercase tracking-[0.22em] text-white/80 hover:bg-white/[0.06] transition-all"
-                              >
-                                {jsonLoading ? "Loading..." : "Reload Sample JSON"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="h-10 px-4 rounded-xl border border-white/10 bg-white/[0.02] text-[11px] font-black uppercase tracking-[0.22em] text-white/80 hover:bg-white/[0.06] transition-all"
-                              >
-                                Upload JSON File
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleCopyJson}
-                                disabled={!projectJson.trim()}
-                                className="h-10 px-4 rounded-xl border border-white/10 bg-white/[0.02] text-[11px] font-black uppercase tracking-[0.22em] text-white/80 hover:bg-white/[0.06] transition-all disabled:opacity-40"
-                              >
-                                Copy JSON
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleDownloadJson}
-                                disabled={!projectJson.trim()}
-                                className="h-10 px-4 rounded-xl border border-white/10 bg-white/[0.02] text-[11px] font-black uppercase tracking-[0.22em] text-white/80 hover:bg-white/[0.06] transition-all disabled:opacity-40"
-                              >
-                                Download JSON
-                              </button>
-                            </div>
-                          </div>
-
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".json,application/json"
-                            className="hidden"
-                            onChange={handleJsonFileSelected}
-                          />
-
-                          <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-[#06080d] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/45">
-                                JSON editor
-                              </div>
-                              <div className={`text-[10px] font-black uppercase tracking-[0.22em] ${jsonError ? "text-white/40" : "text-white"}`}>
-                                {jsonError ? "Invalid JSON" : "Valid JSON"}
-                              </div>
-                            </div>
-
-                            <textarea
-                              value={projectJson}
-                              onChange={(event) => setProjectJson(event.target.value)}
-                              spellCheck={false}
-                              className="mt-4 min-h-[56vh] w-full resize-none rounded-2xl border border-white/5 bg-transparent px-1 py-1 text-sm leading-6 text-slate-100 font-mono focus:outline-none placeholder:text-slate-400/40"
-                              placeholder="Paste JSON here, or load the sample and import directly."
-                            />
-                          </div>
-
-                          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
-                            <div className={`rounded-2xl border px-4 py-3 text-xs font-semibold ${jsonError ? "border-white/10 bg-white/5 text-white/60" : "border-white/20 bg-white/10 text-white"}`}>
-                              {jsonError
-                                ? `Invalid JSON: ${jsonError}`
-                                : "JSON is valid and ready for direct import."}
-                            </div>
-                            <div className="text-[10px] uppercase tracking-[0.22em] text-white/35 md:text-right">
-                              Tip: this path bypasses workshop and AI refinement.
-                            </div>
-                          </div>
-
-                          <div className="mt-4 rounded-3xl border border-white/10 bg-black/20 p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
-                                Direct import checklist
-                              </div>
-                              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">
-                                Ready when valid
-                              </div>
-                            </div>
-                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                              {[
-                                ["Schema", "Valid JSON"],
-                                ["Structure", "Pages and blocks align"],
-                                ["Action", "Direct import to workspace"],
-                              ].map(([label, value]) => (
-                                <div key={label} className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
-                                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/35">{label}</div>
-                                  <div className="mt-1 text-sm font-semibold text-white">{value}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-5 flex gap-3 sm:gap-4">
-                          <button
-                            type="button"
-                            onClick={handleCancelCreate}
-                            className="flex-1 h-11 rounded-2xl border border-white/10 text-[11px] font-black uppercase tracking-[0.22em] text-[var(--ide-text-secondary)] hover:text-white hover:bg-white/[0.04] transition-all"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={Boolean(jsonError) || jsonLoading}
-                            className="flex-1 h-11 rounded-2xl bg-white text-black font-black text-[11px] uppercase tracking-[0.22em] hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-30 shadow-lg"
-                          >
-                            Import Project JSON
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
       </div>
+
+      {/* ===== EXPANDED DUAL-MODE IMPORT SHEET ===== */}
+      {isImportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 dark:bg-black/70 backdrop-blur-md animate-fade-in"
+            onClick={() => {
+              if (repoDropdownOpen) {
+                setRepoDropdownOpen(false);
+              } else if (!isIngesting) {
+                setIsImportOpen(false);
+              }
+            }}
+          />
+
+          <LiquidCard
+            variant="elevated"
+            interactive={false}
+            className="relative z-10 w-full max-w-xl p-6 shadow-2xl animate-scale-up border border-black/10 dark:border-white/10 !overflow-visible"
+            style={{ borderRadius: "24px" }}
+          >
+            {/* Header & Tabs */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold tracking-tight text-neutral-950 dark:text-white">
+                  Import Project
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                  AI Architecture
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={isIngesting}
+                onClick={() => setIsImportOpen(false)}
+                className="text-xs font-medium text-neutral-400 hover:text-neutral-800 dark:hover:text-white disabled:opacity-40"
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Segmented Control Tabs */}
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/10 mb-4">
+              <button
+                type="button"
+                disabled={isIngesting}
+                onClick={() => setImportTab("github")}
+                className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                  importTab === "github"
+                    ? "bg-white dark:bg-[#1a1d2e] text-neutral-900 dark:text-white shadow-sm border border-black/[0.05] dark:border-white/10"
+                    : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+                }`}
+              >
+                <GitBranch className="w-3.5 h-3.5 text-cyan-500" />
+                <span>GitHub Repository</span>
+              </button>
+              <button
+                type="button"
+                disabled={isIngesting}
+                onClick={() => setImportTab("json")}
+                className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                  importTab === "json"
+                    ? "bg-white dark:bg-[#1a1d2e] text-neutral-900 dark:text-white shadow-sm border border-black/[0.05] dark:border-white/10"
+                    : "text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>JSON Schema</span>
+              </button>
+            </div>
+
+            {/* TAB 1: GITHUB INGESTION */}
+            {importTab === "github" && (
+              <div>
+                {isIngesting ? (
+                  /* Progress State */
+                  <div className="py-6 px-4 space-y-5 text-center animate-fade-in">
+                    <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-2 border-cyan-500/20 animate-ping" />
+                      <div className="w-14 h-14 rounded-full bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                        <Loader2 className="w-7 h-7 animate-spin" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-neutral-900 dark:text-white">
+                        Autonomous Ingestion in Progress
+                      </h4>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">
+                        Reading source code, detecting schemas & generating full architecture
+                      </p>
+                    </div>
+
+                    {/* Step Indicators */}
+                    <div className="space-y-2 text-left bg-black/[0.02] dark:bg-white/[0.03] p-3.5 rounded-xl border border-black/[0.05] dark:border-white/10">
+                      {[
+                        { step: 1, label: "Scanning Git tree & discovering file structure" },
+                        { step: 2, label: "Reading manifests, models, routes & controllers" },
+                        { step: 3, label: "Synthesizing data models, REST APIs & UI pages" },
+                        { step: 4, label: "Auditing bugs & crafting External Agent Prompts" },
+                        { step: 5, label: "Formulating future roadmap & finalizing project" },
+                      ].map((item) => (
+                        <div key={item.step} className="flex items-center gap-2.5 text-xs">
+                          {ingestStep > item.step ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                          ) : ingestStep === item.step ? (
+                            <Loader2 className="w-4 h-4 text-cyan-400 animate-spin flex-shrink-0" />
+                          ) : (
+                            <div className="w-4 h-4 rounded-full border border-neutral-300 dark:border-white/20 flex-shrink-0" />
+                          )}
+                          <span
+                            className={`font-mono text-[11px] ${
+                              ingestStep >= item.step
+                                ? "text-neutral-900 dark:text-white font-medium"
+                                : "text-neutral-400 dark:text-white/30"
+                            }`}
+                          >
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  /* Repository Setup Form */
+                  <form onSubmit={handleGitHubIngest} className="space-y-4">
+                    {/* GitHub Connection Banner */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] border border-black/[0.05] dark:border-white/10 text-xs">
+                      {ghConnected && ghUser ? (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={ghUser.avatar_url}
+                            alt=""
+                            className="w-5 h-5 rounded-full border border-black/10 dark:border-white/20"
+                          />
+                          <span className="font-mono text-[11px] text-neutral-800 dark:text-neutral-200">
+                            Connected as <strong>@{ghUser.login}</strong>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400 text-[11px]">
+                          <GitBranch className="w-4 h-4 text-neutral-400" />
+                          <span>Enter public repo or connect GitHub</span>
+                        </div>
+                      )}
+
+                      {!ghConnected ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const w = 600, h = 700;
+                            const left = window.screen.width / 2 - w / 2;
+                            const top = window.screen.height / 2 - h / 2;
+                            window.open("/api/github/login", "github-oauth", `width=${w},height=${h},top=${top},left=${left}`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold bg-neutral-900 text-white dark:bg-white dark:text-neutral-950 hover:opacity-90 transition-opacity cursor-pointer"
+                        >
+                          Sign In
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-mono text-emerald-500 flex items-center gap-1 font-bold">
+                          <CheckCircle2 className="w-3 h-3" /> OAuth Active
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Pre-fill from User Repos if available */}
+                    {ghConnected && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+                            <FolderGit2 className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Select from your repositories</span>
+                          </label>
+                          {reposLoading ? (
+                            <span className="flex items-center gap-1 text-[10px] text-cyan-400 font-mono">
+                              <Loader2 className="w-3 h-3 animate-spin" /> Fetching...
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-neutral-400 font-mono">
+                              {userRepos.length} available
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Custom Obsidian Glass Repository Picker */}
+                        <div ref={repoDropdownRef} className="relative z-30">
+                          <button
+                            type="button"
+                            onClick={() => setRepoDropdownOpen((prev) => !prev)}
+                            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-left transition-all duration-200 cursor-pointer ${
+                              repoDropdownOpen
+                                ? "bg-black/[0.06] dark:bg-white/[0.08] border-cyan-500/50 ring-2 ring-cyan-500/20 shadow-lg"
+                                : "bg-white/80 dark:bg-[#0c0d16]/90 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] border-black/10 dark:border-white/12 shadow-sm"
+                            } border`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                              {selectedRepo?.owner?.avatar_url ? (
+                                <img
+                                  src={selectedRepo.owner.avatar_url}
+                                  alt=""
+                                  className="w-5 h-5 rounded-md border border-black/10 dark:border-white/10 flex-shrink-0"
+                                />
+                              ) : selectedRepo ? (
+                                <FolderGit2 className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                              ) : (
+                                <GitBranch className="w-4 h-4 text-neutral-400 flex-shrink-0" />
+                              )}
+                              <span className="font-mono text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                                {selectedRepo ? selectedRepo.full_name : (repoUrl || "Choose one of your repositories...")}
+                              </span>
+                              {selectedRepo && (
+                                selectedRepo.private ? (
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 flex-shrink-0">
+                                    <Lock className="w-2.5 h-2.5" /> Private
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex-shrink-0">
+                                    <Globe className="w-2.5 h-2.5" /> Public
+                                  </span>
+                                )
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              {repoUrl && (
+                                <div
+                                  role="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRepoUrl("");
+                                    setRepoBranch("main");
+                                  }}
+                                  className="p-1 rounded-md text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                  title="Clear selection"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </div>
+                              )}
+                              <ChevronDown
+                                className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${
+                                  repoDropdownOpen ? "rotate-180 text-cyan-400" : ""
+                                }`}
+                              />
+                            </div>
+                          </button>
+
+                          {/* Floating Overlay Dropdown Container */}
+                          {repoDropdownOpen && (
+                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 p-3 rounded-2xl bg-[#0c0d16]/98 border border-white/20 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] backdrop-blur-3xl space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+                              {/* Filter Tabs Header */}
+                              <div className="flex items-center justify-between gap-1 pb-1 border-b border-white/[0.08]">
+                                <div className="flex items-center gap-1 overflow-x-auto py-0.5 custom-scrollbar w-full">
+                                  {(
+                                    [
+                                      { key: "all", label: "All", icon: <FolderGit2 className="w-3 h-3 text-cyan-400" />, count: repoCounts.all },
+                                      { key: "self", label: "Self", icon: <User className="w-3 h-3 text-emerald-400" />, count: repoCounts.self },
+                                      { key: "starred", label: "Starred", icon: <Star className="w-3 h-3 text-amber-400" />, count: repoCounts.starred },
+                                      { key: "org", label: "Organization", icon: <Building2 className="w-3 h-3 text-indigo-400" />, count: repoCounts.org },
+                                    ] as const
+                                  ).map((tab) => {
+                                    const isActive = repoFilterTab === tab.key;
+                                    return (
+                                      <button
+                                        key={tab.key}
+                                        type="button"
+                                        onClick={() => setRepoFilterTab(tab.key)}
+                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${
+                                          isActive
+                                            ? "bg-white/20 text-white font-semibold shadow-sm border border-white/25"
+                                            : "text-neutral-400 hover:text-white hover:bg-white/5"
+                                        }`}
+                                      >
+                                        {tab.icon}
+                                        <span>{tab.label}</span>
+                                        <span
+                                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                                            isActive
+                                              ? "bg-white/25 text-white font-bold"
+                                              : "bg-white/10 text-neutral-400"
+                                          }`}
+                                        >
+                                          {tab.count}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Search Input within Dropdown */}
+                              <div className="relative">
+                                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                                <input
+                                  type="text"
+                                  value={repoSearchQuery}
+                                  onChange={(e) => setRepoSearchQuery(e.target.value)}
+                                  placeholder="Search repositories by name or description..."
+                                  className="w-full h-8 pl-8 pr-7 rounded-lg bg-white/[0.05] border border-white/10 text-xs font-mono text-white placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                                  autoFocus
+                                />
+                                {repoSearchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRepoSearchQuery("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white cursor-pointer"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Repository Cards List */}
+                              <div className="max-h-56 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                {reposLoading && userRepos.length === 0 ? (
+                                  <div className="py-8 text-center text-xs text-neutral-400 font-mono space-y-2">
+                                    <Loader2 className="w-5 h-5 mx-auto animate-spin text-cyan-400" />
+                                    <div>Fetching your repositories from GitHub...</div>
+                                  </div>
+                                ) : filteredRepos.length === 0 ? (
+                                  <div className="py-6 text-center text-xs text-neutral-400 font-mono space-y-2">
+                                    <div>No repositories found</div>
+                                    <div className="text-[10px] text-neutral-500">
+                                      {repoSearchQuery
+                                        ? `No matches found for "${repoSearchQuery}"`
+                                        : "No repositories under this tab"}
+                                    </div>
+                                    {(repoSearchQuery || repoFilterTab !== "all") && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setRepoSearchQuery("");
+                                          setRepoFilterTab("all");
+                                        }}
+                                        className="text-[10px] text-cyan-400 hover:underline cursor-pointer"
+                                      >
+                                        Reset filters
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  filteredRepos.map((r: any) => {
+                                    const isSelected =
+                                      repoUrl.toLowerCase() === r.full_name?.toLowerCase() ||
+                                      repoUrl.toLowerCase() === r.html_url?.toLowerCase() ||
+                                      repoUrl.toLowerCase() === r.name?.toLowerCase();
+                                    const isOrg =
+                                      r.owner?.type === "Organization" ||
+                                      (ghUser?.login && r.owner?.login?.toLowerCase() !== ghUser.login.toLowerCase());
+
+                                    return (
+                                      <button
+                                        key={r.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setRepoUrl(r.full_name || r.name);
+                                          if (r.default_branch) setRepoBranch(r.default_branch);
+                                          setRepoDropdownOpen(false);
+                                        }}
+                                        className={`w-full text-left p-2.5 rounded-xl transition-all duration-150 flex items-start justify-between gap-2.5 group cursor-pointer ${
+                                          isSelected
+                                            ? "bg-cyan-500/15 border border-cyan-500/40 shadow-sm"
+                                            : "hover:bg-white/[0.07] border border-transparent"
+                                        }`}
+                                      >
+                                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                          {r.owner?.avatar_url ? (
+                                            <img
+                                              src={r.owner.avatar_url}
+                                              alt=""
+                                              className="w-5 h-5 rounded-md mt-0.5 border border-white/10 flex-shrink-0"
+                                            />
+                                          ) : isOrg ? (
+                                            <Building2 className="w-4 h-4 mt-0.5 text-indigo-400 flex-shrink-0" />
+                                          ) : (
+                                            <User className="w-4 h-4 mt-0.5 text-cyan-400 flex-shrink-0" />
+                                          )}
+
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="font-mono text-xs font-semibold text-white group-hover:text-cyan-300 transition-colors truncate">
+                                                {r.full_name || r.name}
+                                              </span>
+                                              {r.private ? (
+                                                <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                                  <Lock className="w-2.5 h-2.5" /> Private
+                                                </span>
+                                              ) : (
+                                                <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                  <Globe className="w-2.5 h-2.5" /> Public
+                                                </span>
+                                              )}
+                                              {r.fork && (
+                                                <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                                  <GitFork className="w-2.5 h-2.5" /> Fork
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            {r.description && (
+                                              <p className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">
+                                                {r.description}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 flex-shrink-0 pt-0.5">
+                                          {(r.isStarred || (typeof r.stargazers_count === "number" && r.stargazers_count > 0)) && (
+                                            <span className="flex items-center gap-1 text-[10px] font-mono text-amber-400/90">
+                                              <Star className="w-3 h-3 fill-amber-400/40 text-amber-400" />
+                                              <span>{r.stargazers_count ?? 1}</span>
+                                            </span>
+                                          )}
+                                          {isSelected ? (
+                                            <Check className="w-4 h-4 text-cyan-400" />
+                                          ) : (
+                                            <ArrowRight className="w-3.5 h-3.5 text-neutral-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Repository Input & Branch */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2 space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 flex items-center justify-between">
+                          <span>Repository URL or Name</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={repoUrl}
+                          onChange={(e) => setRepoUrl(e.target.value)}
+                          placeholder="e.g. owner/repo or URL"
+                          className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#121422] border border-black/[0.1] dark:border-white/10 text-xs font-mono text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                          <GitBranch className="w-3 h-3 text-cyan-500" />
+                          <span>Branch</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={repoBranch}
+                          onChange={(e) => setRepoBranch(e.target.value)}
+                          placeholder="main"
+                          className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#121422] border border-black/[0.1] dark:border-white/10 text-xs font-mono text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Feature Highlights */}
+                    <div className="grid grid-cols-3 gap-2 p-2 rounded-xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.05] dark:border-white/10 text-xs">
+                      <div className="flex items-center gap-1.5 text-neutral-700 dark:text-neutral-300 min-w-0">
+                        <Sparkles className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                        <span className="text-[10px] font-medium truncate">Models & APIs</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-neutral-700 dark:text-neutral-300 min-w-0">
+                        <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                        <span className="text-[10px] font-medium truncate">Bug Audit</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-neutral-700 dark:text-neutral-300 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <span className="text-[10px] font-medium truncate">Task Tracking</span>
+                      </div>
+                    </div>
+
+                    {/* Submit Actions */}
+                    <div className="flex justify-end gap-2 pt-2">
+                      <LiquidPill
+                        type="button"
+                        variant="subtle"
+                        size="sm"
+                        onClick={() => setIsImportOpen(false)}
+                      >
+                        Cancel
+                      </LiquidPill>
+                      <button
+                        type="submit"
+                        disabled={!repoUrl.trim()}
+                        className="
+                          flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold
+                          bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-white
+                          hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-lg
+                        "
+                      >
+                        <span>Import & Ingest with AI</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: JSON SPECIFICATION IMPORT */}
+            {importTab === "json" && (
+              <div>
+                {/* Quick Actions */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.07] dark:hover:bg-white/[0.12] border border-black/[0.06] dark:border-white/10 text-neutral-800 dark:text-neutral-200 transition-colors"
+                    >
+                      <span>Upload File</span>
+                    </button>
+                    {importJson.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setImportJson("")}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.07] dark:hover:bg-white/[0.12] border border-black/[0.06] dark:border-white/10 text-neutral-800 dark:text-neutral-200 transition-colors"
+                      >
+                        <span>Clear</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+
+                  <span
+                    className={`text-[10px] font-medium ${
+                      jsonError ? "text-amber-500" : "text-emerald-500"
+                    }`}
+                  >
+                    {jsonError ? "Invalid JSON" : "Ready"}
+                  </span>
+                </div>
+
+                {/* JSON Area */}
+                <form onSubmit={handleImport} className="space-y-3">
+                  <textarea
+                    value={importJson}
+                    onChange={(e) => setImportJson(e.target.value)}
+                    placeholder="Paste JSON schema..."
+                    spellCheck={false}
+                    className="
+                      w-full h-44 p-3 rounded-xl
+                      bg-white/85 dark:bg-[#121422]/90
+                      border border-black/[0.08] dark:border-white/[0.1]
+                      text-[11px] font-mono leading-relaxed text-neutral-900 dark:text-neutral-100
+                      focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none
+                    "
+                  />
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <LiquidPill
+                      type="button"
+                      variant="subtle"
+                      size="sm"
+                      onClick={() => setIsImportOpen(false)}
+                    >
+                      Cancel
+                    </LiquidPill>
+                    <LiquidPill
+                      type="submit"
+                      variant="primary"
+                      size="sm"
+                      disabled={Boolean(jsonError) || isImporting}
+                    >
+                      <span>{isImporting ? "Importing..." : "Import"}</span>
+                    </LiquidPill>
+                  </div>
+                </form>
+              </div>
+            )}
+          </LiquidCard>
+        </div>
+      )}
+
+      {/* ===== MINIMALIST DELETE CONFIRMATION ===== */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
+            onClick={() => setConfirmDeleteId(null)}
+          />
+
+          <LiquidCard
+            variant="elevated"
+            className="relative z-10 w-full max-w-xs p-4 text-center shadow-2xl animate-scale-up"
+            style={{ borderRadius: "20px" }}
+          >
+            <h3 className="text-xs font-semibold text-neutral-900 dark:text-white mb-1">
+              Delete project?
+            </h3>
+            <p className="text-[11px] text-neutral-400 mb-3">
+              Cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <LiquidPill
+                variant="subtle"
+                size="sm"
+                className="flex-1"
+                onClick={() => setConfirmDeleteId(null)}
+              >
+                Cancel
+              </LiquidPill>
+              <LiquidPill
+                variant="danger"
+                size="sm"
+                className="flex-1"
+                onClick={() => handleDelete(confirmDeleteId)}
+              >
+                Delete
+              </LiquidPill>
+            </div>
+          </LiquidCard>
+        </div>
+      )}
     </div>
   );
 };
 
+/* ─── Ultra-Minimalist Apple Liquid Project Card (Zero Icons) ─── */
 const ProjectCard: React.FC<{
   project: ProjectSummary;
-  index: number;
   onOpen: () => void;
   onDelete: () => void;
-}> = ({ project, index, onOpen, onDelete }) => {
+}> = ({ project, onOpen, onDelete }) => {
+  const formattedDate = useMemo(() => {
+    try {
+      const d = new Date(project.updated_at);
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch {
+      return "Recent";
+    }
+  }, [project.updated_at]);
+
   return (
-    <div
-      className="group bg-[#111116] border border-white/[0.03] rounded-3xl p-6 hover:border-white/10 transition-all duration-300 flex flex-col h-64 relative overflow-hidden cursor-pointer shadow-lg hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
-      style={{ animationDelay: `${index * 40}ms` }}
+    <LiquidCard
+      variant="glass"
+      className="p-5 flex flex-col justify-between h-36 group transition-all duration-300"
       onClick={onOpen}
     >
-      <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
-
-      <div className="absolute -top-16 -right-16 w-32 h-32 bg-white/5 blur-[50px] rounded-full group-hover:bg-white/10 transition-all duration-700" />
-
-      <div className="relative z-10 flex-1">
-        <div className="w-12 h-12 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center mb-6 group-hover:border-white/10 group-hover:bg-white/[0.04] transition-all duration-300 shadow-inner">
-          <svg
-            className="w-5 h-5 text-white/40 group-hover:text-white transition-colors duration-300"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-            />
-          </svg>
-        </div>
-        <h3 className="text-xl font-black text-white mb-2 leading-tight tracking-tight drop-shadow-sm">
-          {project.name}
-        </h3>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] text-white/30 font-black uppercase tracking-widest bg-white/5 px-2 py-1 rounded border border-white/5">
-            {new Date(project.updated_at).toLocaleDateString()}
-          </span>
-          <span className="w-1 h-1 rounded-full bg-white/10" />
-          <span className="text-[9px] text-white/30 font-black uppercase tracking-widest">
-            IDE v0.1.0
-          </span>
-        </div>
-      </div>
-
-      <div className="relative z-10 flex items-center gap-3 mt-4 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-        <div className="flex-1 text-[11px] font-black text-white/60 uppercase tracking-widest">
-          Open Project
-        </div>
+      {/* Top row: Date pill badge & Delete text */}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-neutral-700 dark:text-neutral-300 px-2 py-0.5 rounded-full bg-black/[0.06] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/10">
+          {formattedDate}
+        </span>
         <button
-          onClick={(event) => {
-            event.stopPropagation();
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
             onDelete();
           }}
-          className="p-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all"
-          title="Delete Project"
+          className="text-[11px] font-medium text-neutral-500 hover:text-rose-600 dark:text-neutral-400 dark:hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100 px-1.5 py-0.5 rounded-md hover:bg-rose-500/10"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
+          Delete
         </button>
       </div>
-    </div>
+
+      {/* Middle: Project Title */}
+      <div className="my-auto">
+        <h3 className="text-sm font-bold text-neutral-950 dark:text-white tracking-tight line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+          {project.name}
+        </h3>
+      </div>
+
+      {/* Bottom: Subtle status & Open text */}
+      <div className="pt-2 flex items-center justify-between">
+        <span className="text-[10px] font-medium text-neutral-600 dark:text-neutral-400">
+          Ready
+        </span>
+        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform">
+          Open
+        </span>
+      </div>
+    </LiquidCard>
   );
 };
 

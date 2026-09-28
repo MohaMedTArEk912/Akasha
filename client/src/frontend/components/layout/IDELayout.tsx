@@ -1,67 +1,197 @@
 /**
- * IDE Layout Component — Feature-Page Architecture
+ * IDE Layout Component — Pure Apple Minimalism (Zero Icons)
  *
- * Layout structure:
- * ┌──────────────────────────────────────────────┐
- * │  Title Bar                                    │
- * ├──────┬───────────────────────────────────────┤
- * │ Nav  │  [Feature Page Content]               │
- * │ Rail │  (Hub & Spoke Model)                  │
- * │      │                                       │
- * ├──────┴───────────────────────────────────────┤
- * │  Status Bar                                   │
- * └──────────────────────────────────────────────┘
+ * Implements:
+ * - 100% typography-driven navigation (no icons)
+ * - Liquid glass light & tinted aesthetic
+ * - Fluid ambient background
+ * - Unobtrusive, focused creative canvas
  */
 
-import React, { useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import { useProjectStore } from "../../hooks/useProjectStore";
-import { setActivePage, toggleTerminal, goBackPage } from "../../stores/projectStore";
+import { setActivePage, toggleTerminal, goBackPage, closeProject } from "../../stores/projectStore";
 import type { FeaturePage } from "../../stores/projectStore";
-
-import { Logo } from "../ui/Logo";
-import ThemeToggle from "../ui/ThemeToggle";
+import { useBackgroundLoading } from "../../context/BackgroundLoadingContext";
 
 // Feature Pages
-import UIIdeationPage from "../../pages/UIIdeationPage";
-import UseCasesPage from "../../pages/UseCasesPage";
-import APIsPage from "../../pages/APIsPage";
-import DatabasePage from "../../pages/DatabasePage";
-import DiagramsPage from "../../pages/DiagramsPage";
-import SourceCodePage from "../../pages/SourceCodePage";
-import IdeaPage from "../../pages/IdeaPage";
-import SettingsPage from "../../pages/SettingsPage";
-import TeamSpacePage from "../../pages/TeamSpacePage";
+import { LiquidBackground } from "../ui/LiquidGlass";
+const UIIdeationPage = lazy(() => import("../../pages/UIIdeationPage"));
+const UseCasesPage = lazy(() => import("../../pages/UseCasesPage"));
+const APIsPage = lazy(() => import("../../pages/APIsPage"));
+const DatabasePage = lazy(() => import("../../pages/DatabasePage"));
+const DiagramsPage = lazy(() => import("../../pages/DiagramsPage"));
+const SourceCodePage = lazy(() => import("../../pages/SourceCodePage"));
+const IdeaPage = lazy(() => import("../../pages/IdeaPage"));
+const SettingsPage = lazy(() => import("../../pages/SettingsPage"));
+const TeamSpacePage = lazy(() => import("../../pages/TeamSpacePage"));
+const InitiationWizard = lazy(() => import("../project/InitiationWizard"));
+const ProjectDashboard = lazy(() => import("../../pages/ProjectDashboard"));
 
-import InitiationWizard from "../project/InitiationWizard";
-import ProjectDashboard from "../../pages/ProjectDashboard";
+import {
+    LayoutDashboard,
+    Sparkles,
+    Network,
+    Palette,
+    Database,
+    Cable,
+    GitFork,
+    Code2,
+    Users,
+    Settings,
+    LogOut,
+    PanelLeftClose,
+    PanelLeftOpen,
+} from "lucide-react";
 
-/* ───── Feature Page Definitions ───── */
-interface FeaturePageDef {
-    id: FeaturePage;
+/* ───── Navigation Item Definitions ───── */
+export interface AsideNavItemDef {
+    id: FeaturePage | "exit";
     label: string;
-    icon: string | React.ReactNode;
+    shortLabel: string;
+    badge?: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
 }
 
-// Used for Title Bar labels and Dashboard cards (but not rail anymore)
-const FEATURE_PAGES: FeaturePageDef[] = [
-    { id: "dashboard", label: "Dashboard", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
-    { id: "idea", label: "Project Idea", icon: "M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" },
-    { id: "ui", label: "UI Design", icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" },
-    { id: "usecases", label: "Use Cases", icon: "M13 10V3L4 14h7v7l9-11h-7z" },
-    { id: "apis", label: "APIs", icon: "M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" },
-    { id: "database", label: "Database", icon: "M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" },
-    { id: "diagrams", label: "Diagrams", icon: "M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" },
-    { id: "code", label: "Source Code", icon: "M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" },
-    { id: "settings", label: "Settings", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
-    { id: "team", label: "Team Space", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
+const BLUEPRINT_NAV_ITEMS: AsideNavItemDef[] = [
+    {
+        id: "dashboard",
+        label: "Mission Hub",
+        shortLabel: "Hub",
+        badge: "01",
+        description: "Project overview",
+        icon: LayoutDashboard,
+    },
+    {
+        id: "idea",
+        label: "AI Workshop",
+        shortLabel: "Idea",
+        badge: "AI",
+        description: "Plan the product",
+        icon: Sparkles,
+    },
+    {
+        id: "diagrams",
+        label: "Diagrams & ERD",
+        shortLabel: "Draw",
+        badge: "ARCH",
+        description: "Map the architecture",
+        icon: Network,
+    },
+    {
+        id: "ui",
+        label: "UI Studio",
+        shortLabel: "UI",
+        badge: "PROT",
+        description: "Build the interface",
+        icon: Palette,
+    },
 ];
 
+const ENGINEERING_NAV_ITEMS: AsideNavItemDef[] = [
+    {
+        id: "database",
+        label: "Data Models",
+        shortLabel: "Data",
+        badge: "SQL",
+        description: "Manage data",
+        icon: Database,
+    },
+    {
+        id: "apis",
+        label: "REST APIs",
+        shortLabel: "APIs",
+        badge: "REST",
+        description: "Manage endpoints",
+        icon: Cable,
+    },
+    {
+        id: "usecases",
+        label: "Workflows",
+        shortLabel: "Cases",
+        badge: "FLOW",
+        description: "Map workflows",
+        icon: GitFork,
+    },
+    {
+        id: "code",
+        label: "Source Code",
+        shortLabel: "Code",
+        badge: "SRC",
+        description: "Edit source",
+        icon: Code2,
+    },
+];
+
+const WORKSPACE_NAV_ITEMS: AsideNavItemDef[] = [
+    {
+        id: "team",
+        label: "Team Space",
+        shortLabel: "Team",
+        badge: "SYNC",
+        description: "Manage the team",
+        icon: Users,
+    },
+];
+
+const SETTINGS_NAV_ITEM: AsideNavItemDef = {
+    id: "settings",
+    label: "Settings",
+    shortLabel: "Prefs",
+    badge: "CFG",
+    description: "App preferences",
+    icon: Settings,
+};
+
+const EXIT_NAV_ITEM: AsideNavItemDef = {
+    id: "exit",
+    label: "Exit Project",
+    shortLabel: "Exit",
+    badge: "ESC",
+    description: "Return to projects",
+    icon: LogOut,
+};
+
 /**
- * Main IDE Layout — Feature Page Architecture
+ * Main IDE Layout — Sleek Liquid Glass Cyberpunk Architecture
  */
 const IDELayout: React.FC = () => {
     const { project, activePage, loading, terminalOpen, builderActive, pageHistory } = useProjectStore();
-    const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+    const { is3DFocused, setIs3DFocused, isLoading, activeTasks } = useBackgroundLoading();
+    const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+        try {
+            return localStorage.getItem("akasha:sidebar-expanded") === "true";
+        } catch {
+            return false;
+        }
+    });
+    const isWorking = isLoading || activeTasks.length > 0;
+
+    const toggleSidebar = () => {
+        setIsSidebarExpanded((prev) => {
+            const next = !prev;
+            try {
+                localStorage.setItem("akasha:sidebar-expanded", String(next));
+            } catch {}
+            return next;
+        });
+    };
+
+    // Keyboard shortcut for toggling sidebar (Ctrl+B or Cmd+B)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+                const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+                if (tag !== "input" && tag !== "textarea") {
+                    e.preventDefault();
+                    toggleSidebar();
+                }
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
 
     const canGoBack = pageHistory && pageHistory.length > 0;
 
@@ -85,8 +215,9 @@ const IDELayout: React.FC = () => {
             case "apis": return <APIsPage />;
             case "database": return <DatabasePage />;
             case "diagrams": return <DiagramsPage />;
-            case "settings": return <SettingsPage />;
+            case "settings": return <SettingsPage onBack={() => (canGoBack ? goBackPage() : setActivePage("dashboard"))} />;
             case "team": return <TeamSpacePage />;
+            case "source":
             case "code":
             case "git": return <SourceCodePage />;
             default: return <UIIdeationPage />;
@@ -94,204 +225,306 @@ const IDELayout: React.FC = () => {
     };
 
     return (
-        <div className="akasha-ide-root h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden">
-
-            {/* ===== TOP: Title Bar ===== */}
+        <div className={`akasha-ide-root h-screen w-screen flex flex-col bg-[#f8fafc] dark:bg-[#07080c] text-neutral-900 dark:text-neutral-100 overflow-hidden relative selection:bg-blue-500/20 ${isWorking ? 'code-runtime-active' : ''} ${is3DFocused ? 'is-3d-focused' : ''}`}>
+            {/* Ambient 3D WebGL Code Runtime & Liquid Mesh Background (Always Visible & Light) */}
+            <LiquidBackground />
+            {/* ===== TOP: Apple Liquid Glass Title Bar (Zero Icons) ===== */}
             {!builderActive && (
-                <header className="ide-shell-header h-10 flex items-center justify-between px-4 select-none flex-shrink-0 relative overflow-hidden">
-                    <div className="absolute top-0 left-1/4 w-1/4 h-full bg-[var(--ide-accent-subtle)] blur-xl pointer-events-none opacity-50" />
-                    <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-[var(--ide-border)]" />
-
-                    {/* Left: App name */}
-                    <div className="flex items-center gap-3 relative z-10">
-                        {(canGoBack || project?.status === "initializing") && (
-                            <button
-                                onClick={project?.status === "initializing" ? () => window.location.href = '/dashboard' : goBackPage}
-                                className="bg-[var(--ide-accent-subtle)] hover:bg-[var(--ide-bg-elevated)] text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] transition-colors w-6 h-6 flex items-center justify-center rounded-md border border-[var(--ide-border)] hover:border-[var(--ide-border-strong)] press-effect"
-                                title="Go Back"
-                            >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                                </svg>
-                            </button>
-                        )}
+                <header className="h-12 flex items-center justify-between px-4 select-none flex-shrink-0 relative z-20 backdrop-blur-[32px] saturate-[210%] bg-white/75 dark:bg-black/55 border-b border-black/[0.08] dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.6)]">
+                    {/* Left: App & Project */}
+                    <div className="flex items-center gap-2.5 relative z-10">
                         <button
-                            onClick={() => setActivePage("dashboard")}
-                            className="flex items-center gap-3 relative group text-left hover:opacity-80 transition-opacity press-effect bg-transparent border-0 p-0 focus:outline-none"
-                            title="Go to Project Tools"
+                            onClick={() => {
+                                if (project?.status === "initializing") {
+                                    closeProject();
+                                } else if (activePage !== "dashboard") {
+                                    if (canGoBack) goBackPage();
+                                    else setActivePage("dashboard");
+                                } else {
+                                    closeProject();
+                                }
+                            }}
+                            className="px-3 py-1 text-[11px] font-bold tracking-tight rounded-full bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] border border-black/[0.08] dark:border-white/10 text-neutral-800 dark:text-neutral-200 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-[0.97]"
                         >
-                            <div className="relative flex items-center justify-center">
-                                <div className="absolute inset-0 bg-white/10 rounded-lg blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <Logo size={20} className="relative transition-transform duration-300 group-hover:scale-110" />
-                            </div>
-                            <span className="text-[11px] font-black tracking-[0.2em] text-[var(--ide-text)]">
-                                AKASHA
-                            </span>
+                            <span className="font-mono text-[10px]">←</span>
+                            <span>{activePage === "dashboard" ? "Projects" : "Back"}</span>
                         </button>
-                        <div className="w-[1px] h-3.5 bg-[var(--ide-border)]" />
-                        <div className="px-2 py-0.5 rounded-md bg-[var(--ide-accent-subtle)] border border-[var(--ide-border)] flex items-center">
-                            <span className="text-[9px] font-semibold text-[var(--ide-text-secondary)] tracking-wider uppercase">
-                                {project?.name || ""}
+
+                        <button
+                            onClick={() => closeProject()}
+                            className="text-xs font-black tracking-widest uppercase text-neutral-950 dark:text-white hover:opacity-75 transition-opacity bg-transparent border-0 p-0 focus:outline-none cursor-pointer"
+                        >
+                            Akasha
+                        </button>
+
+                        <span className="text-neutral-400 dark:text-neutral-600 font-light text-xs">/</span>
+
+                        <div className="px-3 py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.08] dark:border-white/10 shadow-xs flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+                            <span className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">
+                                {project?.name || "Project"}
                             </span>
                         </div>
                     </div>
 
-                    {/* Center: Feature Page Name */}
-                    <div className="flex-1 flex justify-center items-center relative z-10">
-                        <div className="px-4 py-1 rounded-full bg-[var(--ide-accent-subtle)] border border-[var(--ide-border)] flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--ide-primary)] shadow-[0_0_8px_rgba(37,99,235,0.3)]" />
-                            <span
-                                key={activePage}
-                                className="text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--ide-text-secondary)] page-shell-enter"
-                            >
-                                {project?.status === "initializing" ? "Project Initiation Wizard" : (FEATURE_PAGES.find(p => p.id === activePage)?.label || "Dashboard")}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 relative z-10">
-                        <ThemeToggle size="sm" />
-                    </div>
+                    {/* Spacer */}
+                    <div className="flex-1" />
                 </header>
             )}
 
             {/* ===== MAIN CONTENT AREA ===== */}
-            <div className="flex-1 flex overflow-hidden p-0 gap-0 bg-[var(--ide-bg)]">
+            <div className={`akasha-foreground-content flex-1 flex overflow-hidden p-0 gap-0 bg-transparent transition-all duration-500 ${is3DFocused ? 'opacity-15 pointer-events-none scale-[0.985] blur-xs' : 'opacity-100'}`}>
 
                 {/* ===== LEFT: Feature Navigation Rail ===== */}
                 {!builderActive && project?.status !== "initializing" && (
-                    <aside className={`ide-shell-sidebar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isSidebarExpanded ? 'w-48 items-start px-2' : 'w-14 items-center'} flex flex-col py-3 flex-shrink-0 border-y-0 border-l-0 border-r border-[var(--ide-border)] relative overflow-hidden`}>
-                        <div className="absolute inset-0 bg-gradient-to-b from-[var(--ide-accent-subtle)] to-transparent pointer-events-none opacity-60" />
+                    <aside
+                        className={`ide-shell-sidebar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                            isSidebarExpanded ? "w-[236px] px-2.5" : "w-[68px] px-2"
+                        } flex flex-col py-2.5 flex-shrink-0 border-y-0 border-l-0 border-r border-black/[0.06] dark:border-white/[0.08] backdrop-blur-[36px] saturate-[210%] bg-white/85 dark:bg-[#07090e]/85 shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_35px_rgba(0,0,0,0.55)] relative overflow-hidden z-20`}
+                    >
+                        {/* Specular lighting accents */}
+                        <div className="absolute top-0 right-0 bottom-0 w-[1px] bg-gradient-to-b from-cyan-400/40 via-blue-500/20 to-transparent pointer-events-none" />
+                        <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-cyan-500/[0.06] via-blue-500/[0.02] to-transparent pointer-events-none" />
 
-                        {/* Project Tools */}
-                        <NavRailIcon
-                            icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-                            label="Project Tools"
-                            active={activePage === "dashboard"}
-                            onClick={() => setActivePage("dashboard")}
-                            expanded={isSidebarExpanded}
-                        />
-                        {/* Workshop */}
-                        <NavRailIcon
-                            icon="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                            label="AI Workshop"
-                            active={activePage === "idea"}
-                            onClick={() => setActivePage("idea")}
-                            expanded={isSidebarExpanded}
-                        />
-                        {/* Team Space */}
-                        <NavRailIcon
-                            icon="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                            label="Team Space"
-                            active={activePage === "team"}
-                            onClick={() => setActivePage("team")}
-                            expanded={isSidebarExpanded}
-                        />
+                        {/* Top: Section Navigation List */}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3 py-1 pr-0.5 custom-scrollbar">
+                            {/* Blueprint Group */}
+                            <div className="space-y-1">
+                                {isSidebarExpanded ? (
+                                    <div className="px-2 pt-1 pb-1 flex items-center justify-between text-[9px] font-mono font-bold tracking-widest uppercase text-neutral-400 dark:text-neutral-500 select-none">
+                                        <span>Blueprint</span>
+                                        <span className="text-[8px] text-cyan-600 dark:text-cyan-400">SPEC</span>
+                                    </div>
+                                ) : (
+                                    <div className="h-[1px] bg-black/[0.04] dark:bg-white/[0.06] my-1 mx-2" />
+                                )}
+                                {BLUEPRINT_NAV_ITEMS.map((item) => (
+                                    <AsideNavItem
+                                        key={item.id}
+                                        item={item}
+                                        active={activePage === item.id}
+                                        expanded={isSidebarExpanded}
+                                        onClick={() => setActivePage(item.id as FeaturePage)}
+                                    />
+                                ))}
+                            </div>
 
-                        {/* Spacer */}
-                        <div className="flex-1" />
+                            {/* Engineering Group */}
+                            <div className="space-y-1">
+                                {isSidebarExpanded ? (
+                                    <div className="px-2 pt-2 pb-1 flex items-center justify-between text-[9px] font-mono font-bold tracking-widest uppercase text-neutral-400 dark:text-neutral-500 select-none">
+                                        <span>Engineering</span>
+                                        <span className="text-[8px] text-blue-600 dark:text-blue-400">CORE</span>
+                                    </div>
+                                ) : (
+                                    <div className="h-[1px] bg-black/[0.04] dark:bg-white/[0.06] my-1 mx-2" />
+                                )}
+                                {ENGINEERING_NAV_ITEMS.map((item) => (
+                                    <AsideNavItem
+                                        key={item.id}
+                                        item={item}
+                                        active={activePage === item.id}
+                                        expanded={isSidebarExpanded}
+                                        onClick={() => setActivePage(item.id as FeaturePage)}
+                                    />
+                                ))}
+                            </div>
 
-                        {/* Settings */}
-                        <NavRailIcon
-                            icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                            label="Settings"
-                            active={activePage === "settings"}
-                            onClick={() => setActivePage("settings")}
-                            expanded={isSidebarExpanded}
-                        />
+                            {/* Workspace Group */}
+                            <div className="space-y-1">
+                                {isSidebarExpanded ? (
+                                    <div className="px-2 pt-2 pb-1 flex items-center justify-between text-[9px] font-mono font-bold tracking-widest uppercase text-neutral-400 dark:text-neutral-500 select-none">
+                                        <span>Workspace</span>
+                                        <span className="text-[8px] text-emerald-600 dark:text-emerald-400">TEAM</span>
+                                    </div>
+                                ) : (
+                                    <div className="h-[1px] bg-black/[0.04] dark:bg-white/[0.06] my-1 mx-2" />
+                                )}
+                                {WORKSPACE_NAV_ITEMS.map((item) => (
+                                    <AsideNavItem
+                                        key={item.id}
+                                        item={item}
+                                        active={activePage === item.id}
+                                        expanded={isSidebarExpanded}
+                                        onClick={() => setActivePage(item.id as FeaturePage)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
 
-                        {/* Back to Website */}
-                        <NavRailIcon
-                            icon="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                            label="Back to Website"
-                            active={false}
-                            onClick={() => window.location.href = '/dashboard'}
-                            expanded={isSidebarExpanded}
-                        />
+                        {/* Bottom Utility (Settings, Exit, Collapse) */}
+                        <div className="pt-2 border-t border-black/[0.06] dark:border-white/10 space-y-1 shrink-0 w-full">
+                            <AsideNavItem
+                                item={SETTINGS_NAV_ITEM}
+                                active={activePage === "settings"}
+                                expanded={isSidebarExpanded}
+                                onClick={() => setActivePage("settings")}
+                            />
+                            <AsideNavItem
+                                item={EXIT_NAV_ITEM}
+                                active={false}
+                                expanded={isSidebarExpanded}
+                                onClick={() => closeProject()}
+                                variant="danger"
+                            />
 
-                        {/* Expand/Collapse Toggle */}
-                        <div className="mt-2 pt-2 border-t border-[var(--ide-border)] w-full">
                             <button
-                                className={`h-10 mx-auto flex items-center ${isSidebarExpanded ? 'w-full justify-start px-3' : 'w-10 justify-center'} rounded-xl transition-all duration-300 text-[var(--ide-nav-text)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)]`}
-                                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-                                title={isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+                                type="button"
+                                onClick={toggleSidebar}
+                                title={isSidebarExpanded ? "Collapse Sidebar (Ctrl+B)" : "Expand Sidebar (Ctrl+B)"}
+                                className={`w-full h-8 flex items-center rounded-xl transition-all duration-200 select-none cursor-pointer text-neutral-500 hover:text-neutral-900 dark:hover:text-white ${
+                                    isSidebarExpanded
+                                        ? "px-2.5 justify-between bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] border border-black/[0.05] dark:border-white/10"
+                                        : "justify-center hover:bg-black/[0.04] dark:hover:bg-white/[0.08]"
+                                }`}
                             >
-                                <svg className={`w-4 h-4 transition-transform duration-300 ${isSidebarExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                                </svg>
-                                {isSidebarExpanded && <span className="ml-3 text-xs font-semibold uppercase tracking-wider">Collapse</span>}
+                                {isSidebarExpanded ? (
+                                    <>
+                                        <div className="flex items-center gap-2">
+                                            <PanelLeftClose className="w-3.5 h-3.5 text-neutral-500" />
+                                            <span className="text-[10px] font-mono font-bold tracking-wider uppercase">Collapse</span>
+                                        </div>
+                                        <kbd className="text-[9px] font-mono text-neutral-400 dark:text-neutral-500 bg-black/[0.05] dark:bg-white/[0.07] px-1.5 py-0.5 rounded">
+                                            ^B
+                                        </kbd>
+                                    </>
+                                ) : (
+                                    <PanelLeftOpen className="w-4 h-4 text-neutral-500 hover:text-cyan-400 transition-colors" />
+                                )}
                             </button>
                         </div>
                     </aside>
                 )}
 
                 {/* ===== CENTER: Page Content + Terminal ===== */}
-                <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[var(--ide-bg)]">
+                <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-transparent">
                     {/* Page Content */}
                     <div
                         key={activePage}
-                        className={`ide-page flex-1 relative overflow-hidden page-shell-enter-strong ${terminalOpen ? "h-[60%]" : ""}`}
+                        className={`ide-page flex-1 relative overflow-hidden page-shell-enter ${terminalOpen ? "h-[60%]" : ""}`}
                     >
                         {loading && (
-                            <div className="absolute inset-0 bg-[var(--bg-overlay,rgba(0,0,0,0.25))] backdrop-blur-sm z-50 flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--ide-primary)]"></div>
+                            <div className="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+                                <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                    Loading...
+                                </span>
                             </div>
                         )}
-                        {renderPage()}
+                        <Suspense fallback={<PageLoadingState />}>
+                            {renderPage()}
+                        </Suspense>
                     </div>
 
                     {/* Terminal Panel (toggleable) */}
                     {terminalOpen && (
-                        <div className="h-[35%] border-t border-[var(--ide-border)] bg-[var(--ide-bg)]">
-                            <div className="h-8 bg-[var(--ide-chrome)] px-4 flex items-center gap-4 text-xs border-b border-[var(--ide-border)]">
-                                <span className="text-[var(--ide-text)] font-medium">Terminal</span>
+                        <div className="h-[35%] border-t border-white/40 dark:border-white/10 bg-white/[0.6] dark:bg-neutral-900/[0.6] backdrop-blur-xl">
+                            <div className="h-7 px-3 flex items-center gap-4 text-[11px] border-b border-white/40 dark:border-white/10 text-neutral-600 dark:text-neutral-400 font-medium">
+                                <span>Terminal</span>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
 
+            {/* 3D Horizon Inspection Return Button */}
+            {is3DFocused && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-bounce">
+                    <button
+                        type="button"
+                        onClick={() => setIs3DFocused(false)}
+                        className="px-5 py-2.5 rounded-full bg-[#070b14]/95 hover:bg-[#0f172a] text-cyan-300 border border-cyan-400/60 backdrop-blur-2xl font-bold text-xs shadow-[0_12px_40px_rgba(6,182,212,0.45)] flex items-center gap-2.5 cursor-pointer transition-all active:scale-95"
+                    >
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                        <span>3D Horizon View Active • Click to Return to Project</span>
+                        <span className="text-neutral-400 font-mono text-sm">✕</span>
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
 
-/* ===== Navigation Rail Icon ===== */
-interface NavRailIconProps {
-    icon: string;
-    label: string;
+const PageLoadingState: React.FC = () => (
+    <div className="h-full w-full flex items-center justify-center text-xs text-neutral-500 dark:text-neutral-400">
+        Loading workspace...
+    </div>
+);
+
+/* ===== Aside Navigation Item with Liquid Glass Aesthetics & Lucide Icons ===== */
+interface AsideNavItemProps {
+    item: AsideNavItemDef;
     active: boolean;
+    expanded: boolean;
     onClick: () => void;
-    expanded?: boolean;
+    variant?: "default" | "danger";
 }
 
-const NavRailIcon: React.FC<NavRailIconProps> = ({ icon, label, active, onClick, expanded }) => (
-    <button
-        className={`h-10 mx-auto my-0.5 flex items-center relative group rounded-xl transition-all duration-300 press-effect overflow-hidden ${expanded ? "w-full justify-start px-3" : "w-10 justify-center"
-            } ${active
-                ? "text-[var(--ide-nav-active)] bg-[var(--ide-accent-muted)] border border-[var(--ide-border)]"
-                : "text-[var(--ide-nav-text)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)]"
-            }`}
-        onClick={onClick}
-        title={!expanded ? label : undefined}
-        aria-label={label}
-    >
-        {/* Active glow */}
-        {active && !expanded && (
-            <>
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[1px] h-4 bg-[var(--ide-primary)] rounded-r-full" />
-                <div className="absolute inset-0 rounded-xl bg-[var(--ide-accent-muted)] blur-sm" />
-            </>
-        )}
-        <svg className="w-[18px] h-[18px] shrink-0 relative z-10 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d={icon} />
-        </svg>
+const AsideNavItem: React.FC<AsideNavItemProps> = ({
+    item,
+    active,
+    expanded,
+    onClick,
+    variant = "default",
+}) => {
+    const Icon = item.icon;
+    const isDanger = variant === "danger";
 
-        {expanded && (
-            <span className="ml-3 text-[11px] font-semibold tracking-wider whitespace-nowrap overflow-hidden text-ellipsis relative z-10">
-                {label}
-            </span>
-        )}
-    </button>
-);
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            title={!expanded ? `${item.label} • ${item.description || item.badge || ""}` : undefined}
+            className={`group relative w-full flex items-center select-none cursor-pointer rounded-xl transition-all duration-200 outline-none ${
+                expanded ? "h-9 px-2.5 justify-start gap-2.5" : "h-10 px-0 justify-center"
+            } ${
+                active
+                    ? "bg-gradient-to-r from-cyan-500/18 via-blue-500/12 to-transparent dark:from-cyan-400/22 dark:via-blue-500/15 dark:to-transparent text-cyan-900 dark:text-cyan-100 border border-cyan-500/35 dark:border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.18)] font-semibold"
+                    : isDanger
+                    ? "text-neutral-500 dark:text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/25 border border-transparent font-medium"
+                    : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-neutral-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:border-black/[0.05] dark:hover:border-white/10 border border-transparent font-medium"
+            }`}
+        >
+            {/* Glowing Accent Indicator Bar when active */}
+            {active && (
+                <span className="absolute left-1 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-cyan-400 to-blue-500 shadow-[0_0_10px_rgba(6,182,212,0.9)] animate-pulse" />
+            )}
+
+            {/* Icon */}
+            <div
+                className={`flex items-center justify-center shrink-0 transition-all duration-200 ${
+                    expanded ? "w-5 h-5 ml-1" : "w-8 h-8 rounded-lg"
+                } ${
+                    active
+                        ? "text-cyan-600 dark:text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.55)] scale-105"
+                        : isDanger
+                        ? "text-neutral-500 dark:text-neutral-400 group-hover:text-rose-500 group-hover:scale-110"
+                        : "text-neutral-500 dark:text-neutral-400 group-hover:text-cyan-500 dark:group-hover:text-cyan-300 group-hover:scale-110"
+                }`}
+            >
+                <Icon className="w-4 h-4 stroke-[2]" />
+            </div>
+
+            {/* Expanded Label + Mono Badge */}
+            {expanded && (
+                <div className="flex-1 flex items-center justify-between min-w-0 pr-0.5">
+                    <span className="text-[11px] font-medium tracking-tight truncate">
+                        {item.label}
+                    </span>
+                    {item.badge && (
+                        <span
+                            className={`text-[8.5px] font-mono px-1.5 py-0.2 rounded uppercase tracking-wider shrink-0 transition-colors ${
+                                active
+                                    ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-400/40 font-bold"
+                                    : "bg-black/[0.04] dark:bg-white/[0.06] text-neutral-500 dark:text-neutral-400 border border-black/[0.06] dark:border-white/10 font-medium"
+                            }`}
+                        >
+                            {item.badge}
+                        </span>
+                    )}
+                </div>
+            )}
+        </button>
+    );
+};
 
 export default IDELayout;

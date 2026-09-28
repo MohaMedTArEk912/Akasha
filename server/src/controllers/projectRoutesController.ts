@@ -178,67 +178,28 @@ export async function getProjectImportTemplate(req: Request, res: Response) {
     const requestedName =
       typeof req.query.name === "string" && req.query.name.trim()
         ? req.query.name.trim()
-        : "Sample Project";
+        : "";
 
     res.json({
       title: requestedName,
-      summary:
-        "Describe the product vision in plain language. Include what the system does, who it serves, and why it matters.",
-      target_audience: [
-        "Primary users (e.g. patients, doctors, nurses)",
-        "Secondary users (e.g. admins, finance, support)",
-      ],
-      core_value_proposition: [
-        "What key value this product delivers",
-        "How it improves current workflows",
-      ],
-      problem_statement: [
-        "What is broken today",
-        "What pain points must be solved first",
-      ],
+      summary: "",
+      target_audience: [],
+      core_value_proposition: [],
+      problem_statement: [],
       decision_summary: [],
-      key_features: [
-        "Feature 1",
-        "Feature 2",
-        "Feature 3",
-      ],
-      user_flows: [
-        "User flow 1",
-        "User flow 2",
-      ],
-      technical_architecture: [
-        "Frontend",
-        "Backend",
-        "Database",
-        "Integrations",
-      ],
-      data_api_requirements: [
-        "Entities and data model notes",
-        "API endpoint requirements",
-      ],
-      milestones: [
-        "Milestone 1",
-        "Milestone 2",
-      ],
-      success_metrics: [
-        "KPI 1",
-        "KPI 2",
-      ],
-      risks: [
-        "Risk 1",
-        "Risk 2",
-      ],
-      implementation_checklist: [
-        "Task 1",
-        "Task 2",
-      ],
-      open_questions: [
-        "Question 1",
-      ],
+      key_features: [],
+      user_flows: [],
+      technical_architecture: [],
+      data_api_requirements: [],
+      milestones: [],
+      success_metrics: [],
+      risks: [],
+      implementation_checklist: [],
+      open_questions: [],
     });
   } catch (error) {
-    console.error("Error generating project template:", error);
-    res.status(500).json({ error: "Failed to generate project template" });
+    console.error("Error generating project specification schema:", error);
+    res.status(500).json({ error: "Failed to generate project specification schema" });
   }
 }
 
