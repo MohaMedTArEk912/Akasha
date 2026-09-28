@@ -24,8 +24,9 @@ app.use(express.static(path.join(__dirname, '../../public')));
 app.use((req, res, next) => {
     const aiConfig = {
         apiKey: (req.headers['x-ai-api-key'] as string) || req.body?.apiKey,
-        model: (req.headers['x-ai-model'] as string) || req.body?.model,
+        model: (req.headers['x-ai-model'] as string) || req.body?.model || 'antigravity-brain',
         apiBaseUrl: (req.headers['x-ai-api-base-url'] as string) || req.body?.apiBaseUrl,
+        provider: (req.headers['x-ai-provider'] as string) || req.body?.provider || 'antigravity',
     };
     aiConfigStorage.run(aiConfig, next);
 });

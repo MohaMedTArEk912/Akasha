@@ -16,10 +16,10 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [apiKey, setApiKeyState] = useState('');
-  const [model, setModelState] = useState('openrouter/free');
-  const [apiBaseUrl, setApiBaseUrlState] = useState('https://openrouter.ai/api/v1');
-  const [provider, setProviderState] = useState('openrouter');
+  const [apiKey, setApiKeyState] = useState('antigravity-brain-active');
+  const [model, setModelState] = useState('antigravity-brain');
+  const [apiBaseUrl, setApiBaseUrlState] = useState('/api/akasha');
+  const [provider, setProviderState] = useState('antigravity');
   const [noAi, setNoAiState] = useState(false);
 
   // Load from localStorage on mount
@@ -30,24 +30,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const savedProvider = localStorage.getItem('akasha_provider');
     const savedNoAi = localStorage.getItem('akasha_no_ai');
     
-    if (savedApiKey) setApiKeyState(savedApiKey);
-    if (savedModel) setModelState(savedModel);
-    if (savedApiBaseUrl) setApiBaseUrlState(savedApiBaseUrl);
+    setApiKeyState(savedApiKey || 'antigravity-brain-active');
+    setModelState(savedModel || 'antigravity-brain');
+    setApiBaseUrlState(savedApiBaseUrl || '/api/akasha');
+    setProviderState(savedProvider || 'antigravity');
     if (savedNoAi) setNoAiState(savedNoAi === 'true');
-    
-    if (savedProvider) {
-      setProviderState(savedProvider);
-    } else if (savedApiBaseUrl) {
-      if (savedApiBaseUrl.includes('api.openai.com')) {
-        setProviderState('openai');
-      } else if (savedApiBaseUrl.includes('googleapis.com')) {
-        setProviderState('gemini');
-      } else if (savedApiBaseUrl.includes('openrouter.ai')) {
-        setProviderState('openrouter');
-      } else {
-        setProviderState('custom');
-      }
-    }
   }, []);
 
   // Persist to localStorage

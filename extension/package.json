@@ -1,0 +1,92 @@
+{
+  "name": "akasha-antigravity-studio",
+  "displayName": "Akasha Studio with Antigravity AI",
+  "description": "Full-stack cloud-native web builder powered by Antigravity autonomous agent, MongoDB GridFS, and quota management",
+  "version": "1.0.0",
+  "publisher": "akasha-team",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "AI",
+    "Web Development"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "akasha-sidebar-view",
+          "title": "Akasha Studio",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "akasha-sidebar-view": [
+        {
+          "type": "webview",
+          "id": "akasha.studioView",
+          "name": "Akasha Cloud Canvas"
+        },
+        {
+          "id": "akasha.quotaView",
+          "name": "Antigravity Quota & Resources"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "akasha.openStudio",
+        "title": "Akasha: Open Full Studio Canvas",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "akasha.syncCloud",
+        "title": "Akasha: Sync to MongoDB GridFS",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "akasha.checkQuota",
+        "title": "Akasha: Check Antigravity Quota",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "akasha.askAgent",
+        "title": "Akasha: Ask Antigravity with Context",
+        "icon": "$(sparkle)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "akasha.askAgent",
+          "group": "akasha@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "akasha.syncCloud",
+          "when": "view == akasha.studioView",
+          "group": "navigation"
+        },
+        {
+          "command": "akasha.openStudio",
+          "when": "view == akasha.studioView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}

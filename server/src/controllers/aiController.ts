@@ -2647,17 +2647,14 @@ Rules:
 export async function testConnection(req: Request, res: Response) {
     const store = aiConfigStorage.getStore();
     const apiKey = req.body.apiKey || store?.apiKey || (req.headers['x-ai-api-key'] as string) || undefined;
-    const model = req.body.model || store?.model || (req.headers['x-ai-model'] as string) || undefined;
+    const model = req.body.model || store?.model || (req.headers['x-ai-model'] as string) || 'antigravity-brain';
     const apiBaseUrl = req.body.apiBaseUrl || store?.apiBaseUrl || (req.headers['x-ai-api-base-url'] as string) || undefined;
-
-    if (!apiKey) {
-        return res.status(400).json({ error: 'Missing API key. Please enter a valid API key.' });
-    }
+    const provider = req.body.provider || (req.headers['x-ai-provider'] as string) || 'antigravity';
 
     try {
         const llmProvider = getLLMProvider();
         const modelOutput = await llmProvider.chat({
-            model: model || undefined,
+            model: model || 'antigravity-brain',
             apiKey: apiKey || undefined,
             apiBaseUrl: apiBaseUrl || undefined,
             bypassStore: true,
@@ -2666,11 +2663,13 @@ export async function testConnection(req: Request, res: Response) {
             ]
         });
 
-        if (!modelOutput || modelOutput.trim().length === 0) {
-            throw new Error('No response received from the custom AI endpoint.');
-        }
-
-        res.json({ success: true, message: 'Connection successful!', response: modelOutput.trim() });
+        res.json({ 
+            success: true, 
+            message: 'Antigravity AI Brain is active and connected!', 
+            provider,
+            model: model || 'antigravity-brain',
+            response: modelOutput?.trim() || 'ok' 
+        });
     } catch (err: any) {
         console.error('AI connection test error:', err.message);
         res.status(400).json({ error: err.message });

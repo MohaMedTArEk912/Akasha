@@ -348,10 +348,10 @@ const BotChat: React.FC<BotChatProps> = ({
         }
     }, [initialOpenSettings]);
 
-    const [inputApiKey, setInputApiKey] = useState(apiKey || "");
-    const [inputModel, setInputModel] = useState(model || "gemini-2.0-flash");
-    const [inputBaseUrl, setInputBaseUrl] = useState(apiBaseUrl || "https://generativelanguage.googleapis.com/v1beta");
-    const [selectedProvider, setSelectedProvider] = useState(provider || "gemini");
+    const [inputApiKey, setInputApiKey] = useState(apiKey || "antigravity-brain-active");
+    const [inputModel, setInputModel] = useState(model || "antigravity-brain");
+    const [inputBaseUrl, setInputBaseUrl] = useState(apiBaseUrl || "/api/akasha");
+    const [selectedProvider, setSelectedProvider] = useState(provider || "antigravity");
     const [showApiKey, setShowApiKey] = useState(false);
     const [isTestingAi, setIsTestingAi] = useState(false);
     const [aiTestResult, setAiTestResult] = useState<{ status: "idle" | "success" | "error"; message: string }>({
@@ -368,7 +368,11 @@ const BotChat: React.FC<BotChatProps> = ({
 
     const handleProviderSelect = (p: string) => {
         setSelectedProvider(p);
-        if (p === "gemini") {
+        if (p === "antigravity") {
+            setInputBaseUrl("/api/akasha");
+            setInputModel("antigravity-brain");
+            setInputApiKey("antigravity-brain-active");
+        } else if (p === "gemini") {
             setInputBaseUrl("https://generativelanguage.googleapis.com/v1beta");
             setInputModel("gemini-3.6-flash");
         } else if (p === "openrouter") {
@@ -390,7 +394,7 @@ const BotChat: React.FC<BotChatProps> = ({
     };
 
     const handleTestAiConnection = async () => {
-        if (!inputApiKey.trim()) {
+        if (selectedProvider !== "antigravity" && !inputApiKey.trim()) {
             setAiTestResult({ status: "error", message: "API key is empty. Please enter a valid key." });
             toast.showToast("Please enter an API key", "error");
             return;

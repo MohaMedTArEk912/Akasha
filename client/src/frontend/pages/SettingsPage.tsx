@@ -35,7 +35,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
 
   const handleProviderSelect = (p: string) => {
     setSelectedProvider(p);
-    if (p === "gemini") {
+    if (p === "antigravity") {
+      setInputBaseUrl("/api/akasha");
+      setInputModel("antigravity-brain");
+      setInputApiKey("antigravity-brain-active");
+    } else if (p === "gemini") {
       setInputBaseUrl("https://generativelanguage.googleapis.com/v1beta");
       setInputModel("gemini-3.6-flash");
     } else if (p === "openrouter") {
@@ -56,7 +60,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
   };
 
   const handleTestAiConnection = async () => {
-    if (!inputApiKey.trim()) {
+    if (selectedProvider !== "antigravity" && !inputApiKey.trim()) {
       setAiTestResult({ status: "error", message: "API key is empty. Please enter a valid key." });
       toast.showToast("Please enter an API key", "error");
       return;
@@ -213,11 +217,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                 AI Model & Credentials
               </span>
               <span className={`text-[8.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                inputApiKey
+                selectedProvider === "antigravity" || inputApiKey
                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                   : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
               }`}>
-                {inputApiKey ? "Configured" : "Missing Key"}
+                {selectedProvider === "antigravity" ? "Active (Zero-Key)" : inputApiKey ? "Configured" : "Missing Key"}
               </span>
             </div>
             <span className="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
@@ -230,8 +234,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
             <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
               Provider
             </label>
-            <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] p-1 border border-black/[0.05] dark:border-white/6">
+            <div className="grid grid-cols-5 gap-1.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] p-1 border border-black/[0.05] dark:border-white/6">
               {[
+                { id: "antigravity", label: "Antigravity" },
                 { id: "gemini", label: "Gemini" },
                 { id: "openrouter", label: "OpenRouter" },
                 { id: "openai", label: "OpenAI" },
@@ -253,88 +258,103 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
             </div>
           </div>
 
-          {/* API Key & Model — On the Exact Same Line */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            {/* API Key Column */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between h-4">
-                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
-                  API Key
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="text-[9px] font-bold uppercase text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer"
-                >
-                  {showApiKey ? "HIDE" : "SHOW"}
-                </button>
+          {selectedProvider === "antigravity" ? (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-cyan-500/10 border border-indigo-500/25">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 dark:text-indigo-300 mb-1">
+                <span>✨ Antigravity Autonomous Brain Active</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Zero Config Required
+                </span>
               </div>
-              <input
-                type={showApiKey ? "text" : "password"}
-                value={inputApiKey}
-                onChange={(e) => setInputApiKey(e.target.value)}
-                placeholder={
-                  selectedProvider === "gemini"
-                    ? "AIzaSy..."
-                    : selectedProvider === "openrouter"
-                    ? "sk-or-v1-..."
-                    : "sk-..."
-                }
-                className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
-              />
+              <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                All workspace missions—including full project synthesis, UI component layout, database schema generation, pair-programming chat, and MongoDB GridFS cloud persistence—run autonomously through the Antigravity Brain. No external API keys are required.
+              </p>
             </div>
-
-            {/* Model Column */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between h-4">
-                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
-                  Model
-                </label>
-                <div className="flex items-center gap-1">
-                  {[
-                    { label: "Gemini 3.6", model: "gemini-3.6-flash" },
-                    { label: "Gemini 2.5", model: "gemini-2.5-flash" },
-                    { label: "GPT-4o Mini", model: "gpt-4o-mini" },
-                    { label: "Free", model: "openrouter/free" },
-                  ].map((item) => (
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                {/* API Key Column */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between h-4">
+                    <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                      API Key
+                    </label>
                     <button
-                      key={item.model}
                       type="button"
-                      onClick={() => setInputModel(item.model)}
-                      className={`px-1.5 py-0.2 rounded text-[7.5px] font-semibold transition-colors cursor-pointer ${
-                        inputModel === item.model
-                          ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/35 font-bold"
-                          : "bg-black/[0.03] dark:bg-white/[0.04] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-transparent"
-                      }`}
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="text-[9px] font-bold uppercase text-cyan-600 dark:text-cyan-400 hover:underline cursor-pointer"
                     >
-                      {item.label}
+                      {showApiKey ? "HIDE" : "SHOW"}
                     </button>
-                  ))}
+                  </div>
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    value={inputApiKey}
+                    onChange={(e) => setInputApiKey(e.target.value)}
+                    placeholder={
+                      selectedProvider === "gemini"
+                        ? "AIzaSy..."
+                        : selectedProvider === "openrouter"
+                        ? "sk-or-v1-..."
+                        : "sk-..."
+                    }
+                    className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
+                  />
+                </div>
+
+                {/* Model Column */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between h-4">
+                    <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                      Model
+                    </label>
+                    <div className="flex items-center gap-1">
+                      {[
+                        { label: "Gemini 3.6", model: "gemini-3.6-flash" },
+                        { label: "Gemini 2.5", model: "gemini-2.5-flash" },
+                        { label: "GPT-4o Mini", model: "gpt-4o-mini" },
+                        { label: "Free", model: "openrouter/free" },
+                      ].map((item) => (
+                        <button
+                          key={item.model}
+                          type="button"
+                          onClick={() => setInputModel(item.model)}
+                          className={`px-1.5 py-0.2 rounded text-[7.5px] font-semibold transition-colors cursor-pointer ${
+                            inputModel === item.model
+                              ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/35 font-bold"
+                              : "bg-black/[0.03] dark:bg-white/[0.04] text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white border border-transparent"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={inputModel}
+                    onChange={(e) => setInputModel(e.target.value)}
+                    placeholder="e.g. gemini-2.0-flash"
+                    className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
+                  />
                 </div>
               </div>
-              <input
-                type="text"
-                value={inputModel}
-                onChange={(e) => setInputModel(e.target.value)}
-                placeholder="e.g. gemini-2.0-flash"
-                className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
-              />
-            </div>
-          </div>
 
-          {/* API Base URL */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
-              API Base URL
-            </label>
-            <input
-              type="text"
-              value={inputBaseUrl}
-              onChange={(e) => setInputBaseUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
-            />
-          </div>
+              {/* API Base URL */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                  API Base URL
+                </label>
+                <input
+                  type="text"
+                  value={inputBaseUrl}
+                  onChange={(e) => setInputBaseUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full h-9 px-3 rounded-xl bg-white/90 dark:bg-[#07090f] border border-black/[0.08] dark:border-white/12 text-xs font-mono text-neutral-950 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500/60 transition-all"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Test Status feedback */}
           {aiTestResult.status !== "idle" && (

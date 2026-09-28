@@ -545,9 +545,6 @@ export const DashboardLanding: React.FC = () => {
               >
                 <SettingsIcon className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 group-hover:rotate-45 transition-transform duration-300" />
                 <span>Settings</span>
-                {!apiKey && !noAi && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 ml-0.5 animate-pulse shadow-[0_0_6px_rgba(245,158,11,0.8)]" />
-                )}
               </button>
             </div>
           </header>

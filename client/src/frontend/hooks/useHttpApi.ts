@@ -35,8 +35,9 @@ client.interceptors.request.use((config) => {
     const ghSession = localStorage.getItem("gh_session")?.trim();
     const ghToken = (localStorage.getItem("gh_pat_token") || localStorage.getItem("gh_token"))?.trim();
     
+    config.headers["x-ai-provider"] = localStorage.getItem("akasha_provider") || "antigravity";
+    config.headers["x-ai-model"] = model || "antigravity-brain";
     if (apiKey) config.headers["x-ai-api-key"] = apiKey;
-    if (model) config.headers["x-ai-model"] = model;
     if (apiBaseUrl) config.headers["x-ai-api-base-url"] = apiBaseUrl;
     if (token) config.headers["Authorization"] = `Bearer ${token}`;
     if (ghSession) {
@@ -264,8 +265,9 @@ export const httpApi = {
       const apiBaseUrl = localStorage.getItem("akasha_api_base_url")?.trim();
       const token = (localStorage.getItem("akasha_token") || localStorage.getItem("token"))?.trim();
       const ghSession = localStorage.getItem("gh_session")?.trim();
+      headers["x-ai-provider"] = localStorage.getItem("akasha_provider") || "antigravity";
+      headers["x-ai-model"] = model || "antigravity-brain";
       if (apiKey) headers["x-ai-api-key"] = apiKey;
-      if (model) headers["x-ai-model"] = model;
       if (apiBaseUrl) headers["x-ai-api-base-url"] = apiBaseUrl;
       if (token) headers["Authorization"] = `Bearer ${token}`;
       if (ghSession) headers["x-gh-session"] = ghSession;
