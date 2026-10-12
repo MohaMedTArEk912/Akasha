@@ -16,6 +16,8 @@ import apiHistoryRouter from './apiHistory.js';
 import aiRouter from './ai.js';
 import githubRouter from './github.js';
 import storageRouter from './storage.js';
+import agentSquadRouter from './agentSquad.js';
+import mcpRouter from './mcp.js';
 
 interface RouteMount {
     path: string;
@@ -39,6 +41,8 @@ const routeMounts: RouteMount[] = [
     { path: '/ai', router: aiRouter },
     { path: '/github', router: githubRouter },
     { path: '/storage', router: storageRouter },
+    { path: '/agent-squad', router: agentSquadRouter },
+    { path: '/mcp', router: mcpRouter },
 ];
 
 /**

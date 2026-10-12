@@ -41,6 +41,15 @@ export class DashboardPanel {
                     case 'OPEN_BROWSER':
                         vscode.commands.executeCommand('akasha.openPreview');
                         break;
+                    case 'DISPATCH_SQUAD_PARALLEL':
+                        vscode.commands.executeCommand('akasha.dispatchSquadParallel');
+                        break;
+                    case 'DISPATCH_SQUAD_SERIES':
+                        vscode.commands.executeCommand('akasha.dispatchSquadSeries');
+                        break;
+                    case 'SYNC_BLUEPRINT':
+                        vscode.commands.executeCommand('akasha.syncBlueprint');
+                        break;
                     case 'REFRESH_QUOTA':
                         this.updateQuotaState();
                         break;
@@ -533,14 +542,83 @@ export class DashboardPanel {
 
     <!-- Navigation Tabs -->
     <div class="tabs-bar">
-      <button class="tab-btn active" onclick="switchTab('tab-missions', this)">⚡ Autonomous Missions</button>
+      <button class="tab-btn active" onclick="switchTab('tab-squad', this)">🤖 Agent Squad Studio</button>
+      <button class="tab-btn" onclick="switchTab('tab-missions', this)">⚡ Autonomous Missions</button>
       <button class="tab-btn" onclick="switchTab('tab-preview', this)">🌐 Live App Preview</button>
       <button class="tab-btn" onclick="switchTab('tab-storage', this)">🗄 MongoDB Cloud Explorer</button>
       <button class="tab-btn" onclick="switchTab('tab-quality', this)">🛡 Self-Healing & Diagnostics</button>
     </div>
 
+    <!-- Tab: Agent Squad Studio (Default Active) -->
+    <div id="tab-squad" class="tab-content active">
+      <!-- Token Saver Banner -->
+      <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(6, 182, 212, 0.1)); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 14px; padding: 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--cyan);">Structure-First Token Optimization</div>
+          <div style="font-size: 14px; font-weight: 700; color: var(--text); margin-top: 3px;">Pre-compiled architectural blueprint saves 85-95% exploration tokens.</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Injected Data Models, REST APIs, UI Components, and Kanban tasks directly into Antigravity brain.</div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;" onclick="syncBlueprint()">📋 Sync Blueprint (.json)</button>
+          <div style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7; padding: 6px 12px; border-radius: 8px; font-weight: 800; font-size: 11.5px;">~92% SAVED</div>
+        </div>
+      </div>
+
+      <!-- Squad Topology Visualizer -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+        <div style="font-size: 13px; font-weight: 700; color: var(--text);">Squad Members & Execution Pipeline</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn primary" onclick="dispatchSquadParallel()">⚡ Dispatch Squad (Parallel)</button>
+          <button class="btn" style="border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc;" onclick="dispatchSquadSeries()">⛓ Dispatch Squad (Series)</button>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card" style="border-top: 3px solid #818cf8;">
+          <div class="metric-title"><span>Aria</span><span class="tag">ARCHITECT</span></div>
+          <div style="font-size: 13px; font-weight: 700; margin-top: 4px;">Lead Architect</div>
+          <div class="metric-sub">Decomposes specs, enforces contracts, verifies boundaries.</div>
+          <div style="margin-top: 10px; font-size: 10px; font-family: monospace; color: var(--emerald);">● Ready / Idle</div>
+        </div>
+
+        <div class="metric-card" style="border-top: 3px solid #06b6d4;">
+          <div class="metric-title"><span>Leo</span><span class="tag">FRONTEND</span></div>
+          <div style="font-size: 13px; font-weight: 700; margin-top: 4px;">Frontend Engineer</div>
+          <div class="metric-sub">React 18 + Vite, Tailwind CSS glassmorphism, responsive views.</div>
+          <div style="margin-top: 10px; font-size: 10px; font-family: monospace; color: var(--cyan);">● Ready / Idle</div>
+        </div>
+
+        <div class="metric-card" style="border-top: 3px solid #10b981;">
+          <div class="metric-title"><span>Rex</span><span class="tag">BACKEND</span></div>
+          <div style="font-size: 13px; font-weight: 700; margin-top: 4px;">Backend Engineer</div>
+          <div class="metric-sub">Express 5 controllers, Prisma models, MongoDB GridFS.</div>
+          <div style="margin-top: 10px; font-size: 10px; font-family: monospace; color: var(--emerald);">● Ready / Idle</div>
+        </div>
+
+        <div class="metric-card" style="border-top: 3px solid #f43f5e;">
+          <div class="metric-title"><span>Vera</span><span class="tag">QA / BUILD</span></div>
+          <div style="font-size: 13px; font-weight: 700; margin-top: 4px;">Self-Healing Verifier</div>
+          <div class="metric-sub">tsc compiler diagnostics, auto error-repair, UI check.</div>
+          <div style="margin-top: 10px; font-size: 10px; font-family: monospace; color: #fda4af;">● Ready / Idle</div>
+        </div>
+      </div>
+
+      <!-- Live Telemetry Stream Box -->
+      <div class="metric-card" style="padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">Live Action Stream & Telemetry</div>
+          <span style="font-size: 11px; font-family: monospace; color: var(--emerald);">● Brain Stream Active</span>
+        </div>
+        <div style="background: rgba(0,0,0,0.65); border: 1px solid var(--card-border); border-radius: 9px; padding: 14px; font-family: monospace; font-size: 11.5px; color: #e2e8f0; max-height: 180px; overflow-y: auto; line-height: 1.6;">
+          <div style="color: #67e8f9;">[00:00:01] [Antigravity Orchestrator]: Squad session initialized in Parallel execution mode.</div>
+          <div style="color: #818cf8;">[00:00:02] [Structured Blueprint]: Blueprint generated. 88% token reduction achieved.</div>
+          <div style="color: #34d399;">[00:00:03] [Lead Architect]: Data models and REST API contracts locked. Ready for mission dispatch.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tab 1: Missions & Control Room -->
-    <div id="tab-missions" class="tab-content active">
+    <div id="tab-missions" class="tab-content">
       <div class="prompt-box">
         <div style="font-size: 13px; font-weight: 700;">Direct Antigravity Mission Dispatch</div>
         <textarea id="prompt-input" class="prompt-input" placeholder="Instruct Antigravity to build a new feature, generate REST endpoints, create MongoDB models, or refactor code..."></textarea>
@@ -701,6 +779,18 @@ export class DashboardPanel {
 
     function openBrowser() {
       vscode.postMessage({ type: 'OPEN_BROWSER' });
+    }
+
+    function dispatchSquadParallel() {
+      vscode.postMessage({ type: 'DISPATCH_SQUAD_PARALLEL' });
+    }
+
+    function dispatchSquadSeries() {
+      vscode.postMessage({ type: 'DISPATCH_SQUAD_SERIES' });
+    }
+
+    function syncBlueprint() {
+      vscode.postMessage({ type: 'SYNC_BLUEPRINT' });
     }
 
     function refreshFrame() {

@@ -66,7 +66,7 @@ const PRESETS = [
 export const DashboardLanding: React.FC = () => {
   const { projects } = useProjectStore();
 
-  const { apiKey, noAi } = useSettings();
+  const { apiKey } = useSettings();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);

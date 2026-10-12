@@ -59,6 +59,18 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand('akasha.openPreview');
                     break;
                 }
+                case 'DISPATCH_SQUAD_PARALLEL': {
+                    vscode.commands.executeCommand('akasha.dispatchSquadParallel');
+                    break;
+                }
+                case 'DISPATCH_SQUAD_SERIES': {
+                    vscode.commands.executeCommand('akasha.dispatchSquadSeries');
+                    break;
+                }
+                case 'SYNC_BLUEPRINT': {
+                    vscode.commands.executeCommand('akasha.syncBlueprint');
+                    break;
+                }
                 case 'GET_STATUS': {
                     this.updateWebviewState();
                     break;
@@ -344,6 +356,17 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
         🌐 Live Preview
       </button>
     </div>
+    <div class="grid-2" style="margin-top: 6px;">
+      <button class="action-btn secondary" style="border-color: rgba(99,102,241,0.4); color: #a5b4fc;" onclick="dispatchSquadParallel()">
+        ⚡ Squad (Parallel)
+      </button>
+      <button class="action-btn secondary" style="border-color: rgba(6,182,212,0.4); color: #67e8f9;" onclick="dispatchSquadSeries()">
+        ⛓ Squad (Series)
+      </button>
+    </div>
+    <button class="action-btn secondary" style="margin-top: 4px; border-color: rgba(16,185,129,0.4); color: #6ee7b7;" onclick="syncBlueprint()">
+      📋 Sync Blueprint (.json)
+    </button>
     <button class="action-btn primary" style="background: linear-gradient(135deg, #059669, #0284c7); margin-top: 6px;" onclick="saveToAntigravity()">
       💾 Save to Antigravity
     </button>
@@ -389,6 +412,18 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
 
     function openPreview() {
       vscode.postMessage({ type: 'OPEN_PREVIEW' });
+    }
+
+    function dispatchSquadParallel() {
+      vscode.postMessage({ type: 'DISPATCH_SQUAD_PARALLEL' });
+    }
+
+    function dispatchSquadSeries() {
+      vscode.postMessage({ type: 'DISPATCH_SQUAD_SERIES' });
+    }
+
+    function syncBlueprint() {
+      vscode.postMessage({ type: 'SYNC_BLUEPRINT' });
     }
 
     window.addEventListener('message', event => {

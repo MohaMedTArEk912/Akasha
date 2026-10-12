@@ -86,6 +86,21 @@
         "command": "akasha.saveToAntigravity",
         "title": "Akasha: Save Project to Antigravity Workspace",
         "icon": "$(save)"
+      },
+      {
+        "command": "akasha.dispatchSquadParallel",
+        "title": "Akasha: Dispatch Agent Squad (Parallel)",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "akasha.dispatchSquadSeries",
+        "title": "Akasha: Dispatch Agent Squad (Series)",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "akasha.syncBlueprint",
+        "title": "Akasha: Sync Structured Blueprint (.json)",
+        "icon": "$(file-code)"
       }
     ],
     "menus": {

@@ -10,6 +10,7 @@ export interface Toast {
 
 interface ToastContextProps {
     showToast: (message: string, type: ToastType) => void;
+    show: (options: { message: string; type?: ToastType } | string) => void;
     success: (message: string) => void;
     error: (message: string) => void;
     info: (message: string) => void;
@@ -36,6 +37,14 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const error = (message: string) => showToast(message, "error");
     const info = (message: string) => showToast(message, "info");
     const warning = (message: string) => showToast(message, "warning");
+
+    const show = (options: { message: string; type?: ToastType } | string) => {
+        if (typeof options === "string") {
+            showToast(options, "info");
+        } else {
+            showToast(options.message, options.type || "info");
+        }
+    };
 
     const getBadge = (type: ToastType) => {
         switch (type) {
@@ -67,7 +76,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     return (
-        <ToastContext.Provider value={{ showToast, success, error, info, warning }}>
+        <ToastContext.Provider value={{ showToast, show, success, error, info, warning }}>
             {children}
             <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
                 {toasts.map((toast) => (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useProjectStore } from "../hooks/useProjectStore";
-import { updateProjectSettings, syncGitHubTasksForCurrentProject } from "../stores/projectStore";
+import { updateProjectSettings, syncGitHubTasksForCurrentProject, setActivePage } from "../stores/projectStore";
 import { useToast } from "../context/ToastContext";
 import { TeamTask } from "../types/api";
 import { LiquidCard, LiquidPill } from "../components/ui/LiquidGlass";
@@ -1524,6 +1524,17 @@ function KanbanCard({ task, solo, onToggleDone, onMove, onDelete, onEdit, onDrag
                                     Inspect
                                 </button>
                             )}
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActivePage("agent-squad");
+                                }}
+                                className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 px-1.5 py-0.5 rounded border border-cyan-500/20 transition-all cursor-pointer"
+                                title="Dispatch task to Antigravity Agent Squad"
+                            >
+                                ⚡ Squad
+                            </button>
                         </div>
                     )}
                 </div>

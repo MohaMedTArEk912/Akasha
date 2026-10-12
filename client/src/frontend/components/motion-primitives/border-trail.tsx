@@ -1,6 +1,6 @@
-'use client';
+import React from 'react';
 import { cn } from '@/lib/utils';
-import { motion, Transition } from 'motion/react';
+import { motion, type Transition } from 'motion/react';
 
 export type BorderTrailProps = {
   className?: string;

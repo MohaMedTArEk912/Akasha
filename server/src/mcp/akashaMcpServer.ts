@@ -1,6 +1,9 @@
 import readline from 'readline';
 import { storageService } from '../services/storageService.js';
 import prisma from '../lib/prisma.js';
+import { compileProjectBlueprint } from '../services/structuredBlueprintService.js';
+import { getSquadConfig, reportAgentAction } from '../services/agentSquadOrchestrator.js';
+import type { AgentRole } from '../services/agentSquadOrchestrator.js';
 
 interface JsonRpcRequest {
     jsonrpc: string;
@@ -52,7 +55,7 @@ function getQuota(userId = 'default_user'): QuotaProfile {
     return quotaStore.get(userId)!;
 }
 
-function handleToolsList() {
+export function handleToolsList() {
     return {
         tools: [
             {
@@ -113,12 +116,65 @@ function handleToolsList() {
                     },
                     required: ['projectId']
                 }
+            },
+            {
+                name: 'akasha_get_structured_blueprint',
+                description: 'Retrieve the pre-compiled, token-optimized architectural blueprint of the project (data models, REST APIs, UI wireframes, tasks) to save 85-95% tokens.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        projectId: { type: 'string', description: 'Project ID in Akasha' }
+                    },
+                    required: ['projectId']
+                }
+            },
+            {
+                name: 'akasha_stream_agent_telemetry',
+                description: 'Stream live thoughts, reasoning, tool execution, and progress back to the Akasha Mission Control dashboard.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        projectId: { type: 'string', description: 'Project ID in Akasha' },
+                        agentRole: { type: 'string', enum: ['architect', 'frontend', 'backend', 'qa_verifier'], description: 'Role of the executing agent' },
+                        stepName: { type: 'string', description: 'Title of the current operation' },
+                        thought: { type: 'string', description: 'Reasoning thought or explanation' },
+                        activeTool: { type: 'string', description: 'Name of the tool currently being executed' },
+                        toolArgsSnippet: { type: 'string', description: 'Arguments or target file for the tool' },
+                        fileCreatedOrModified: { type: 'string', description: 'Path of file created or edited' },
+                        progress: { type: 'number', description: 'Progress percentage (0 - 100)' }
+                    },
+                    required: ['projectId', 'agentRole', 'stepName', 'thought']
+                }
+            },
+            {
+                name: 'akasha_get_squad_topology',
+                description: 'Get active multi-agent squad configuration, roles, and execution mode (series vs parallel).',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        projectId: { type: 'string', description: 'Project ID in Akasha' }
+                    },
+                    required: ['projectId']
+                }
+            },
+            {
+                name: 'akasha_update_task_status',
+                description: 'Update the status of a Kanban task in Akasha when an autonomous agent completes it.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        projectId: { type: 'string', description: 'Project ID in Akasha' },
+                        taskId: { type: 'string', description: 'ID of the task' },
+                        status: { type: 'string', enum: ['todo', 'in_progress', 'done'], description: 'New task status' }
+                    },
+                    required: ['projectId', 'taskId', 'status']
+                }
             }
         ]
     };
 }
 
-async function handleToolCall(name: string, args: any) {
+export async function handleToolCall(name: string, args: any) {
     switch (name) {
         case 'akasha_check_quota': {
             const userId = args?.userId || 'default_user';
@@ -219,6 +275,84 @@ async function handleToolCall(name: string, args: any) {
                         hmrWebSocket: `ws://localhost:${port}`,
                         status: 'READY'
                     }, null, 2)
+                }]
+            };
+        }
+
+        case 'akasha_get_structured_blueprint': {
+            const { projectId } = args;
+            if (!projectId) throw new Error('projectId is required for akasha_get_structured_blueprint');
+            const blueprint = await compileProjectBlueprint(projectId);
+            return {
+                content: [{
+                    type: 'text',
+                    text: JSON.stringify(blueprint, null, 2)
+                }]
+            };
+        }
+
+        case 'akasha_stream_agent_telemetry': {
+            const { projectId, agentRole, stepName, thought, activeTool, toolArgsSnippet, fileCreatedOrModified, progress } = args;
+            if (!projectId || !agentRole || !stepName || !thought) {
+                throw new Error('projectId, agentRole, stepName, and thought are required');
+            }
+            reportAgentAction(projectId, {
+                agentRole: agentRole as AgentRole,
+                stepName,
+                thought,
+                activeTool,
+                toolArgsSnippet,
+                fileCreatedOrModified,
+                progress
+            });
+            return {
+                content: [{
+                    type: 'text',
+                    text: JSON.stringify({ success: true, message: 'Telemetry streamed to Akasha Mission Control' })
+                }]
+            };
+        }
+
+        case 'akasha_get_squad_topology': {
+            const { projectId } = args;
+            if (!projectId) throw new Error('projectId is required for akasha_get_squad_topology');
+            const config = getSquadConfig(projectId);
+            return {
+                content: [{
+                    type: 'text',
+                    text: JSON.stringify({
+                        projectId,
+                        executionMode: config.executionMode,
+                        members: config.members.map(m => ({ role: m.role, name: m.name, status: m.status }))
+                    }, null, 2)
+                }]
+            };
+        }
+
+        case 'akasha_update_task_status': {
+            const { projectId, taskId, status } = args;
+            if (!projectId || !taskId || !status) throw new Error('projectId, taskId, and status are required');
+            const project = await prisma.project.findUnique({ where: { id: projectId } });
+            if (project) {
+                let settings: any = {};
+                try {
+                    settings = typeof project.settings === 'string' ? JSON.parse(project.settings) : (project.settings || {});
+                } catch { settings = {}; }
+                const teamTasks: any[] = settings.teamTasks || [];
+                const task = teamTasks.find((t: any) => t.id === taskId);
+                if (task) {
+                    task.status = status;
+                    settings.teamTasks = teamTasks;
+                    await prisma.project.update({
+                        where: { id: projectId },
+                        data: { settings: typeof project.settings === 'string' ? JSON.stringify(settings) : settings }
+                    });
+                }
+            }
+            return {
+                content: [{
+                    type: 'text',
+                    text: JSON.stringify({ success: true, taskId, newStatus: status })
                 }]
             };
         }
