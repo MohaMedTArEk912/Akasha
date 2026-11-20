@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useCallback, useState, ReactNode } from "react";
 
-export type Theme = "dark";
-export type GlassMode = "bubble";
+export type Theme = "light" | "dark";
+export type GlassMode = "clean" | "bubble";
 
 export interface ThemeContextValue {
     theme: Theme;
@@ -14,57 +14,89 @@ export interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-const THEME_STORAGE_KEY = "akasha-theme";
-const GLASS_STORAGE_KEY = "akasha-glass-mode";
+const THEME_STORAGE_KEY = "akasha-theme-v2";
+const GLASS_STORAGE_KEY = "akasha-surface-mode";
+
+function readInitialTheme(): Theme {
+    try {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === "light" || stored === "dark") {
+            return stored;
+        }
+    } catch {
+        // ignore storage errors
+    }
+    return "light";
+}
 
 interface ThemeProviderProps {
     children: ReactNode;
 }
 
 /**
- * ThemeProvider — Dark Mode Only + 3D Liquid Bubble Glass
- * 
- * - Strictly dark mode only across all pages
- * - VisionOS 3D Bubble Glass Material Engine
- * - Persisted to localStorage and applied via data-glass-mode="bubble" on <html>
+ * ThemeProvider — Light-First Architectural Studio Palette with Optional Dark Mode
+ *
+ * Defaults to a crisp, airy daylight palette while letting any user toggle smoothly
+ * between Light and Dark studio modes in the top bar or Settings.
  */
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-    // Strictly dark mode only
-    const theme: Theme = "dark";
-    const glassMode: GlassMode = "bubble";
+    const [theme, setThemeState] = useState<Theme>(readInitialTheme);
+    const [glassMode, setGlassModeState] = useState<GlassMode>("clean");
 
-    // Enforce dark mode and apply 3D bubble glass mode to <html>
     useEffect(() => {
         const root = document.documentElement;
-        root.classList.add("dark");
-        root.classList.remove("light");
-        root.setAttribute("data-glass-mode", "bubble");
-        localStorage.setItem(THEME_STORAGE_KEY, "dark");
-        localStorage.setItem(GLASS_STORAGE_KEY, "bubble");
+        if (theme === "dark") {
+            root.classList.add("dark");
+            root.classList.remove("light");
+        } else {
+            root.classList.add("light");
+            root.classList.remove("dark");
+        }
+        root.setAttribute("data-theme", theme);
+        root.setAttribute("data-glass-mode", glassMode);
+        const themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')
+            || (() => {
+                const m = document.createElement("meta");
+                m.name = "theme-color";
+                document.head.appendChild(m);
+                return m;
+            })();
+        themeColorMeta.content = theme === "dark" ? "#0E1117" : "#E7EAEF";
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, theme);
+            localStorage.setItem(GLASS_STORAGE_KEY, glassMode);
+        } catch {
+            // ignore storage errors
+        }
+    }, [theme, glassMode]);
+
+    const setTheme = useCallback((nextTheme: Theme) => {
+        setThemeState(nextTheme);
     }, []);
 
-    const toggleGlassMode = useCallback(() => {}, []);
-    const setGlassMode = useCallback((_mode: GlassMode) => {}, []);
-
-    // Backwards-compatible dummy functions for theme
     const toggleTheme = useCallback(() => {
-        // Toggle glass mode when legacy theme toggle is called
-        toggleGlassMode();
-    }, [toggleGlassMode]);
+        setThemeState((prev) => (prev === "light" ? "dark" : "light"));
+    }, []);
 
-    const setTheme = useCallback((_newTheme: Theme) => {
-        // Always dark
+    const setGlassMode = useCallback((mode: GlassMode) => {
+        setGlassModeState(mode);
+    }, []);
+
+    const toggleGlassMode = useCallback(() => {
+        setGlassModeState((prev) => (prev === "clean" ? "bubble" : "clean"));
     }, []);
 
     return (
-        <ThemeContext.Provider value={{
-            theme,
-            toggleTheme,
-            setTheme,
-            glassMode,
-            toggleGlassMode,
-            setGlassMode,
-        }}>
+        <ThemeContext.Provider
+            value={{
+                theme,
+                toggleTheme,
+                setTheme,
+                glassMode,
+                toggleGlassMode,
+                setGlassMode,
+            }}
+        >
             {children}
         </ThemeContext.Provider>
     );

@@ -1,12 +1,12 @@
 /**
- * Deep Code Search Engine & AST/Pattern Inspector
- * 
- * Performs deep, intelligent static analysis on code repositories (both GitHub trees and local workspaces).
- * Accurately extracts:
- * 1. Data Models: Prisma schema, SQL DDL tables, Mongoose schemas, and TypeScript interfaces.
- * 2. REST API Routes: Express, Nest.js, FastAPI, Flask, and Next.js route handlers.
- * 3. Frontend Pages: React Router, Next.js App Router, Vue/Svelte view components.
- * 4. Tech Stack & Dependencies: Manifest files (package.json, requirements.txt, go.mod).
+ * Deep Code Search Engine & Static Pattern Inspector (V2)
+ *
+ * Extracts real architectural structure from code repositories (GitHub or local workspace):
+ * 1. Data Models: Prisma, SQL DDL, Mongoose Schemas, Drizzle pgTable/mysqlTable,
+ *    TypeScript model interfaces, and Python Pydantic/SQLAlchemy models.
+ * 2. REST API Routes: Express, NestJS, FastAPI/Flask, and Next.js App Router (`route.ts`).
+ * 3. Frontend Pages: React Router, Next.js App Router, Vue/Svelte views.
+ * 4. Tech Stack & Codebase Size Metrics.
  */
 
 import path from 'node:path';
@@ -31,6 +31,7 @@ export interface ExtractedModel {
     description: string;
     fields: ExtractedModelField[];
     relations: ExtractedModelRelation[];
+    sourceFile?: string;
 }
 
 export interface ExtractedApi {
@@ -62,17 +63,11 @@ export interface RepoCodeIntelligence {
     pages: ExtractedPage[];
     sourceSnippets: Array<{ path: string; summary: string }>;
     rawFileCount: number;
+    totalBytes: number;
     gitCommitSha?: string;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Regex & Pattern Matchers for Deep AST Analysis
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Parse Prisma schema string into structured models
- */
-export function parsePrismaSchema(content: string): ExtractedModel[] {
+export function parsePrismaSchema(content: string, sourceFile?: string): ExtractedModel[] {
     const models: ExtractedModel[] = [];
     const modelBlocks = content.split(/model\s+(\w+)\s*\{/g);
 
@@ -96,23 +91,21 @@ export function parsePrismaSchema(content: string): ExtractedModel[] {
                 const isOptional = fieldType.endsWith('?');
                 const isArray = fieldType.endsWith('[]');
                 const baseType = fieldType.replace(/[?\[\]]/g, '');
-
                 const isId = line.includes('@id');
                 const isUnique = line.includes('@unique');
 
-                // Check if this references another model (relation)
                 const isStandardType = ['String', 'Int', 'Float', 'Boolean', 'DateTime', 'Json', 'Bytes', 'Decimal'].includes(baseType);
                 if (!isStandardType && /^[A-Z]/.test(baseType)) {
                     relations.push({
                         name: fieldName,
                         target_model: baseType,
-                        relation_type: isArray ? 'one_to_many' : 'many_to_one'
+                        relation_type: isArray ? 'one_to_many' : 'many_to_one',
                     });
                 }
 
-                // Map Prisma types to standard types
                 let normalizedType = 'string';
-                if (['Int', 'Float', 'Decimal'].includes(baseType)) normalizedType = 'integer';
+                if (['Int', 'Decimal'].includes(baseType)) normalizedType = 'integer';
+                else if (baseType === 'Float') normalizedType = 'float';
                 else if (baseType === 'Boolean') normalizedType = 'boolean';
                 else if (baseType === 'DateTime') normalizedType = 'datetime';
                 else if (baseType === 'Json') normalizedType = 'json';
@@ -123,7 +116,6 @@ export function parsePrismaSchema(content: string): ExtractedModel[] {
                     required: !isOptional && !isArray,
                     unique: isUnique || isId,
                     primary_key: isId,
-                    description: `${fieldName} property for ${modelName}`
                 });
             }
         }
@@ -131,9 +123,10 @@ export function parsePrismaSchema(content: string): ExtractedModel[] {
         if (fields.length > 0) {
             models.push({
                 name: modelName,
-                description: `Domain model parsed from Prisma schema for ${modelName}`,
+                description: `Prisma model ${modelName}`,
                 fields,
-                relations
+                relations,
+                sourceFile,
             });
         }
     }
@@ -141,10 +134,7 @@ export function parsePrismaSchema(content: string): ExtractedModel[] {
     return models;
 }
 
-/**
- * Parse SQL CREATE TABLE DDL statements into structured models
- */
-export function parseSqlDdl(content: string): ExtractedModel[] {
+export function parseSqlDdl(content: string, sourceFile?: string): ExtractedModel[] {
     const models: ExtractedModel[] = [];
     const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`|"|')?(\w+)(?:`|"|')?\s*\(([\s\S]*?)\);/gi;
 
@@ -156,7 +146,6 @@ export function parseSqlDdl(content: string): ExtractedModel[] {
 
         const tableName = rawTableName.charAt(0).toUpperCase() + rawTableName.slice(1);
         const lines = body.split('\n');
-
         const fields: ExtractedModelField[] = [];
         const relations: ExtractedModelRelation[] = [];
 
@@ -164,13 +153,12 @@ export function parseSqlDdl(content: string): ExtractedModel[] {
             const line = rawLine.trim().replace(/,$/, '');
             if (!line || line.startsWith('--') || line.startsWith('/*')) continue;
             if (/^(CONSTRAINT|PRIMARY\s+KEY|FOREIGN\s+KEY|UNIQUE|INDEX|KEY)/i.test(line)) {
-                // Check foreign key
                 const fkMatch = line.match(/FOREIGN\s+KEY\s*\((?:`|"|')?(\w+)(?:`|"|')?\)\s*REFERENCES\s*(?:`|"|')?(\w+)/i);
                 if (fkMatch && fkMatch[1] && fkMatch[2]) {
                     relations.push({
                         name: fkMatch[1],
                         target_model: fkMatch[2].charAt(0).toUpperCase() + fkMatch[2].slice(1),
-                        relation_type: 'many_to_one'
+                        relation_type: 'many_to_one',
                     });
                 }
                 continue;
@@ -198,18 +186,12 @@ export function parseSqlDdl(content: string): ExtractedModel[] {
                     required: isNotNull || isPrimaryKey,
                     unique: isUnique || isPrimaryKey,
                     primary_key: isPrimaryKey,
-                    description: `${rawFieldName} column in ${rawTableName}`
                 });
             }
         }
 
         if (fields.length > 0) {
-            models.push({
-                name: tableName,
-                description: `Database entity parsed from SQL DDL for table ${rawTableName}`,
-                fields,
-                relations
-            });
+            models.push({ name: tableName, description: `SQL table ${rawTableName}`, fields, relations, sourceFile });
         }
     }
 
@@ -217,12 +199,170 @@ export function parseSqlDdl(content: string): ExtractedModel[] {
 }
 
 /**
- * Parse Express/Router/FastAPI/Nest routes from file content
+ * Parse Mongoose schemas: `new Schema({ field: { type: String, required: true } })` + `model('User', ...)`
+ */
+export function parseMongooseSchemas(content: string, sourceFile?: string): ExtractedModel[] {
+    const models: ExtractedModel[] = [];
+    const schemaRegex = /(?:const|let|var)\s+(\w+)Schema\s*=\s*new\s+(?:mongoose\.)?Schema\s*\(\s*\{([\s\S]*?)\}\s*(?:,|\))/g;
+    let match;
+
+    while ((match = schemaRegex.exec(content)) !== null) {
+        const rawName = match[1];
+        const body = match[2];
+        if (!rawName || !body) continue;
+
+        const modelName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+        const fields: ExtractedModelField[] = [];
+        const relations: ExtractedModelRelation[] = [];
+
+        const fieldLineRegex = /^\s*([a-zA-Z_]\w*)\s*:\s*([^,\n]+(?:\{[^}]*\})?)/gm;
+        let fm;
+        while ((fm = fieldLineRegex.exec(body)) !== null) {
+            const fname = fm[1];
+            const fspec = fm[2] || '';
+            if (!fname || ['type', 'required', 'unique', 'default', 'ref', 'enum'].includes(fname)) continue;
+
+            let ftype = 'string';
+            if (/Number|Int/i.test(fspec)) ftype = 'float';
+            else if (/Boolean/i.test(fspec)) ftype = 'boolean';
+            else if (/Date/i.test(fspec)) ftype = 'datetime';
+            else if (/Mixed|Object|Array|\[/i.test(fspec)) ftype = 'json';
+
+            const refMatch = fspec.match(/ref\s*:\s*['"](\w+)['"]/);
+            if (refMatch && refMatch[1]) {
+                relations.push({ name: fname, target_model: refMatch[1], relation_type: 'many_to_one' });
+            }
+
+            fields.push({
+                name: fname,
+                field_type: ftype,
+                required: /required\s*:\s*true/i.test(fspec),
+                unique: /unique\s*:\s*true/i.test(fspec),
+            });
+        }
+
+        if (fields.length > 0) {
+            models.push({ name: modelName, description: `Mongoose schema ${modelName}`, fields, relations, sourceFile });
+        }
+    }
+
+    return models;
+}
+
+/**
+ * Parse Drizzle ORM schemas (`pgTable('orders', { id: uuid('id'), ... })`)
+ */
+export function parseDrizzleSchemas(content: string, sourceFile?: string): ExtractedModel[] {
+    const models: ExtractedModel[] = [];
+    const tableRegex = /(?:pgTable|mysqlTable|sqliteTable)\s*\(\s*['"](\w+)['"]\s*,\s*\{([\s\S]*?)\}\s*\)/g;
+    let match;
+
+    while ((match = tableRegex.exec(content)) !== null) {
+        const rawName = match[1];
+        const body = match[2];
+        if (!rawName || !body) continue;
+
+        const name = rawName.charAt(0).toUpperCase() + rawName.slice(1).replace(/s$/, '');
+        const fields: ExtractedModelField[] = [];
+        const fieldRegex = /(\w+)\s*:\s*(uuid|serial|integer|int|numeric|real|doublePrecision|text|varchar|boolean|timestamp|jsonb?)\s*\(/gi;
+        let fm;
+        while ((fm = fieldRegex.exec(body)) !== null) {
+            const fname = fm[1];
+            const rawType = (fm[2] || '').toLowerCase();
+            if (!fname) continue;
+            let ftype = 'string';
+            if (['serial', 'integer', 'int'].includes(rawType)) ftype = 'integer';
+            else if (['numeric', 'real', 'doubleprecision'].includes(rawType)) ftype = 'float';
+            else if (rawType === 'boolean') ftype = 'boolean';
+            else if (rawType === 'timestamp') ftype = 'datetime';
+            else if (rawType.startsWith('json')) ftype = 'json';
+            else if (rawType === 'uuid') ftype = 'uuid';
+
+            fields.push({
+                name: fname,
+                field_type: ftype,
+                required: fname === 'id',
+                primary_key: fname === 'id',
+            });
+        }
+
+        if (fields.length > 0) {
+            models.push({ name, description: `Drizzle table ${rawName}`, fields, relations: [], sourceFile });
+        }
+    }
+    return models;
+}
+
+/**
+ * Parse TypeScript domain interfaces in `models/` or `types/` files
+ */
+export function parseTypeScriptModels(content: string, sourceFile?: string): ExtractedModel[] {
+    const models: ExtractedModel[] = [];
+    const ifaceRegex = /export\s+interface\s+([A-Z]\w+)\s*\{([\s\S]*?)\}/g;
+    let match;
+
+    while ((match = ifaceRegex.exec(content)) !== null) {
+        const name = match[1];
+        const body = match[2];
+        if (!name || !body || /(Props|State|Options|Config|Response|Request|Context)$/.test(name)) continue;
+
+        const fields: ExtractedModelField[] = [];
+        for (const rawLine of body.split('\n')) {
+            const line = rawLine.trim();
+            const fm = line.match(/^(\w+)(\?)?\s*:\s*([^;]+);?/);
+            if (!fm || !fm[1] || !fm[3]) continue;
+            const fname = fm[1];
+            const optional = Boolean(fm[2]);
+            const rawType = fm[3].trim().toLowerCase();
+            let ftype = 'string';
+            if (rawType === 'number') ftype = 'float';
+            else if (rawType === 'boolean') ftype = 'boolean';
+            else if (rawType.includes('date')) ftype = 'datetime';
+            else if (rawType.includes('[') || rawType.includes('record') || rawType.includes('{')) ftype = 'json';
+
+            fields.push({
+                name: fname,
+                field_type: ftype,
+                required: !optional,
+                primary_key: fname === 'id',
+            });
+        }
+
+        if (fields.length >= 2) {
+            models.push({ name, description: `TypeScript interface ${name}`, fields, relations: [], sourceFile });
+        }
+    }
+
+    return models;
+}
+
+/**
+ * Parse Express, NestJS, FastAPI/Flask, and Next.js App Router (`app/api/.../route.ts`) endpoints
  */
 export function parseRouteEndpoints(content: string, filePath: string): ExtractedApi[] {
     const apis: ExtractedApi[] = [];
+    const normalizedPath = filePath.replace(/\\/g, '/');
 
-    // 1. Express / Router patterns: router.get('/path', handler) or app.post('/path', ...)
+    // 1. Next.js App Router: app/api/**/route.ts -> export async function GET/POST/...
+    if (/\/api\/.+\/route\.(ts|tsx|js|jsx)$/i.test(normalizedPath)) {
+        const apiSubpathMatch = normalizedPath.match(/(\/api\/.+)\/route\.(ts|tsx|js|jsx)$/i);
+        const routePath = apiSubpathMatch?.[1]?.replace(/\[(\w+)\]/g, ':$1') || '/api';
+        const nextMethodRegex = /export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)\b/g;
+        let nm;
+        while ((nm = nextMethodRegex.exec(content)) !== null) {
+            const method = nm[1];
+            if (!method) continue;
+            apis.push({
+                method,
+                path: routePath,
+                name: `${method} ${routePath}`,
+                description: `Next.js App Router handler in ${path.basename(filePath)}`,
+                file: filePath,
+            });
+        }
+    }
+
+    // 2. Express / Router patterns
     const expressRegex = /(?:router|app)\.(get|post|put|delete|patch)\s*\(\s*['"`]([^'"`]+)['"`]/gi;
     let match;
     while ((match = expressRegex.exec(content)) !== null) {
@@ -230,13 +370,10 @@ export function parseRouteEndpoints(content: string, filePath: string): Extracte
         const routePath = match[2];
         if (!method || !routePath) continue;
 
-        // Format clean endpoint name: "GET /api/users" -> "Get Users"
         const segments = routePath.split('/').filter(Boolean);
         const resourceName = segments[segments.length - 1] || 'root';
         const cleanName = `${method} ${resourceName.replace(/[^a-zA-Z0-9]/g, ' ')}`.trim();
-
-        // Inferred entity
-        const entitySegment = segments.length > 0 ? segments[segments.length - 1] : undefined;
+        const entitySegment = segments.find(s => !s.startsWith(':') && s !== 'api' && !/^v\d+$/.test(s));
         const entityName = entitySegment ? entitySegment.replace(/s$/, '') : undefined;
 
         apis.push({
@@ -245,61 +382,54 @@ export function parseRouteEndpoints(content: string, filePath: string): Extracte
             name: cleanName,
             description: `Route controller in ${path.basename(filePath)} (${method} ${routePath})`,
             entity: entityName ? entityName.charAt(0).toUpperCase() + entityName.slice(1) : undefined,
-            file: filePath
+            file: filePath,
         });
     }
 
-    // 2. Nest.js decorators: @Get('path'), @Post('path'), @Controller('prefix')
+    // 3. Nest.js decorators
     const controllerPrefixMatch = content.match(/@Controller\s*\(\s*['"`]([^'"`]*)['"`]\s*\)/i);
     const controllerPrefix = controllerPrefixMatch ? controllerPrefixMatch[1]?.replace(/^\/?/, '/') || '' : '';
-
     const nestRegex = /@(Get|Post|Put|Delete|Patch)\s*\(\s*(?:['"`]([^'"`]*)['"`])?\s*\)/gi;
     while ((match = nestRegex.exec(content)) !== null) {
         const method = match[1]?.toUpperCase();
         if (!method) continue;
         const subPath = (match[2] || '').replace(/^\/?/, '/');
         const fullPath = (controllerPrefix + (subPath === '/' ? '' : subPath)) || '/';
-
         apis.push({
             method,
             path: fullPath,
             name: `${method} ${fullPath}`,
             description: `NestJS endpoint controller in ${path.basename(filePath)}`,
-            file: filePath
+            file: filePath,
         });
     }
 
-    // 3. FastAPI/Flask: @app.get('/path') or @router.post('/path')
+    // 4. FastAPI / Flask
     const pyRegex = /@(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gi;
     while ((match = pyRegex.exec(content)) !== null) {
         const method = match[1]?.toUpperCase();
         const pyPath = match[2];
         if (!method || !pyPath) continue;
-
         apis.push({
             method,
             path: pyPath,
             name: `${method} ${pyPath}`,
-            description: `FastAPI route handler in ${path.basename(filePath)}`,
-            file: filePath
+            description: `Python route handler in ${path.basename(filePath)}`,
+            file: filePath,
         });
     }
 
     return apis;
 }
 
-/**
- * Parse UI Pages & Views from React Router, Next.js, or file paths
- */
 export function parseUiPages(files: Array<{ path: string; content?: string }>): ExtractedPage[] {
     const pages: ExtractedPage[] = [];
     const seenPaths = new Set<string>();
 
     for (const file of files) {
-        const lower = file.path.toLowerCase();
-        
-        // 1. React Router scan
-        if (file.content && (lower.includes('app.tsx') || lower.includes('routes.tsx') || lower.includes('router.tsx') || lower.includes('main.tsx'))) {
+        const lower = file.path.replace(/\\/g, '/').toLowerCase();
+
+        if (file.content && (lower.includes('app.tsx') || lower.includes('routes.tsx') || lower.includes('router.tsx'))) {
             const routeTagRegex = /<Route\s+[^>]*path\s*=\s*['"]([^'"]+)['"][^>]*element\s*=\s*\{\s*<(\w+)/gi;
             let m;
             while ((m = routeTagRegex.exec(file.content)) !== null) {
@@ -307,28 +437,20 @@ export function parseUiPages(files: Array<{ path: string; content?: string }>): 
                 const componentName = m[2];
                 if (routePath && componentName && !seenPaths.has(routePath)) {
                     seenPaths.add(routePath);
-                    let pageType: ExtractedPage['type'] = 'dashboard';
-                    const compLower = componentName.toLowerCase();
-                    if (compLower.includes('login') || compLower.includes('auth') || compLower.includes('signup')) pageType = 'auth';
-                    else if (compLower.includes('setting') || compLower.includes('config')) pageType = 'settings';
-                    else if (compLower.includes('list') || compLower.includes('table') || compLower.includes('browse')) pageType = 'list';
-                    else if (compLower.includes('detail') || compLower.includes('view')) pageType = 'detail';
-                    else if (routePath === '/') pageType = 'landing';
-
                     pages.push({
                         name: componentName.replace(/Page$/, ''),
                         path: routePath,
-                        type: pageType,
-                        description: `Route component <${componentName} /> rendered at path ${routePath}`,
-                        file: file.path
+                        type: routePath === '/' ? 'landing' : 'dashboard',
+                        description: `Route component <${componentName} />`,
+                        file: file.path,
                     });
                 }
             }
         }
 
-        // 2. File-system based page routes (e.g. pages/Dashboard.tsx or app/dashboard/page.tsx)
         const isPageView = (lower.includes('/pages/') || lower.includes('/views/') || lower.includes('/screens/') || lower.includes('/app/')) &&
-            (lower.endsWith('.tsx') || lower.endsWith('.jsx') || lower.endsWith('.vue'));
+            (lower.endsWith('.tsx') || lower.endsWith('.jsx') || lower.endsWith('.vue')) &&
+            !lower.includes('/api/');
 
         if (isPageView) {
             const fileName = path.basename(file.path, path.extname(file.path));
@@ -342,27 +464,20 @@ export function parseUiPages(files: Array<{ path: string; content?: string }>): 
                         name: name || 'Home',
                         path: pagePath,
                         type: pagePath === '/' ? 'landing' : 'dashboard',
-                        description: `File-system route page in ${file.path}`,
-                        file: file.path
+                        description: `Page route in ${file.path}`,
+                        file: file.path,
                     });
                 }
-            } else if (!fileName.startsWith('_') && !fileName.toLowerCase().includes('modal') && !fileName.toLowerCase().includes('dialog')) {
+            } else if (!fileName.startsWith('_') && !fileName.toLowerCase().includes('modal')) {
                 const pagePath = `/${fileName.toLowerCase().replace(/page$/, '').replace(/[^a-z0-9]/g, '-')}`;
                 if (!seenPaths.has(pagePath)) {
                     seenPaths.add(pagePath);
-                    let pageType: ExtractedPage['type'] = 'dashboard';
-                    const fLower = fileName.toLowerCase();
-                    if (fLower.includes('login') || fLower.includes('auth')) pageType = 'auth';
-                    else if (fLower.includes('setting')) pageType = 'settings';
-                    else if (fLower.includes('list')) pageType = 'list';
-                    else if (fLower.includes('detail')) pageType = 'detail';
-
                     pages.push({
                         name: fileName.replace(/Page$/, ''),
                         path: pagePath,
-                        type: pageType,
-                        description: `UI View component ${fileName} located at ${file.path}`,
-                        file: file.path
+                        type: 'dashboard',
+                        description: `UI view ${fileName}`,
+                        file: file.path,
                     });
                 }
             }
@@ -372,9 +487,6 @@ export function parseUiPages(files: Array<{ path: string; content?: string }>): 
     return pages;
 }
 
-/**
- * Inspect dependencies and build system from manifests
- */
 export function parseTechStack(manifestFiles: Array<{ path: string; content: string }>): RepoCodeIntelligence['techStack'] {
     const keyLibraries = new Set<string>();
     let frontend: string | undefined;
@@ -387,26 +499,21 @@ export function parseTechStack(manifestFiles: Array<{ path: string; content: str
             try {
                 const pkg = JSON.parse(m.content);
                 const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
-
-                if (deps.react) frontend = `React ${deps.react.replace(/[\^~]/g, '')}`;
+                if (deps.next) frontend = `Next.js ${deps.next.replace(/[\^~]/g, '')}`;
+                else if (deps.react) frontend = `React ${deps.react.replace(/[\^~]/g, '')}`;
                 else if (deps.vue) frontend = `Vue ${deps.vue.replace(/[\^~]/g, '')}`;
                 else if (deps.svelte) frontend = 'Svelte';
-                else if (deps.next) frontend = `Next.js ${deps.next.replace(/[\^~]/g, '')}`;
 
                 if (deps.express) backend = 'Node.js Express';
                 else if (deps['@nestjs/core']) backend = 'NestJS';
                 else if (deps.fastify) backend = 'Fastify';
-                else if (deps.koa) backend = 'Koa';
 
                 if (deps['@prisma/client'] || deps.prisma) database = 'Prisma ORM';
-                else if (deps.mongoose) database = 'MongoDB (Mongoose)';
-                else if (deps.typeorm) database = 'TypeORM';
+                else if (deps.mongoose || deps.mongodb) database = 'MongoDB';
                 else if (deps['drizzle-orm']) database = 'Drizzle ORM';
                 else if (deps.pg) database = 'PostgreSQL';
-                else if (deps.mysql2) database = 'MySQL';
 
-                const notable = ['tailwindcss', 'three', 'lucide-react', 'axios', 'zustand', 'redux', 'zod', 'socket.io', 'graphql'];
-                for (const lib of notable) {
+                for (const lib of ['tailwindcss', 'zod', 'lucide-react', 'axios', 'zustand', 'socket.io', 'graphql']) {
                     if (deps[lib]) keyLibraries.add(lib);
                 }
             } catch {}
@@ -414,23 +521,17 @@ export function parseTechStack(manifestFiles: Array<{ path: string; content: str
             if (m.content.includes('fastapi')) backend = 'FastAPI (Python)';
             else if (m.content.includes('django')) backend = 'Django (Python)';
             else if (m.content.includes('flask')) backend = 'Flask (Python)';
-
-            if (m.content.includes('sqlalchemy')) database = 'SQLAlchemy';
-            else if (m.content.includes('pymongo')) database = 'MongoDB';
         }
     }
 
     return {
         frontend: frontend || 'Modern Web UI',
         backend: backend || 'REST API Backend',
-        database: database || 'Relational / Document DB',
-        keyLibraries: Array.from(keyLibraries)
+        database: database || 'Database',
+        keyLibraries: Array.from(keyLibraries),
     };
 }
 
-/**
- * Deep scan an array of repository files and compile comprehensive Code Intelligence
- */
 export function analyzeRepositoryFiles(
     files: Array<{ path: string; content: string; size?: number }>,
     commitSha?: string
@@ -439,22 +540,33 @@ export function analyzeRepositoryFiles(
     const allApis: ExtractedApi[] = [];
     const manifests: Array<{ path: string; content: string }> = [];
     const snippets: Array<{ path: string; summary: string }> = [];
+    let totalBytes = 0;
 
     for (const file of files) {
-        const lower = file.path.toLowerCase();
+        const normPath = file.path.replace(/\\/g, '/');
+        const lower = normPath.toLowerCase();
+        totalBytes += file.size ?? Buffer.byteLength(file.content || '', 'utf-8');
 
-        // 1. Schemas
         if (lower.includes('schema.prisma') || lower.endsWith('.prisma')) {
-            const parsed = parsePrismaSchema(file.content);
+            const parsed = parsePrismaSchema(file.content, normPath);
             allModels.push(...parsed);
-            snippets.push({ path: file.path, summary: `Prisma Schema (${parsed.length} models detected)` });
-        } else if (lower.endsWith('.sql') && (lower.includes('migration') || lower.includes('schema') || lower.includes('init') || lower.includes('ddl'))) {
-            const parsed = parseSqlDdl(file.content);
+            if (parsed.length) snippets.push({ path: normPath, summary: `Prisma Schema (${parsed.length} models)` });
+        } else if (lower.endsWith('.sql')) {
+            const parsed = parseSqlDdl(file.content, normPath);
             allModels.push(...parsed);
-            snippets.push({ path: file.path, summary: `SQL DDL (${parsed.length} tables detected)` });
+            if (parsed.length) snippets.push({ path: normPath, summary: `SQL DDL (${parsed.length} tables)` });
+        } else if (lower.endsWith('.ts') || lower.endsWith('.js')) {
+            if (file.content.includes('Schema(') || file.content.includes('mongoose')) {
+                allModels.push(...parseMongooseSchemas(file.content, normPath));
+            }
+            if (file.content.includes('pgTable(') || file.content.includes('mysqlTable(') || file.content.includes('sqliteTable(')) {
+                allModels.push(...parseDrizzleSchemas(file.content, normPath));
+            }
+            if (lower.includes('/models/') || lower.includes('/entities/') || lower.includes('/types/models')) {
+                allModels.push(...parseTypeScriptModels(file.content, normPath));
+            }
         }
 
-        // 2. Routes & Controllers
         if (
             lower.includes('/routes/') ||
             lower.includes('/controllers/') ||
@@ -464,25 +576,22 @@ export function analyzeRepositoryFiles(
             lower.endsWith('app.ts') ||
             lower.endsWith('main.py')
         ) {
-            const parsedApis = parseRouteEndpoints(file.content, file.path);
+            const parsedApis = parseRouteEndpoints(file.content, normPath);
             if (parsedApis.length > 0) {
                 allApis.push(...parsedApis);
-                snippets.push({ path: file.path, summary: `API Routes (${parsedApis.length} endpoints: ${parsedApis.map(a => a.method + ' ' + a.path).slice(0, 3).join(', ')})` });
+                snippets.push({
+                    path: normPath,
+                    summary: `API Routes (${parsedApis.length}: ${parsedApis.map(a => `${a.method} ${a.path}`).slice(0, 3).join(', ')})`,
+                });
             }
         }
 
-        // 3. Manifests
         if (lower.endsWith('package.json') || lower.endsWith('requirements.txt') || lower.endsWith('go.mod')) {
             manifests.push(file);
         }
     }
 
-    // 4. UI Pages
     const allPages = parseUiPages(files);
-    if (allPages.length > 0) {
-        snippets.push({ path: 'Frontend Routes', summary: `Discovered ${allPages.length} UI pages (${allPages.map(p => p.name).slice(0, 4).join(', ')})` });
-    }
-
     const techStack = parseTechStack(manifests);
 
     const uniqueModels = Array.from(new Map(allModels.map(m => [m.name.toLowerCase(), m])).values());
@@ -495,6 +604,7 @@ export function analyzeRepositoryFiles(
         pages: allPages,
         sourceSnippets: snippets,
         rawFileCount: files.length,
-        gitCommitSha: commitSha
+        totalBytes,
+        gitCommitSha: commitSha,
     };
 }

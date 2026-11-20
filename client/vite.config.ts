@@ -13,6 +13,16 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      '/sitemap.xml': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: false,
+        headers: { 'x-forwarded-host': 'localhost:5173' },
+      },
+      '/robots.txt': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: false,
+        headers: { 'x-forwarded-host': 'localhost:5173' },
+      },
       '/api': {
         target: 'http://127.0.0.1:3001',
         changeOrigin: true,
@@ -47,8 +57,8 @@ export default defineConfig({
             return "vendor-monaco";
           }
 
-          // Craft.js visual canvas builder
-          if (id.includes("@craftjs") || id.includes("re-resizable")) {
+          // Resizable panels
+          if (id.includes("re-resizable")) {
             return "vendor-builder";
           }
 
@@ -99,8 +109,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: [
-      "@craftjs/core",
-      "@craftjs/layers",
       "@monaco-editor/react",
       "@dnd-kit/core",
       "@dnd-kit/utilities",

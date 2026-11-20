@@ -1,553 +1,781 @@
 /**
- * IDE Layout Component — Pure Apple Minimalism (Zero Icons)
+ * Akasha Workspace Layout — Daylight Architectural Studio Shell
  *
- * Implements:
- * - 100% typography-driven navigation (no icons)
- * - Liquid glass light & tinted aesthetic
- * - Fluid ambient background
- * - Unobtrusive, focused creative canvas
+ * Clean, lightweight navigation without 3D WebGL clock clutter:
+ * - Unified top bar with Breadcrumbs, Global Quick Jump (⌘K), Live Prototype link, and Light/Dark Toggle
+ * - Smooth spring-animated sidebar rail with plain-English navigation and Launch Readiness meter
+ * - Responsive mobile drawer for small screens
+ * - Crisp AnimatePresence view transitions
  */
 
-import React, { lazy, Suspense, useEffect, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useProjectStore } from "../../hooks/useProjectStore";
 import { setActivePage, toggleTerminal, goBackPage, closeProject } from "../../stores/projectStore";
 import type { FeaturePage } from "../../stores/projectStore";
 import { useBackgroundLoading } from "../../context/BackgroundLoadingContext";
+import { useTheme } from "../../context/ThemeContext";
+import { useToast } from "../../context/ToastContext";
+import ThemeToggle from "../ui/ThemeToggle";
+import { Logo } from "../ui/Logo";
+import { useDocumentMeta } from "../../hooks/useDocumentMeta";
+import { fetchReleaseReadiness } from "../../services/akashaV2Service";
 
-// Feature Pages
-import { LiquidBackground } from "../ui/LiquidGlass";
-const UIIdeationPage = lazy(() => import("../../pages/UIIdeationPage"));
-const UseCasesPage = lazy(() => import("../../pages/UseCasesPage"));
-const APIsPage = lazy(() => import("../../pages/APIsPage"));
-const DatabasePage = lazy(() => import("../../pages/DatabasePage"));
-const DiagramsPage = lazy(() => import("../../pages/DiagramsPage"));
-const SourceCodePage = lazy(() => import("../../pages/SourceCodePage"));
-const IdeaPage = lazy(() => import("../../pages/IdeaPage"));
+const ProductHubPage = lazy(() => import("../../pages/ProductHubPage"));
+const ScopeFeaturesPage = lazy(() => import("../../pages/ScopeFeaturesPage"));
+const InteractiveStudioPage = lazy(() => import("../../pages/InteractiveStudioPage"));
+const SystemBlueprintPage = lazy(() => import("../../pages/SystemBlueprintPage"));
+const BuildShipPage = lazy(() => import("../../pages/BuildShipPage"));
 const SettingsPage = lazy(() => import("../../pages/SettingsPage"));
-const TeamSpacePage = lazy(() => import("../../pages/TeamSpacePage"));
 const InitiationWizard = lazy(() => import("../project/InitiationWizard"));
-const ProjectDashboard = lazy(() => import("../../pages/ProjectDashboard"));
-const AgentMissionControlPage = lazy(() => import("../../pages/AgentMissionControlPage"));
-const MotionLabPage = lazy(() => import("../../pages/MotionLabPage"));
 
 import {
-    LayoutDashboard,
-    Sparkles,
-    Network,
-    Palette,
-    Database,
-    Cable,
-    GitFork,
-    Code2,
-    Users,
-    Settings,
-    LogOut,
-    PanelLeftClose,
-    PanelLeftOpen,
-    Cpu,
-    Wand2,
+  LayoutGrid,
+  Layers,
+  Play,
+  Database,
+  Rocket,
+  Settings,
+  ArrowLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  ExternalLink,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  Copy,
+  CheckCircle2,
 } from "lucide-react";
 
+type CanonicalView = "hub" | "scope" | "studio" | "blueprint" | "build" | "settings";
 
-/* ───── Navigation Item Definitions ───── */
 export interface AsideNavItemDef {
-    id: FeaturePage | "exit";
-    label: string;
-    shortLabel: string;
-    badge?: string;
-    description: string;
-    icon: React.ComponentType<{ className?: string }>;
+  id: CanonicalView;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
-const BLUEPRINT_NAV_ITEMS: AsideNavItemDef[] = [
-    {
-        id: "dashboard",
-        label: "Mission Hub",
-        shortLabel: "Hub",
-        badge: "01",
-        description: "Project overview",
-        icon: LayoutDashboard,
-    },
-    {
-        id: "agent-squad",
-        label: "Mission Control",
-        shortLabel: "Squad",
-        badge: "AI",
-        description: "Antigravity Squad Cockpit",
-        icon: Cpu,
-    },
-    {
-        id: "motion-lab",
-        label: "Motion Lab",
-        shortLabel: "Motion",
-        badge: "NEW",
-        description: "Animation Studio & Primitives",
-        icon: Wand2,
-    },
-    {
-        id: "idea",
-        label: "AI Workshop",
-        shortLabel: "Idea",
-        badge: "PLAN",
-        description: "Plan the product",
-        icon: Sparkles,
-    },
-    {
-        id: "diagrams",
-        label: "Diagrams & ERD",
-        shortLabel: "Draw",
-        badge: "ARCH",
-        description: "Map the architecture",
-        icon: Network,
-    },
-    {
-        id: "ui",
-        label: "UI Studio",
-        shortLabel: "UI",
-        badge: "PROT",
-        description: "Build the interface",
-        icon: Palette,
-    },
+const PRIMARY_NAV_ITEMS: AsideNavItemDef[] = [
+  {
+    id: "hub",
+    label: "Overview",
+    description: "Launch readiness and team overview",
+    icon: LayoutGrid,
+  },
+  {
+    id: "scope",
+    label: "Features & scope",
+    description: "Feature slices, team votes, and decisions",
+    icon: Layers,
+  },
+  {
+    id: "studio",
+    label: "Live prototype",
+    description: "Interactive screens wired to mock data",
+    icon: Play,
+  },
+  {
+    id: "blueprint",
+    label: "Data & APIs",
+    description: "Models, REST contracts, mock server, and impact",
+    icon: Database,
+  },
+  {
+    id: "build",
+    label: "Build & ship",
+    description: "Agent control, team board, drift, and export",
+    icon: Rocket,
+  },
 ];
 
-const ENGINEERING_NAV_ITEMS: AsideNavItemDef[] = [
-    {
-        id: "database",
-        label: "Data Models",
-        shortLabel: "Data",
-        badge: "SQL",
-        description: "Manage data",
-        icon: Database,
-    },
-    {
-        id: "apis",
-        label: "REST APIs",
-        shortLabel: "APIs",
-        badge: "REST",
-        description: "Manage endpoints",
-        icon: Cable,
-    },
-    {
-        id: "usecases",
-        label: "Workflows",
-        shortLabel: "Cases",
-        badge: "FLOW",
-        description: "Map workflows",
-        icon: GitFork,
-    },
-    {
-        id: "code",
-        label: "Source Code",
-        shortLabel: "Code",
-        badge: "SRC",
-        description: "Edit source",
-        icon: Code2,
-    },
-];
+function normalizeCanonicalView(page: FeaturePage): CanonicalView {
+  switch (page) {
+    case "hub":
+    case "dashboard":
+      return "hub";
+    case "scope":
+    case "idea":
+    case "usecases":
+      return "scope";
+    case "studio":
+    case "ui":
+      return "studio";
+    case "blueprint":
+    case "database":
+    case "apis":
+    case "diagrams":
+      return "blueprint";
+    case "build":
+    case "team":
+    case "agent-squad":
+    case "code":
+    case "source":
+    case "git":
+      return "build";
+    case "settings":
+      return "settings";
+    default:
+      return "hub";
+  }
+}
 
-const WORKSPACE_NAV_ITEMS: AsideNavItemDef[] = [
-    {
-        id: "team",
-        label: "Team Space",
-        shortLabel: "Team",
-        badge: "SYNC",
-        description: "Manage the team",
-        icon: Users,
-    },
-];
-
-const SETTINGS_NAV_ITEM: AsideNavItemDef = {
-    id: "settings",
-    label: "Settings",
-    shortLabel: "Prefs",
-    badge: "CFG",
-    description: "App preferences",
-    icon: Settings,
-};
-
-const EXIT_NAV_ITEM: AsideNavItemDef = {
-    id: "exit",
-    label: "Exit Project",
-    shortLabel: "Exit",
-    badge: "ESC",
-    description: "Return to projects",
-    icon: LogOut,
-};
-
-/**
- * Main IDE Layout — Sleek Liquid Glass Cyberpunk Architecture
- */
 const IDELayout: React.FC = () => {
-    const { project, activePage, loading, terminalOpen, builderActive, pageHistory } = useProjectStore();
-    const { is3DFocused, setIs3DFocused, isLoading, activeTasks } = useBackgroundLoading();
-    const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
-        try {
-            return localStorage.getItem("akasha:sidebar-expanded") === "true";
-        } catch {
-            return false;
-        }
+  const { project, activePage, loading, terminalOpen, builderActive, pageHistory } = useProjectStore();
+  const { isLoading, activeTasks } = useBackgroundLoading();
+  const { theme, toggleTheme } = useTheme();
+  const toast = useToast();
+
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    try {
+      const saved = localStorage.getItem("akasha:sidebar-expanded");
+      return saved === null ? true : saved === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState("");
+  const [selectedCmdIndex, setSelectedCmdIndex] = useState(0);
+  const [readinessScore, setReadinessScore] = useState<number | null>(null);
+
+  const isWorking = isLoading || activeTasks.length > 0;
+  const canonicalView = normalizeCanonicalView(activePage);
+  const canGoBack = pageHistory && pageHistory.length > 0;
+
+  const projectSettings: Record<string, any> = useMemo(() => {
+    if (!project?.settings) return {};
+    if (typeof project.settings === "string") {
+      try {
+        return JSON.parse(project.settings);
+      } catch {
+        return {};
+      }
+    }
+    return project.settings;
+  }, [project?.settings]);
+
+  const shareUrl = project
+    ? `${window.location.origin}/preview/${project.id}${projectSettings.shareToken ? `?token=${projectSettings.shareToken}` : ""}`
+    : "";
+
+  // Fetch lightweight readiness indicator for sidebar footer
+  useEffect(() => {
+    if (!project?.id) return;
+    let mounted = true;
+    fetchReleaseReadiness(project.id)
+      .then((r) => {
+        if (mounted) setReadinessScore(r.score);
+      })
+      .catch(() => null);
+    return () => {
+      mounted = false;
+    };
+  }, [project?.id, canonicalView]);
+
+  const toggleSidebar = () => {
+    setIsSidebarExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("akasha:sidebar-expanded", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
     });
-    const isWorking = isLoading || activeTasks.length > 0;
+  };
 
-    const toggleSidebar = () => {
-        setIsSidebarExpanded((prev) => {
-            const next = !prev;
-            try {
-                localStorage.setItem("akasha:sidebar-expanded", String(next));
-            } catch {}
-            return next;
-        });
+  // Global keyboard shortcuts: Cmd/Ctrl+B (sidebar), Cmd/Ctrl+K (quick jump), Cmd/Ctrl+, (settings)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const inInput = tag === "input" || tag === "textarea" || tag === "select";
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandOpen((open) => !open);
+        setCommandQuery("");
+        setSelectedCmdIndex(0);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        setActivePage("settings");
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b" && !inInput) {
+        e.preventDefault();
+        toggleSidebar();
+      }
     };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-    // Keyboard shortcut for toggling sidebar (Ctrl+B or Cmd+B)
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
-                const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-                if (tag !== "input" && tag !== "textarea") {
-                    e.preventDefault();
-                    toggleSidebar();
-                }
-            }
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, []);
+  useEffect(() => {
+    const toggle = () => toggleTerminal();
+    window.addEventListener("akasha:toggle-terminal", toggle);
+    return () => window.removeEventListener("akasha:toggle-terminal", toggle);
+  }, []);
 
-    const canGoBack = pageHistory && pageHistory.length > 0;
+  const commandActions = useMemo(() => {
+    const base = [
+      ...PRIMARY_NAV_ITEMS.map((item) => ({
+        id: `nav-${item.id}`,
+        label: `Go to ${item.label}`,
+        hint: item.description,
+        icon: <item.icon className="w-4 h-4" />,
+        run: () => setActivePage(item.id),
+      })),
+      {
+        id: "nav-settings",
+        label: "Open Settings",
+        hint: "Appearance, AI provider, and project preferences",
+        icon: <Settings className="w-4 h-4" />,
+        run: () => setActivePage("settings"),
+      },
+      {
+        id: "action-preview",
+        label: "Open shareable prototype in new tab",
+        hint: "Test your live mock-API prototype cleanly",
+        icon: <ExternalLink className="w-4 h-4" />,
+        run: () => {
+          if (shareUrl) window.open(shareUrl, "_blank", "noopener");
+        },
+      },
+      {
+        id: "action-copy-link",
+        label: "Copy prototype share link",
+        hint: "Share with teammates or clients for feedback",
+        icon: <Copy className="w-4 h-4" />,
+        run: () => {
+          if (shareUrl) {
+            navigator.clipboard.writeText(shareUrl);
+            toast.showToast("Share link copied", "success");
+          }
+        },
+      },
+      {
+        id: "action-theme",
+        label: theme === "light" ? "Switch to Dark mode" : "Switch to Light mode",
+        hint: "Toggle studio appearance",
+        icon: theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />,
+        run: () => toggleTheme(),
+      },
+      {
+        id: "action-projects",
+        label: "Return to all projects",
+        hint: "Switch workspace or start a new product",
+        icon: <ArrowLeft className="w-4 h-4" />,
+        run: () => closeProject(),
+      },
+    ];
 
-    // Global keyboard shortcut: toggle terminal
-    useEffect(() => {
-        const toggle = () => toggleTerminal();
-        window.addEventListener("akasha:toggle-terminal", toggle);
-        return () => window.removeEventListener("akasha:toggle-terminal", toggle);
-    }, []);
-
-    /* ─── Render active page ─── */
-    const renderPage = () => {
-        if (project?.status === "initializing") {
-            return <InitiationWizard project={project} projectId={project.id} />;
-        }
-        switch (activePage) {
-            case "dashboard": return <ProjectDashboard />;
-            case "agent-squad": return <AgentMissionControlPage />;
-            case "motion-lab": return <MotionLabPage />;
-            case "idea": return <IdeaPage />;
-            case "ui": return <UIIdeationPage />;
-            case "usecases": return <UseCasesPage />;
-            case "apis": return <APIsPage />;
-            case "database": return <DatabasePage />;
-            case "diagrams": return <DiagramsPage />;
-            case "settings": return <SettingsPage onBack={() => (canGoBack ? goBackPage() : setActivePage("dashboard"))} />;
-            case "team": return <TeamSpacePage />;
-            case "source":
-            case "code":
-            case "git": return <SourceCodePage />;
-            default: return <UIIdeationPage />;
-        }
-    };
-
-    return (
-        <div className={`akasha-ide-root h-screen w-screen flex flex-col bg-[#f8fafc] dark:bg-[#07080c] text-neutral-900 dark:text-neutral-100 overflow-hidden relative selection:bg-blue-500/20 ${isWorking ? 'code-runtime-active' : ''} ${is3DFocused ? 'is-3d-focused' : ''}`}>
-            {/* Ambient 3D WebGL Code Runtime & Liquid Mesh Background (Always Visible & Light) */}
-            <LiquidBackground />
-            {/* ===== TOP: Apple Liquid Glass Title Bar (Zero Icons) ===== */}
-            {!builderActive && (
-                <header className="h-12 flex items-center justify-between px-4 select-none flex-shrink-0 relative z-20 backdrop-blur-[32px] saturate-[210%] bg-white/75 dark:bg-black/55 border-b border-black/[0.08] dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.6)]">
-                    {/* Left: App & Project */}
-                    <div className="flex items-center gap-2.5 relative z-10">
-                        <button
-                            onClick={() => {
-                                if (project?.status === "initializing") {
-                                    closeProject();
-                                } else if (activePage !== "dashboard") {
-                                    if (canGoBack) goBackPage();
-                                    else setActivePage("dashboard");
-                                } else {
-                                    closeProject();
-                                }
-                            }}
-                            className="px-3 py-1 text-[11px] font-bold tracking-tight rounded-full bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] border border-black/[0.08] dark:border-white/10 text-neutral-800 dark:text-neutral-200 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-[0.97]"
-                        >
-                            <span className="font-mono text-[10px]">←</span>
-                            <span>{activePage === "dashboard" ? "Projects" : "Back"}</span>
-                        </button>
-
-                        <button
-                            onClick={() => closeProject()}
-                            className="text-xs font-black tracking-widest uppercase text-neutral-950 dark:text-white hover:opacity-75 transition-opacity bg-transparent border-0 p-0 focus:outline-none cursor-pointer"
-                        >
-                            Akasha
-                        </button>
-
-                        <span className="text-neutral-400 dark:text-neutral-600 font-light text-xs">/</span>
-
-                        <div className="px-3 py-1 rounded-full bg-black/[0.04] dark:bg-white/[0.07] border border-black/[0.08] dark:border-white/10 shadow-xs flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
-                            <span className="text-[11px] font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">
-                                {project?.name || "Project"}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Spacer */}
-                    <div className="flex-1" />
-                </header>
-            )}
-
-            {/* ===== MAIN CONTENT AREA ===== */}
-            <div className={`akasha-foreground-content flex-1 flex overflow-hidden p-0 gap-0 bg-transparent transition-all duration-500 ${is3DFocused ? 'opacity-15 pointer-events-none scale-[0.985] blur-xs' : 'opacity-100'}`}>
-
-                {/* ===== LEFT: Feature Navigation Rail ===== */}
-                {!builderActive && project?.status !== "initializing" && (
-                    <aside
-                        className={`ide-shell-sidebar transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                            isSidebarExpanded ? "w-[236px] px-2.5" : "w-[68px] px-2"
-                        } flex flex-col py-2.5 flex-shrink-0 border-y-0 border-l-0 border-r border-black/[0.06] dark:border-white/[0.08] backdrop-blur-[36px] saturate-[210%] bg-white/85 dark:bg-[#07090e]/85 shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_35px_rgba(0,0,0,0.55)] relative overflow-hidden z-20`}
-                    >
-                        {/* Specular lighting accents */}
-                        <div className="absolute top-0 right-0 bottom-0 w-[1px] bg-gradient-to-b from-cyan-400/40 via-blue-500/20 to-transparent pointer-events-none" />
-                        <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-cyan-500/[0.06] via-blue-500/[0.02] to-transparent pointer-events-none" />
-
-                        {/* Top: Section Navigation List */}
-                        <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-3 py-1 pr-0.5 custom-scrollbar">
-                            {/* Blueprint Group */}
-                            <div className="space-y-1">
-                                {isSidebarExpanded ? (
-                                    <div className="px-2 pt-1 pb-1 flex items-center justify-between text-[9px] font-mono font-bold tracking-widest uppercase text-neutral-400 dark:text-neutral-500 select-none">
-                                        <span>Blueprint</span>
-                                        <span className="text-[8px] text-cyan-600 dark:text-cyan-400">SPEC</span>
-                                    </div>
-                                ) : (
-                                    <div className="h-[1px] bg-black/[0.04] dark:bg-white/[0.06] my-1 mx-2" />
-                                )}
-                                {BLUEPRINT_NAV_ITEMS.map((item) => (
-                                    <AsideNavItem
-                                        key={item.id}
-                                        item={item}
-                                        active={activePage === item.id}
-                                        expanded={isSidebarExpanded}
-                                        onClick={() => setActivePage(item.id as FeaturePage)}
-                                    />
-                                ))}
-                            </div>
-
-                            {/* Engineering Group */}
-                            <div className="space-y-1">
-                                {isSidebarExpanded ? (
-                                    <div className="px-2 pt-2 pb-1 flex items-center justify-between text-[9px] font-mono font-bold tracking-widest uppercase text-neutral-400 dark:text-neutral-500 select-none">
-                                        <span>Engineering</span>
-                                        <span className="text-[8px] text-blue-600 dark:text-blue-400">CORE</span>
-                                    </div>
-                                ) : (
-                                    <div className="h-[1px] bg-black/[0.04] dark:bg-white/[0.06] my-1 mx-2" />
-                                )}
-                                {ENGINEERING_NAV_ITEMS.map((item) => (
-                                    <AsideNavItem
-                                        key={item.id}
-                                        item={item}
-                                        active={activePage === item.id}
-                                        expanded={isSidebarExpanded}
-                                        onClick={() => setActivePage(item.id as FeaturePage)}
-                                    />
-                                ))}
-                            </div>
-
-                            {/* Workspace Group */}
-                            <div className="space-y-1">
-                                {isSidebarExpanded ? (
-                                    <div className="px-2 pt-2 pb-1 flex items-center justify-between text-[9px] font-mono font-bold tracking-widest uppercase text-neutral-400 dark:text-neutral-500 select-none">
-                                        <span>Workspace</span>
-                                        <span className="text-[8px] text-emerald-600 dark:text-emerald-400">TEAM</span>
-                                    </div>
-                                ) : (
-                                    <div className="h-[1px] bg-black/[0.04] dark:bg-white/[0.06] my-1 mx-2" />
-                                )}
-                                {WORKSPACE_NAV_ITEMS.map((item) => (
-                                    <AsideNavItem
-                                        key={item.id}
-                                        item={item}
-                                        active={activePage === item.id}
-                                        expanded={isSidebarExpanded}
-                                        onClick={() => setActivePage(item.id as FeaturePage)}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Bottom Utility (Settings, Exit, Collapse) */}
-                        <div className="pt-2 border-t border-black/[0.06] dark:border-white/10 space-y-1 shrink-0 w-full">
-                            <AsideNavItem
-                                item={SETTINGS_NAV_ITEM}
-                                active={activePage === "settings"}
-                                expanded={isSidebarExpanded}
-                                onClick={() => setActivePage("settings")}
-                            />
-                            <AsideNavItem
-                                item={EXIT_NAV_ITEM}
-                                active={false}
-                                expanded={isSidebarExpanded}
-                                onClick={() => closeProject()}
-                                variant="danger"
-                            />
-
-                            <button
-                                type="button"
-                                onClick={toggleSidebar}
-                                title={isSidebarExpanded ? "Collapse Sidebar (Ctrl+B)" : "Expand Sidebar (Ctrl+B)"}
-                                className={`w-full h-8 flex items-center rounded-xl transition-all duration-200 select-none cursor-pointer text-neutral-500 hover:text-neutral-900 dark:hover:text-white ${
-                                    isSidebarExpanded
-                                        ? "px-2.5 justify-between bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] border border-black/[0.05] dark:border-white/10"
-                                        : "justify-center hover:bg-black/[0.04] dark:hover:bg-white/[0.08]"
-                                }`}
-                            >
-                                {isSidebarExpanded ? (
-                                    <>
-                                        <div className="flex items-center gap-2">
-                                            <PanelLeftClose className="w-3.5 h-3.5 text-neutral-500" />
-                                            <span className="text-[10px] font-mono font-bold tracking-wider uppercase">Collapse</span>
-                                        </div>
-                                        <kbd className="text-[9px] font-mono text-neutral-400 dark:text-neutral-500 bg-black/[0.05] dark:bg-white/[0.07] px-1.5 py-0.5 rounded">
-                                            ^B
-                                        </kbd>
-                                    </>
-                                ) : (
-                                    <PanelLeftOpen className="w-4 h-4 text-neutral-500 hover:text-cyan-400 transition-colors" />
-                                )}
-                            </button>
-                        </div>
-                    </aside>
-                )}
-
-                {/* ===== CENTER: Page Content + Terminal ===== */}
-                <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-transparent">
-                    {/* Page Content */}
-                    <div
-                        key={activePage}
-                        className={`ide-page flex-1 relative overflow-hidden page-shell-enter ${terminalOpen ? "h-[60%]" : ""}`}
-                    >
-                        {loading && (
-                            <div className="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
-                                <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
-                                    Loading...
-                                </span>
-                            </div>
-                        )}
-                        <Suspense fallback={<PageLoadingState />}>
-                            {renderPage()}
-                        </Suspense>
-                    </div>
-
-                    {/* Terminal Panel (toggleable) */}
-                    {terminalOpen && (
-                        <div className="h-[35%] border-t border-white/40 dark:border-white/10 bg-white/[0.6] dark:bg-neutral-900/[0.6] backdrop-blur-xl">
-                            <div className="h-7 px-3 flex items-center gap-4 text-[11px] border-b border-white/40 dark:border-white/10 text-neutral-600 dark:text-neutral-400 font-medium">
-                                <span>Terminal</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* 3D Horizon Inspection Return Button */}
-            {is3DFocused && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-bounce">
-                    <button
-                        type="button"
-                        onClick={() => setIs3DFocused(false)}
-                        className="px-5 py-2.5 rounded-full bg-[#070b14]/95 hover:bg-[#0f172a] text-cyan-300 border border-cyan-400/60 backdrop-blur-2xl font-bold text-xs shadow-[0_12px_40px_rgba(6,182,212,0.45)] flex items-center gap-2.5 cursor-pointer transition-all active:scale-95"
-                    >
-                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                        <span>3D Horizon View Active • Click to Return to Project</span>
-                        <span className="text-neutral-400 font-mono text-sm">✕</span>
-                    </button>
-                </div>
-            )}
-        </div>
+    const q = commandQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(
+      (c) => c.label.toLowerCase().includes(q) || c.hint.toLowerCase().includes(q)
     );
+  }, [commandQuery, shareUrl, theme, toggleTheme, toast]);
+
+  const activeNavMeta =
+    PRIMARY_NAV_ITEMS.find((i) => i.id === canonicalView) ||
+    (canonicalView === "settings" ? { label: "Settings", description: "Workspace appearance, AI provider, and project settings." } : { label: "Overview", description: "Launch readiness and team overview." });
+
+  useDocumentMeta({
+    title: project?.name ? `${activeNavMeta.label} · ${project.name} — Akasha` : "Akasha — Product Studio for Small Teams",
+    description: project?.description || activeNavMeta.description,
+  });
+
+  const renderPage = () => {
+    if (project?.status === "initializing") {
+      return <InitiationWizard project={project} projectId={project.id} />;
+    }
+    switch (canonicalView) {
+      case "hub":
+        return <ProductHubPage />;
+      case "scope":
+        return <ScopeFeaturesPage />;
+      case "studio":
+        return <InteractiveStudioPage />;
+      case "blueprint":
+        return <SystemBlueprintPage />;
+      case "build":
+        return <BuildShipPage />;
+      case "settings":
+        return (
+          <SettingsPage
+            onBack={() => (canGoBack ? goBackPage() : setActivePage("hub"))}
+          />
+        );
+      default:
+        return <ProductHubPage />;
+    }
+  };
+
+  const navigateTo = (id: CanonicalView) => {
+    setActivePage(id);
+    setMobileMenuOpen(false);
+  };
+
+  return (
+    <div className="akasha-ide-root h-screen w-screen flex flex-col bg-[var(--ide-bg)] text-[var(--ide-text)] overflow-hidden relative selection:bg-[#1B5BFF]/15">
+      {/* Top Studio Header */}
+      {!builderActive && (
+        <header className="h-13 min-h-[52px] flex items-center justify-between px-4 select-none flex-shrink-0 relative z-20 bg-[var(--ide-titlebar)] border-b border-[var(--ide-border)] shadow-[0_1px_2px_rgba(11,18,32,0.05)]">
+          {/* Left: Mobile Menu + Brand + Breadcrumb */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open navigation menu"
+              className="md:hidden p-1.5 rounded-lg text-[var(--ide-text-secondary)] hover:bg-[var(--ide-accent-subtle)] cursor-pointer"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => closeProject()}
+              title="All projects"
+              className="inline-flex items-center px-1.5 py-1 rounded-lg hover:bg-[var(--ide-accent-subtle)] transition-colors cursor-pointer"
+            >
+              <Logo size={24} showText={false} />
+              <span className="ml-2 text-sm font-bold tracking-tight text-[var(--ide-text)] hidden sm:inline">
+                Akasha
+              </span>
+            </button>
+
+            <span className="text-[var(--ide-border-strong)] select-none">/</span>
+
+            <button
+              type="button"
+              onClick={() => navigateTo("hub")}
+              className="text-sm font-semibold text-[var(--ide-text)] hover:text-[#1B5BFF] dark:hover:text-[#7AA3FF] truncate max-w-[180px] sm:max-w-[260px] transition-colors cursor-pointer"
+            >
+              {project?.name || "Workspace"}
+            </button>
+
+            <span className="hidden lg:inline text-[var(--ide-border-strong)] select-none">/</span>
+            <span className="hidden lg:inline text-sm text-[var(--ide-text-muted)] truncate">
+              {activeNavMeta.label}
+            </span>
+          </div>
+
+          {/* Center: Quick Jump Command Trigger */}
+          <button
+            type="button"
+            onClick={() => {
+              setCommandOpen(true);
+              setCommandQuery("");
+              setSelectedCmdIndex(0);
+            }}
+            className="hidden md:flex items-center justify-between gap-3 w-64 lg:w-80 h-8 px-3 rounded-lg bg-[var(--ide-accent-subtle)] hover:bg-[var(--ide-border)]/60 border border-[var(--ide-border)] text-xs text-[var(--ide-text-muted)] transition-colors cursor-pointer"
+          >
+            <span className="inline-flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 shrink-0" />
+              <span>Jump to view or action...</span>
+            </span>
+            <kbd className="px-1.5 py-0.5 rounded bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] text-[10px] font-mono text-[var(--ide-text-secondary)]">
+              ⌘K
+            </kbd>
+          </button>
+
+          {/* Right: Live Activity, Preview, Theme Switch, Settings */}
+          <div className="flex items-center gap-2">
+            {isWorking && (
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#1B5BFF]/10 text-[#1B5BFF] dark:text-[#7AA3FF] text-xs font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1B5BFF] animate-pulse" />
+                <span>{activeTasks[activeTasks.length - 1]?.title || "Syncing"}</span>
+              </div>
+            )}
+
+            {shareUrl && (
+              <button
+                type="button"
+                onClick={() => window.open(shareUrl, "_blank", "noopener")}
+                className="hidden sm:inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold border border-[var(--ide-border)] bg-[var(--ide-bg-elevated)] hover:bg-[var(--ide-accent-subtle)] text-[var(--ide-text)] transition-colors cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-[#1B5BFF] dark:text-[#7AA3FF]" />
+                <span>Preview</span>
+              </button>
+            )}
+
+            <ThemeToggle />
+
+            <button
+              type="button"
+              onClick={() => navigateTo("settings")}
+              aria-label="Open settings"
+              title="Settings (⌘,)"
+              className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors cursor-pointer ${
+                canonicalView === "settings"
+                  ? "bg-[#1B5BFF]/10 border-[#1B5BFF]/30 text-[#1B5BFF] dark:text-[#7AA3FF]"
+                  : "border-[var(--ide-border)] bg-[var(--ide-bg-elevated)] hover:bg-[var(--ide-accent-subtle)] text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)]"
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </header>
+      )}
+
+      {/* Workspace Body */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Desktop Collapsible Sidebar */}
+        {!builderActive && project?.status !== "initializing" && (
+          <motion.aside
+            initial={false}
+            animate={{ width: isSidebarExpanded ? 232 : 68 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden md:flex flex-col py-3 flex-shrink-0 bg-[var(--ide-bg-sidebar)] border-r border-[var(--ide-border)] relative z-10 overflow-hidden"
+          >
+            <nav className="flex-1 px-2.5 space-y-1 overflow-y-auto" aria-label="Workspace navigation">
+              {PRIMARY_NAV_ITEMS.map((item) => (
+                <AsideNavItem
+                  key={item.id}
+                  item={item}
+                  active={canonicalView === item.id}
+                  expanded={isSidebarExpanded}
+                  onClick={() => navigateTo(item.id)}
+                />
+              ))}
+            </nav>
+
+            {/* Launch Readiness Mini-Gauge */}
+            {isSidebarExpanded && readinessScore !== null && (
+              <div className="mx-2.5 mb-2.5 p-3 rounded-xl bg-[var(--ide-bg)] border border-[var(--ide-border)] space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-[var(--ide-text-secondary)]">Launch readiness</span>
+                  <span className="font-bold text-[var(--ide-text)]">{readinessScore}%</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-[var(--ide-border)] overflow-hidden">
+                  <motion.div
+                    initial={false}
+                    animate={{ width: `${Math.max(4, readinessScore)}%` }}
+                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    className={`h-full rounded-full ${
+                      readinessScore >= 75
+                        ? "bg-emerald-500"
+                        : readinessScore >= 40
+                        ? "bg-[#1B5BFF]"
+                        : "bg-amber-500"
+                    }`}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Footer Controls */}
+            <div className="px-2.5 pt-2 border-t border-[var(--ide-border)] space-y-1 shrink-0">
+              <AsideNavItem
+                item={{
+                  id: "settings",
+                  label: "Settings",
+                  description: "Appearance, AI, and project controls",
+                  icon: Settings,
+                }}
+                active={canonicalView === "settings"}
+                expanded={isSidebarExpanded}
+                onClick={() => navigateTo("settings")}
+              />
+
+              <button
+                type="button"
+                onClick={() => closeProject()}
+                title={!isSidebarExpanded ? "All projects" : undefined}
+                className={`w-full h-9 flex items-center rounded-xl text-[13px] font-medium text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)] transition-colors cursor-pointer ${
+                  isSidebarExpanded ? "px-2.5 gap-2.5" : "justify-center"
+                }`}
+              >
+                <ArrowLeft className="w-4 h-4 shrink-0" />
+                {isSidebarExpanded && <span className="truncate">All projects</span>}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                title={isSidebarExpanded ? "Collapse sidebar (Ctrl+B)" : "Expand sidebar (Ctrl+B)"}
+                className={`w-full h-8 flex items-center rounded-xl text-xs font-medium text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)] transition-colors cursor-pointer ${
+                  isSidebarExpanded ? "px-2.5 justify-between" : "justify-center"
+                }`}
+              >
+                {isSidebarExpanded ? (
+                  <>
+                    <span className="inline-flex items-center gap-2">
+                      <PanelLeftClose className="w-3.5 h-3.5" />
+                      <span>Collapse</span>
+                    </span>
+                    <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--ide-bg)] border border-[var(--ide-border)]">
+                      ^B
+                    </kbd>
+                  </>
+                ) : (
+                  <PanelLeftOpen className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </motion.aside>
+        )}
+
+        {/* Mobile Drawer Navigation */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <div className="fixed inset-0 z-50 md:hidden flex">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setMobileMenuOpen(false)}
+                className="fixed inset-0 bg-slate-900/35 backdrop-blur-[2px]"
+              />
+              <motion.div
+                initial={{ x: -260 }}
+                animate={{ x: 0 }}
+                exit={{ x: -260 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="relative z-10 w-64 max-w-[82vw] h-full bg-[var(--ide-bg-elevated)] border-r border-[var(--ide-border)] flex flex-col p-3"
+              >
+                <div className="flex items-center justify-between px-2 pb-3 border-b border-[var(--ide-border)]">
+                  <span className="text-sm font-bold text-[var(--ide-text)] truncate">
+                    {project?.name || "Akasha"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="p-1.5 rounded-lg text-[var(--ide-text-muted)] hover:bg-[var(--ide-accent-subtle)] cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex-1 py-3 space-y-1">
+                  {PRIMARY_NAV_ITEMS.map((item) => (
+                    <AsideNavItem
+                      key={item.id}
+                      item={item}
+                      active={canonicalView === item.id}
+                      expanded
+                      onClick={() => navigateTo(item.id)}
+                    />
+                  ))}
+                  <AsideNavItem
+                    item={{
+                      id: "settings",
+                      label: "Settings",
+                      description: "Workspace preferences",
+                      icon: Settings,
+                    }}
+                    active={canonicalView === "settings"}
+                    expanded
+                    onClick={() => navigateTo("settings")}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    closeProject();
+                  }}
+                  className="h-9 px-3 rounded-xl flex items-center gap-2 text-sm font-medium text-[var(--ide-text-secondary)] hover:bg-[var(--ide-accent-subtle)] cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  All projects
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Main View Area with Smooth Crossfade */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[var(--ide-bg)]">
+          <div className={`ide-page flex-1 relative overflow-hidden ${terminalOpen ? "h-[65%]" : ""}`}>
+            {loading && (
+              <div className="absolute inset-0 bg-[var(--ide-bg)]/70 backdrop-blur-[2px] z-40 flex items-center justify-center">
+                <span className="px-3.5 py-2 rounded-xl bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] text-xs font-medium text-[var(--ide-text-secondary)] shadow-sm">
+                  Syncing workspace...
+                </span>
+              </div>
+            )}
+
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={canonicalView}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.17, ease: [0.22, 1, 0.36, 1] }}
+                className="h-full w-full"
+              >
+                <Suspense
+                  fallback={
+                    <div className="h-full w-full flex items-center justify-center text-sm text-[var(--ide-text-muted)]">
+                      Loading view...
+                    </div>
+                  }
+                >
+                  {renderPage()}
+                </Suspense>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {terminalOpen && (
+            <div className="h-[35%] border-t border-[var(--ide-border)] bg-[var(--ide-bg-elevated)]">
+              <div className="h-8 px-4 flex items-center justify-between text-xs border-b border-[var(--ide-border)] text-[var(--ide-text-secondary)] font-medium">
+                <span>Activity console</span>
+                <button
+                  type="button"
+                  onClick={() => toggleTerminal()}
+                  className="text-[var(--ide-text-muted)] hover:text-[var(--ide-text)] cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Global Quick Jump Command Palette (⌘K) */}
+      <AnimatePresence>
+        {commandOpen && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh] px-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setCommandOpen(false)}
+              className="fixed inset-0 bg-slate-900/30 dark:bg-black/60 backdrop-blur-[2px]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: -4 }}
+              transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+              className="relative z-10 w-full max-w-lg rounded-2xl bg-[var(--ide-bg-elevated)] border border-[var(--ide-border)] shadow-[var(--ide-shadow-premium)] overflow-hidden"
+            >
+              <div className="flex items-center gap-2.5 px-4 h-12 border-b border-[var(--ide-border)]">
+                <Search className="w-4 h-4 text-[var(--ide-text-muted)]" />
+                <input
+                  autoFocus
+                  value={commandQuery}
+                  onChange={(e) => {
+                    setCommandQuery(e.target.value);
+                    setSelectedCmdIndex(0);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setCommandOpen(false);
+                    } else if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSelectedCmdIndex((i) => Math.min(i + 1, Math.max(0, commandActions.length - 1)));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSelectedCmdIndex((i) => Math.max(0, i - 1));
+                    } else if (e.key === "Enter" && commandActions[selectedCmdIndex]) {
+                      e.preventDefault();
+                      commandActions[selectedCmdIndex]!.run();
+                      setCommandOpen(false);
+                    }
+                  }}
+                  placeholder="Jump to a view, copy preview link, or switch theme..."
+                  className="flex-1 bg-transparent text-sm text-[var(--ide-text)] placeholder:text-[var(--ide-text-muted)] focus:outline-none"
+                />
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--ide-accent-subtle)] text-[10px] font-mono text-[var(--ide-text-muted)]">
+                  Esc
+                </kbd>
+              </div>
+              <div className="max-h-72 overflow-y-auto p-1.5 space-y-0.5">
+                {commandActions.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-[var(--ide-text-muted)]">
+                    No matching commands.
+                  </div>
+                ) : (
+                  commandActions.map((cmd, idx) => {
+                    const active = idx === selectedCmdIndex;
+                    return (
+                      <button
+                        key={cmd.id}
+                        type="button"
+                        onMouseEnter={() => setSelectedCmdIndex(idx)}
+                        onClick={() => {
+                          cmd.run();
+                          setCommandOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-colors cursor-pointer ${
+                          active
+                            ? "bg-[#1B5BFF]/10 text-[#1B5BFF] dark:text-[#7AA3FF]"
+                            : "text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)]"
+                        }`}
+                      >
+                        <span className="shrink-0 opacity-80">{cmd.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate">{cmd.label}</div>
+                          <div className="text-xs text-[var(--ide-text-muted)] truncate">{cmd.hint}</div>
+                        </div>
+                        {active && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 opacity-75" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 };
 
-const PageLoadingState: React.FC = () => (
-    <div className="h-full w-full flex items-center justify-center text-xs text-neutral-500 dark:text-neutral-400">
-        Loading workspace...
-    </div>
-);
-
-/* ===== Aside Navigation Item with Liquid Glass Aesthetics & Lucide Icons ===== */
 interface AsideNavItemProps {
-    item: AsideNavItemDef;
-    active: boolean;
-    expanded: boolean;
-    onClick: () => void;
-    variant?: "default" | "danger";
+  item: AsideNavItemDef;
+  active: boolean;
+  expanded: boolean;
+  onClick: () => void;
 }
 
 const AsideNavItem: React.FC<AsideNavItemProps> = ({
-    item,
-    active,
-    expanded,
-    onClick,
-    variant = "default",
+  item,
+  active,
+  expanded,
+  onClick,
 }) => {
-    const Icon = item.icon;
-    const isDanger = variant === "danger";
+  const Icon = item.icon;
 
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            title={!expanded ? `${item.label} • ${item.description || item.badge || ""}` : undefined}
-            className={`group relative w-full flex items-center select-none cursor-pointer rounded-xl transition-all duration-200 outline-none ${
-                expanded ? "h-9 px-2.5 justify-start gap-2.5" : "h-10 px-0 justify-center"
-            } ${
-                active
-                    ? "bg-gradient-to-r from-cyan-500/18 via-blue-500/12 to-transparent dark:from-cyan-400/22 dark:via-blue-500/15 dark:to-transparent text-cyan-900 dark:text-cyan-100 border border-cyan-500/35 dark:border-cyan-400/40 shadow-[0_0_20px_rgba(6,182,212,0.18)] font-semibold"
-                    : isDanger
-                    ? "text-neutral-500 dark:text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/25 border border-transparent font-medium"
-                    : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-950 dark:hover:text-neutral-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:border-black/[0.05] dark:hover:border-white/10 border border-transparent font-medium"
-            }`}
-        >
-            {/* Glowing Accent Indicator Bar when active */}
-            {active && (
-                <span className="absolute left-1 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-cyan-400 to-blue-500 shadow-[0_0_10px_rgba(6,182,212,0.9)] animate-pulse" />
-            )}
-
-            {/* Icon */}
-            <div
-                className={`flex items-center justify-center shrink-0 transition-all duration-200 ${
-                    expanded ? "w-5 h-5 ml-1" : "w-8 h-8 rounded-lg"
-                } ${
-                    active
-                        ? "text-cyan-600 dark:text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.55)] scale-105"
-                        : isDanger
-                        ? "text-neutral-500 dark:text-neutral-400 group-hover:text-rose-500 group-hover:scale-110"
-                        : "text-neutral-500 dark:text-neutral-400 group-hover:text-cyan-500 dark:group-hover:text-cyan-300 group-hover:scale-110"
-                }`}
-            >
-                <Icon className="w-4 h-4 stroke-[2]" />
-            </div>
-
-            {/* Expanded Label + Mono Badge */}
-            {expanded && (
-                <div className="flex-1 flex items-center justify-between min-w-0 pr-0.5">
-                    <span className="text-[11px] font-medium tracking-tight truncate">
-                        {item.label}
-                    </span>
-                    {item.badge && (
-                        <span
-                            className={`text-[8.5px] font-mono px-1.5 py-0.2 rounded uppercase tracking-wider shrink-0 transition-colors ${
-                                active
-                                    ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-400/40 font-bold"
-                                    : "bg-black/[0.04] dark:bg-white/[0.06] text-neutral-500 dark:text-neutral-400 border border-black/[0.06] dark:border-white/10 font-medium"
-                            }`}
-                        >
-                            {item.badge}
-                        </span>
-                    )}
-                </div>
-            )}
-        </button>
-    );
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={!expanded ? `${item.label} — ${item.description}` : undefined}
+      className={`group relative w-full h-9.5 min-h-[38px] flex items-center select-none cursor-pointer rounded-xl transition-colors duration-150 ${
+        expanded ? "px-2.5 justify-start gap-2.5" : "px-0 justify-center"
+      } ${
+        active
+          ? "text-[#1B5BFF] dark:text-[#7AA3FF] font-semibold"
+          : "text-[var(--ide-text-secondary)] hover:text-[var(--ide-text)] hover:bg-[var(--ide-accent-subtle)] font-medium"
+      }`}
+    >
+      {active && (
+        <motion.span
+          layoutId="sidebar-active-pill"
+          transition={{ type: "spring", stiffness: 460, damping: 35 }}
+          className="absolute inset-0 rounded-xl bg-[#1B5BFF]/[0.09] dark:bg-[#5B8CFF]/15 border border-[#1B5BFF]/20 dark:border-[#5B8CFF]/30"
+        />
+      )}
+      <span className="relative z-10 flex items-center justify-center shrink-0 w-5 h-5">
+        <Icon className="w-[17px] h-[17px]" />
+      </span>
+      {expanded && (
+        <span className="relative z-10 text-[13px] truncate">{item.label}</span>
+      )}
+    </button>
+  );
 };
 
 export default IDELayout;

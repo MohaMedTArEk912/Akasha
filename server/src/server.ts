@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { initializeLLMProvider, aiConfigStorage } from './lib/llmProvider.js';
 import { registerApiRoutes } from './routes/index.js';
+import seoRoutes from './routes/seo.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,12 +22,12 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../../public')));
 
 // AI configuration context from request headers or body
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
     const aiConfig = {
         apiKey: (req.headers['x-ai-api-key'] as string) || req.body?.apiKey,
-        model: (req.headers['x-ai-model'] as string) || req.body?.model || 'antigravity-brain',
+        model: (req.headers['x-ai-model'] as string) || req.body?.model,
         apiBaseUrl: (req.headers['x-ai-api-base-url'] as string) || req.body?.apiBaseUrl,
-        provider: (req.headers['x-ai-provider'] as string) || req.body?.provider || 'antigravity',
+        provider: (req.headers['x-ai-provider'] as string) || req.body?.provider,
     };
     aiConfigStorage.run(aiConfig, next);
 });
@@ -35,6 +36,9 @@ app.use((req, res, next) => {
 app.get('/health', (_req, res) => {
     res.json({ status: 'healthy', version: '1.0.0' });
 });
+
+// Dynamic SEO routes (/sitemap.xml, /robots.txt)
+app.use('/', seoRoutes);
 
 // Register all API routes
 registerApiRoutes(app);

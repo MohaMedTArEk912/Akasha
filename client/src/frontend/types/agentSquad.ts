@@ -1,5 +1,6 @@
 export type AgentRole = 'architect' | 'frontend' | 'backend' | 'qa_verifier';
 export type ExecutionMode = 'series' | 'parallel';
+export type DispatchStrategy = 'generate' | 'handoff';
 
 export interface SquadMember {
     id: string;
@@ -18,6 +19,7 @@ export interface SquadMember {
 export interface TelemetryLog {
     id: string;
     timestamp: string;
+    createdAt?: string;
     agentRole: AgentRole;
     agentName: string;
     stepName: string;
@@ -27,11 +29,13 @@ export interface TelemetryLog {
     fileCreatedOrModified?: string;
     type: 'thought' | 'tool_call' | 'tool_result' | 'file_change' | 'build_check' | 'success' | 'error';
     progress: number;
+    source?: 'server' | 'mcp_stdio' | 'mcp_http';
 }
 
 export interface SquadConfiguration {
     projectId: string;
     executionMode: ExecutionMode;
+    dispatchStrategy?: DispatchStrategy;
     members: SquadMember[];
     autoSelfHealBuild: boolean;
     syncToGridFS: boolean;
@@ -42,13 +46,17 @@ export interface ActiveSquadMission {
     id: string;
     projectId: string;
     prompt: string;
+    sliceId?: string;
     executionMode: ExecutionMode;
-    status: 'idle' | 'running' | 'completed' | 'failed';
+    dispatchStrategy?: DispatchStrategy;
+    status: 'idle' | 'awaiting_agent' | 'running' | 'completed' | 'failed';
     progress: number;
     startedAt: string;
     completedAt?: string;
     logs: TelemetryLog[];
     filesChanged: string[];
+    buildPackMarkdown?: string;
+    outputPath?: string;
     stats: {
         totalTokensSaved: number;
         totalTokensUsed: number;
@@ -63,12 +71,14 @@ export interface TokenMetrics {
     structuredBlueprintTokens: number;
     tokensSaved: number;
     savingsPercent: number;
+    measurementSource?: 'measured' | 'estimated';
 }
 
 export interface CompiledProjectBlueprint {
     projectId: string;
     projectName: string;
     projectDescription: string;
+    archetype?: string;
     compiledAt: string;
     version: string;
     architectureOverview: {
@@ -78,12 +88,14 @@ export interface CompiledProjectBlueprint {
         storage: string;
     };
     entities: Array<{
+        id?: string;
         name: string;
         description?: string;
         fields: Array<{ name: string; type: string; required?: boolean; isId?: boolean }>;
         relations?: any[];
     }>;
     apiContracts: Array<{
+        id?: string;
         method: string;
         path: string;
         summary?: string;
@@ -93,6 +105,7 @@ export interface CompiledProjectBlueprint {
         id: string;
         name: string;
         path: string;
+        pageType?: string;
         componentCount: number;
     }>;
     useCases: Array<{
@@ -100,12 +113,30 @@ export interface CompiledProjectBlueprint {
         actor: string;
         scenario: string;
     }>;
+    featureSlices?: Array<{
+        id: string;
+        title: string;
+        summary: string;
+        lane: 'mvp' | 'v1_1' | 'later';
+        status: string;
+        owner?: string;
+        linkedModels: string[];
+        linkedApis: string[];
+        linkedPages: string[];
+    }>;
+    decisions?: Array<{
+        id: string;
+        title: string;
+        decision: string;
+        author?: string;
+    }>;
     tasks: Array<{
         id: string;
         title: string;
         priority: string;
         status: string;
         assigneeRole: string;
+        claimedBy?: string;
     }>;
     tokenMetrics: TokenMetrics;
     agentDirectives: {

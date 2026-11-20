@@ -1,12 +1,11 @@
 /**
- * Antigravity Brain & LLM Provider Abstraction Layer
- * 
- * Powered by Antigravity AI Engine as the central workspace brain.
- * Transparently fulfills all AI missions:
- * 1. Autonomous code generation, UI Builder schemas, and full project synthesis.
- * 2. Uses server-configured credentials if present without exposing or requiring user keys.
- * 3. Gracefully executes through Antigravity's autonomous semantic engine if external keys are omitted.
- * 4. Completely removes the "Missing API key" blocker.
+ * Akasha V2 Explicit Hybrid AI Provider Layer
+ *
+ * Supports:
+ * 1. Live cloud LLMs: Gemini (@google/genai), OpenRouter, OpenAI, and any OpenAI-compatible endpoint.
+ * 2. Local LLMs: Ollama (http://localhost:11434/v1) with zero external API keys.
+ * 3. Honest Offline Blueprint Mode: deterministic archetype-aware responses clearly badged as `offline`
+ *    so users always know when live AI vs. deterministic offline synthesis is active.
  */
 
 import './env.js';
@@ -14,7 +13,14 @@ import OpenAI from 'openai';
 import { AsyncLocalStorage } from 'async_hooks';
 import { GoogleGenAI } from '@google/genai';
 
-export const aiConfigStorage = new AsyncLocalStorage<{ apiKey?: string; apiBaseUrl?: string; model?: string; provider?: string }>();
+export interface RequestAiConfig {
+    apiKey?: string;
+    apiBaseUrl?: string;
+    model?: string;
+    provider?: string;
+}
+
+export const aiConfigStorage = new AsyncLocalStorage<RequestAiConfig>();
 
 export interface LLMMessage {
     role: 'user' | 'assistant' | 'system';
@@ -29,19 +35,47 @@ export interface LLMCompletionOptions {
     top_p?: number;
     apiKey?: string;
     apiBaseUrl?: string;
+    provider?: string;
     bypassStore?: boolean;
+}
+
+export interface ProviderHealth {
+    mode: 'live' | 'offline';
+    provider: 'gemini' | 'openrouter' | 'openai' | 'ollama' | 'offline';
+    model: string;
+    baseUrl?: string;
+    configured: boolean;
+    reason?: string;
+}
+
+export interface LLMCompletionResult {
+    text: string;
+    mode: 'live' | 'offline';
+    provider: ProviderHealth['provider'];
+    model: string;
+    fallbackReason?: string;
 }
 
 export interface LLMProvider {
     chat(options: LLMCompletionOptions): Promise<string>;
+    chatWithMeta(options: LLMCompletionOptions): Promise<LLMCompletionResult>;
     chatStream(options: LLMCompletionOptions): AsyncGenerator<string, void, undefined>;
+    getHealth(override?: Partial<RequestAiConfig>): ProviderHealth;
     isAvailable(): Promise<boolean>;
     getName(): string;
 }
 
+const PLACEHOLDER_KEYS = new Set([
+    '',
+    'antigravity-embedded',
+    'antigravity-brain-active',
+    'offline',
+    'none',
+]);
+
 function normalizeBaseUrl(rawUrl: string): string {
     let url = (rawUrl || '').trim();
-    if (!url) return url;
+    if (!url || url === '/api/akasha') return '';
 
     while (url.endsWith('/')) {
         url = url.slice(0, -1);
@@ -49,213 +83,273 @@ function normalizeBaseUrl(rawUrl: string): string {
 
     if (url.includes('agentrouter.org')) {
         url = url.replace(/\/console(?:\/.*)?$/, '');
-        if (!url.endsWith('/v1')) {
-            url = `${url}/v1`;
-        }
+        if (!url.endsWith('/v1')) url = `${url}/v1`;
     } else if (url === 'https://openrouter.ai' || url === 'https://openrouter.ai/api') {
         url = 'https://openrouter.ai/api/v1';
     } else if (url === 'https://api.openai.com') {
         url = 'https://api.openai.com/v1';
     } else if (url === 'https://api.groq.com' || url === 'https://api.groq.com/openai') {
         url = 'https://api.groq.com/openai/v1';
+    } else if (url === 'http://localhost:11434' || url === 'http://127.0.0.1:11434') {
+        url = `${url}/v1`;
     }
 
     return url;
 }
 
+function cleanKey(raw?: string): string {
+    let key = (raw || '').trim();
+    if (key.toLowerCase().startsWith('bearer ')) {
+        key = key.slice(7).trim();
+    }
+    return key;
+}
+
+function isUsableKey(key: string): boolean {
+    if (!key) return false;
+    if (PLACEHOLDER_KEYS.has(key.toLowerCase())) return false;
+    if (key.startsWith('AQ.')) return false;
+    return true;
+}
+
 /**
- * Antigravity Autonomous Semantic Generator
- * Synthesizes grounded outputs for all Akasha workspace missions when external API keys are omitted.
+ * Deterministic Offline Blueprint Responder
+ * Used strictly when provider is explicitly `offline` or no valid API key/local Ollama endpoint is available.
+ * Never claims to be a live LLM response; callers can inspect `mode: 'offline'`.
  */
-function synthesizeAntigravityResponse(options: LLMCompletionOptions): string {
+function synthesizeOfflineResponse(options: LLMCompletionOptions): string {
     const userPrompt = options.messages.map(m => m.content).join('\n').toLowerCase();
     const systemPrompt = options.messages.find(m => m.role === 'system')?.content?.toLowerCase() || '';
     const fullContext = `${systemPrompt}\n${userPrompt}`;
 
-    // 1. Ping / Health check
-    if (fullContext.includes('respond with exactly the word "ok"') || fullContext.includes('ping') || userPrompt === 'ok') {
+    if (fullContext.includes('respond with exactly the word "ok"') || fullContext.includes('ping') || userPrompt.trim() === 'ok') {
         return 'ok';
     }
 
-    // 2. Database Schema Generation (JSON expected)
     if (fullContext.includes('schema') || fullContext.includes('prisma') || fullContext.includes('collections') || fullContext.includes('generate-schema')) {
         return JSON.stringify({
             models: [
                 {
-                    name: 'User',
-                    fields: [
-                        { name: 'id', type: 'String', isId: true, isRequired: true },
-                        { name: 'email', type: 'String', isUnique: true, isRequired: true },
-                        { name: 'name', type: 'String', isRequired: false },
-                        { name: 'role', type: 'String', defaultValue: 'user', isRequired: true },
-                        { name: 'createdAt', type: 'DateTime', isRequired: true }
-                    ]
-                },
-                {
-                    name: 'Project',
+                    name: 'Product',
                     fields: [
                         { name: 'id', type: 'String', isId: true, isRequired: true },
                         { name: 'title', type: 'String', isRequired: true },
-                        { name: 'description', type: 'String', isRequired: false },
-                        { name: 'ownerId', type: 'String', isRequired: true },
+                        { name: 'price', type: 'Float', isRequired: true },
+                        { name: 'stock', type: 'Int', isRequired: true },
                         { name: 'status', type: 'String', defaultValue: 'active', isRequired: true },
-                        { name: 'updatedAt', type: 'DateTime', isRequired: true }
                     ]
                 },
                 {
-                    name: 'Task',
+                    name: 'Order',
                     fields: [
                         { name: 'id', type: 'String', isId: true, isRequired: true },
-                        { name: 'title', type: 'String', isRequired: true },
-                        { name: 'completed', type: 'Boolean', defaultValue: false, isRequired: true },
-                        { name: 'projectId', type: 'String', isRequired: true },
-                        { name: 'assignedTo', type: 'String', isRequired: false }
+                        { name: 'customerEmail', type: 'String', isRequired: true },
+                        { name: 'totalAmount', type: 'Float', isRequired: true },
+                        { name: 'status', type: 'String', defaultValue: 'pending', isRequired: true },
+                        { name: 'createdAt', type: 'DateTime', isRequired: true },
                     ]
-                }
+                },
             ],
             enums: [
-                { name: 'Role', values: ['ADMIN', 'USER', 'MEMBER'] },
-                { name: 'Status', values: ['ACTIVE', 'ARCHIVED', 'PENDING'] }
+                { name: 'OrderStatus', values: ['PENDING', 'PAID', 'FULFILLED', 'REFUNDED'] }
             ]
         }, null, 2);
     }
 
-    // 3. Idea Evaluation / Feasibility Analysis (JSON expected)
-    if (fullContext.includes('feasibility') || fullContext.includes('innovation') || fullContext.includes('marketpotential') || fullContext.includes('idea')) {
+    if (fullContext.includes('feasibility') || fullContext.includes('innovation') || fullContext.includes('marketpotential')) {
         return JSON.stringify({
-            feasibility: 8.5,
-            innovation: 9.0,
-            marketPotential: 8.8,
+            feasibility: 8.2,
+            innovation: 7.8,
+            marketPotential: 8.5,
             complexity: 4.5,
-            overallScore: 8.8,
-            final_score: 8.8,
-            summary: "Highly viable full-stack cloud application with strong user engagement potential and clean scalability on MongoDB GridFS.",
+            overallScore: 8.1,
+            final_score: 8.1,
+            summary: '[Offline Blueprint Analysis] Well-scoped small-team product concept. Configure Gemini, OpenRouter, OpenAI, or local Ollama in Settings for deep live AI market critique.',
             strengths: [
-                "Modern architecture with cloud-first MongoDB GridFS persistence",
-                "Streamlined developer experience powered by Antigravity autonomous pairing",
-                "Reactive, responsive UI with state-of-the-art dark mode aesthetics"
+                'Clear MVP vertical slice boundaries suitable for a 2-6 person team',
+                'Direct mapping from domain entities to live stateful mock API & clickable prototype'
             ],
             weaknesses: [
-                "Requires robust caching for high-concurrency traffic",
-                "Needs token rate-limiting on complex autonomous refactors"
+                'Offline deterministic evaluation active — connect a live LLM provider for competitor and domain-specific risk analysis'
             ],
             recommendedNextSteps: [
-                "Finalize REST API routes and data contracts",
-                "Generate interactive UI components with responsive layouts",
-                "Run automated self-healing build verification"
+                'Choose a Product Archetype Playbook to seed Feature Slices & edge cases',
+                'Vote on MVP vs. V1.1 slices with your team',
+                'Test the clickable prototype against the live Mock API before production build'
             ]
         }, null, 2);
     }
 
-    // 4. UI Builder / Component Generation
-    if (fullContext.includes('ui-builder') || fullContext.includes('component') || fullContext.includes('react') || fullContext.includes('jsx')) {
-        return `import React, { useState } from 'react';
-
-export default function AntigravityComponent() {
-  const [active, setActive] = useState(false);
-
-  return (
-    <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-xl text-slate-100 shadow-2xl transition-all duration-300 hover:border-indigo-500/40">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-          Antigravity Autonomous View
-        </h2>
-        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-          Cloud Synced
-        </span>
-      </div>
-      <p className="text-sm text-slate-400 mb-6">
-        Grounded reactive component synthesized directly by the Antigravity Brain.
-      </p>
-      <button 
-        onClick={() => setActive(!active)}
-        className="w-full py-2.5 px-4 rounded-xl font-medium text-sm transition-all duration-200 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-500/25 active:scale-[0.98]"
-      >
-        {active ? 'State Active' : 'Interact with Component'}
-      </button>
-    </div>
-  );
-}`;
-    }
-
-    // 5. Autonomous Agent Step / Plan (JSON expected)
-    if (fullContext.includes('synthesize-step') || fullContext.includes('plan') || fullContext.includes('agent/plan')) {
+    if (fullContext.includes('answer_markdown') && fullContext.includes('next_actions')) {
         return JSON.stringify({
-            step: "synthesis_step_completed",
-            status: "success",
-            modelsCreated: 3,
-            apisCreated: 4,
-            pagesCompiled: 2,
-            message: "Antigravity synthesized models, REST contracts, and cloud persistence successfully."
-        }, null, 2);
-    }
-
-    // 6. Conversational / Chat Pair Programming
-    return `[Antigravity Brain] I've analyzed your project and requirements. 
-Everything is connected through the Antigravity AI Engine with MongoDB GridFS cloud persistence. 
-
-All missions—from data models, API synthesis, component layouts, to build verification—are ready to run autonomously with zero external API key requirements. Let me know what feature or refactor you'd like to build next!`;
-}
-
-export class AntigravityBrainProvider implements LLMProvider {
-    private defaultApiKey: string;
-    private defaultBaseUrl: string;
-    private defaultModel: string;
-
-    constructor() {
-        const geminiKey = process.env.GEMINI_API_KEY;
-        const openrouterKey = process.env.OPENROUTER_API_KEY;
-        const openaiKey = process.env.OPENAI_API_KEY;
-
-        if (geminiKey && !geminiKey.startsWith('AQ.')) {
-            this.defaultApiKey = geminiKey;
-            this.defaultBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
-            this.defaultModel = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
-        } else {
-            this.defaultApiKey = openrouterKey || openaiKey || '';
-            this.defaultBaseUrl =
-                process.env.OPENAI_BASE_URL ||
-                process.env.OPENROUTER_BASE_URL ||
-                'https://openrouter.ai/api/v1';
-            this.defaultModel = process.env.OPENROUTER_MODEL || 'antigravity-brain';
-        }
-    }
-
-    private getClient(apiKey?: string, apiBaseUrl?: string, bypassStore?: boolean): OpenAI | null {
-        const store = bypassStore ? undefined : aiConfigStorage.getStore();
-        let baseURL = normalizeBaseUrl(apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl);
-        let key = apiKey || store?.apiKey || this.defaultApiKey;
-
-        if (key && key.toLowerCase().startsWith('bearer ')) {
-            key = key.slice(7).trim();
-        }
-
-        // If no valid external key, return null to activate Antigravity Autonomous Engine
-        if (!key || key.startsWith('AQ.') || key === 'antigravity-embedded' || key === 'antigravity-brain-active') {
-            return null;
-        }
-
-        return new OpenAI({
-            baseURL,
-            apiKey: key,
+            answer_markdown: '**Offline Blueprint Mode Active.** No live LLM API key or local Ollama endpoint is currently configured.\n\nYou can still use Akasha\'s **Archetype Playbooks**, **Vertical Feature Slices**, **Live Stateful Mock API**, **Clickable Prototypes**, **Change Impact Ripple**, **Full-Stack Code Export**, and **MCP IDE Agent Handoff** at 100% capacity. Connect Gemini, OpenRouter, OpenAI, or Ollama in **Settings** to unlock live AI generation.',
+            summary: 'Offline Blueprint Mode is active; configure a live AI provider in Settings for generative chat.',
+            highlights: [
+                'Deterministic Archetype Playbooks & Mock API work fully offline',
+                'External IDE agents (Antigravity, Cursor, Claude Code) can connect via MCP without server keys'
+            ],
+            next_actions: [
+                'Open Settings to configure Gemini, OpenRouter, OpenAI, or local Ollama',
+                'Or dispatch a Feature Build Pack to your IDE agent via MCP'
+            ],
+            warnings: ['Running in deterministic Offline Blueprint Mode (no live LLM provider configured)']
         });
     }
 
-    async chat(options: LLMCompletionOptions): Promise<string> {
-        const store = options.bypassStore ? undefined : aiConfigStorage.getStore();
-        let apiKey = options.apiKey || store?.apiKey || this.defaultApiKey;
-        let baseURL = normalizeBaseUrl(options.apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl);
-        const activeModel = options.model || (options.bypassStore ? undefined : store?.model) || this.defaultModel;
+    return '[Offline Blueprint Mode] No live LLM provider is configured. Configure Gemini, OpenRouter, OpenAI, or local Ollama in Settings for live AI responses—or continue building with Akasha\'s deterministic Playbooks, Live Mock API, Impact Ripple, Full-Stack Export, and MCP Agent Handoff.';
+}
 
-        if (apiKey && apiKey.toLowerCase().startsWith('bearer ')) {
-            apiKey = apiKey.slice(7).trim();
+export class HybridLLMProvider implements LLMProvider {
+    private envGeminiKey: string;
+    private envOpenRouterKey: string;
+    private envOpenAiKey: string;
+    private envOllamaUrl: string;
+    private envOllamaModel: string;
+
+    constructor() {
+        this.envGeminiKey = cleanKey(process.env.GEMINI_API_KEY);
+        this.envOpenRouterKey = cleanKey(process.env.OPENROUTER_API_KEY);
+        this.envOpenAiKey = cleanKey(process.env.OPENAI_API_KEY);
+        this.envOllamaUrl = normalizeBaseUrl(process.env.OLLAMA_BASE_URL || '');
+        this.envOllamaModel = process.env.OLLAMA_MODEL || 'llama3.1';
+    }
+
+    private resolveRuntime(options?: Partial<LLMCompletionOptions>): {
+        provider: ProviderHealth['provider'];
+        apiKey: string;
+        baseUrl: string;
+        model: string;
+        configured: boolean;
+        reason?: string;
+    } {
+        const store = options?.bypassStore ? undefined : aiConfigStorage.getStore();
+        const requestedProvider = (options?.provider || store?.provider || '').trim().toLowerCase();
+        const reqKey = cleanKey(options?.apiKey || store?.apiKey);
+        const reqBase = normalizeBaseUrl(options?.apiBaseUrl || store?.apiBaseUrl || '');
+        const reqModel = (options?.model || store?.model || '').trim();
+
+        // Explicit offline mode requested
+        if (requestedProvider === 'offline') {
+            return {
+                provider: 'offline',
+                apiKey: '',
+                baseUrl: '',
+                model: 'deterministic-playbook',
+                configured: false,
+                reason: 'Offline Blueprint Mode explicitly selected',
+            };
         }
 
-        // 1. If valid public Gemini API key is configured on server
-        const isNativeGemini = baseURL.includes('generativelanguage.googleapis.com') && !baseURL.endsWith('/openai');
-        if (isNativeGemini && apiKey && !apiKey.startsWith('AQ.')) {
+        // Local Ollama (no API key required)
+        if (requestedProvider === 'ollama' || reqBase.includes('11434') || (!isUsableKey(reqKey) && this.envOllamaUrl)) {
+            const ollamaUrl = reqBase || this.envOllamaUrl || 'http://localhost:11434/v1';
+            const ollamaModel = (reqModel && reqModel !== 'antigravity-brain') ? reqModel : this.envOllamaModel;
+            return {
+                provider: 'ollama',
+                apiKey: 'ollama',
+                baseUrl: ollamaUrl,
+                model: ollamaModel,
+                configured: true,
+            };
+        }
+
+        // Request-supplied live API key
+        if (isUsableKey(reqKey)) {
+            if (requestedProvider === 'gemini' || reqBase.includes('generativelanguage.googleapis.com')) {
+                return {
+                    provider: 'gemini',
+                    apiKey: reqKey,
+                    baseUrl: reqBase || 'https://generativelanguage.googleapis.com/v1beta',
+                    model: (reqModel && reqModel !== 'antigravity-brain') ? reqModel : (process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
+                    configured: true,
+                };
+            }
+            if (requestedProvider === 'openai' || reqBase.includes('api.openai.com')) {
+                return {
+                    provider: 'openai',
+                    apiKey: reqKey,
+                    baseUrl: reqBase || 'https://api.openai.com/v1',
+                    model: (reqModel && reqModel !== 'antigravity-brain') ? reqModel : 'gpt-4o-mini',
+                    configured: true,
+                };
+            }
+            return {
+                provider: 'openrouter',
+                apiKey: reqKey,
+                baseUrl: reqBase || 'https://openrouter.ai/api/v1',
+                model: (reqModel && reqModel !== 'antigravity-brain') ? reqModel : 'openrouter/free',
+                configured: true,
+            };
+        }
+
+        // Server environment fallback keys
+        if (isUsableKey(this.envGeminiKey)) {
+            return {
+                provider: 'gemini',
+                apiKey: this.envGeminiKey,
+                baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+                model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+                configured: true,
+            };
+        }
+        if (isUsableKey(this.envOpenRouterKey)) {
+            return {
+                provider: 'openrouter',
+                apiKey: this.envOpenRouterKey,
+                baseUrl: normalizeBaseUrl(process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'),
+                model: process.env.OPENROUTER_MODEL || 'openrouter/free',
+                configured: true,
+            };
+        }
+        if (isUsableKey(this.envOpenAiKey)) {
+            return {
+                provider: 'openai',
+                apiKey: this.envOpenAiKey,
+                baseUrl: normalizeBaseUrl(process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'),
+                model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                configured: true,
+            };
+        }
+
+        return {
+            provider: 'offline',
+            apiKey: '',
+            baseUrl: '',
+            model: 'deterministic-playbook',
+            configured: false,
+            reason: 'No live LLM API key or Ollama endpoint configured',
+        };
+    }
+
+    getHealth(override?: Partial<RequestAiConfig>): ProviderHealth {
+        const resolved = this.resolveRuntime(override);
+        return {
+            mode: resolved.configured ? 'live' : 'offline',
+            provider: resolved.provider,
+            model: resolved.model,
+            baseUrl: resolved.baseUrl || undefined,
+            configured: resolved.configured,
+            reason: resolved.reason,
+        };
+    }
+
+    async chatWithMeta(options: LLMCompletionOptions): Promise<LLMCompletionResult> {
+        const resolved = this.resolveRuntime(options);
+
+        if (!resolved.configured || resolved.provider === 'offline') {
+            return {
+                text: synthesizeOfflineResponse(options),
+                mode: 'offline',
+                provider: 'offline',
+                model: 'deterministic-playbook',
+                fallbackReason: resolved.reason,
+            };
+        }
+
+        // 1. Native Gemini SDK path
+        if (resolved.provider === 'gemini' && !resolved.baseUrl.endsWith('/openai')) {
             try {
-                const cleanedModel = activeModel.replace(/^models\//, '').replace(/^google\//, '');
+                const cleanedModel = resolved.model.replace(/^models\//, '').replace(/^google\//, '');
                 const systemMessage = options.messages.find(m => m.role === 'system');
                 const userMessages = options.messages.filter(m => m.role !== 'system');
                 const contents = userMessages.map(m => ({
@@ -263,8 +357,8 @@ export class AntigravityBrainProvider implements LLMProvider {
                     parts: [{ text: m.content }]
                 }));
 
-                const ai = new GoogleGenAI({ apiKey });
-                const config: any = {
+                const ai = new GoogleGenAI({ apiKey: resolved.apiKey });
+                const config: Record<string, unknown> = {
                     temperature: options.temperature ?? 0.3,
                     maxOutputTokens: options.max_tokens ?? 2048,
                 };
@@ -273,53 +367,88 @@ export class AntigravityBrainProvider implements LLMProvider {
                 const response = await ai.models.generateContent({
                     model: cleanedModel,
                     contents,
-                    config
+                    config,
                 });
 
-                if (response.text) {
-                    return response.text;
+                if (response.text && response.text.trim()) {
+                    return {
+                        text: response.text,
+                        mode: 'live',
+                        provider: 'gemini',
+                        model: cleanedModel,
+                    };
                 }
             } catch (err: any) {
-                console.warn('[Antigravity] Native Gemini call failed, falling back to autonomous engine:', err.message);
+                console.warn('[HybridLLM] Gemini call failed, falling back to offline deterministic mode:', err?.message || err);
+                return {
+                    text: synthesizeOfflineResponse(options),
+                    mode: 'offline',
+                    provider: 'offline',
+                    model: 'deterministic-playbook',
+                    fallbackReason: `Gemini error: ${err?.message || 'request failed'}`,
+                };
             }
         }
 
-        // 2. If valid OpenAI or OpenRouter client is configured
-        const client = this.getClient(apiKey, baseURL, options.bypassStore);
-        if (client) {
-            try {
-                const completion = await client.chat.completions.create({
-                    model: activeModel === 'antigravity-brain' ? 'openrouter/free' : activeModel,
-                    messages: options.messages as any,
-                    temperature: options.temperature ?? 0.3,
-                    max_tokens: options.max_tokens ?? 2048,
-                    top_p: options.top_p,
-                });
+        // 2. OpenAI-compatible path (OpenRouter, OpenAI, Ollama, Gemini OpenAI-compat)
+        try {
+            const client = new OpenAI({
+                baseURL: resolved.baseUrl,
+                apiKey: resolved.apiKey,
+            });
+            const completion = await client.chat.completions.create({
+                model: resolved.model,
+                messages: options.messages as any,
+                temperature: options.temperature ?? 0.3,
+                max_tokens: options.max_tokens ?? 2048,
+                top_p: options.top_p,
+            });
 
-                const content = completion.choices[0]?.message?.content;
-                if (content && content.trim().length > 0) {
-                    return content;
-                }
-            } catch (err: any) {
-                console.warn('[Antigravity] Upstream client call failed, activating Antigravity Brain generator:', err.message);
+            const content = completion.choices[0]?.message?.content;
+            if (content && content.trim().length > 0) {
+                return {
+                    text: content,
+                    mode: 'live',
+                    provider: resolved.provider,
+                    model: resolved.model,
+                };
             }
+        } catch (err: any) {
+            console.warn(`[HybridLLM] ${resolved.provider} call failed, falling back to offline deterministic mode:`, err?.message || err);
+            return {
+                text: synthesizeOfflineResponse(options),
+                mode: 'offline',
+                provider: 'offline',
+                model: 'deterministic-playbook',
+                fallbackReason: `${resolved.provider} error: ${err?.message || 'request failed'}`,
+            };
         }
 
-        // 3. Fallback seamlessly to Antigravity Autonomous Semantic Engine (Zero API Key required)
-        return synthesizeAntigravityResponse(options);
+        return {
+            text: synthesizeOfflineResponse(options),
+            mode: 'offline',
+            provider: 'offline',
+            model: 'deterministic-playbook',
+            fallbackReason: 'Empty model response',
+        };
+    }
+
+    async chat(options: LLMCompletionOptions): Promise<string> {
+        const res = await this.chatWithMeta(options);
+        return res.text;
     }
 
     async *chatStream(options: LLMCompletionOptions): AsyncGenerator<string, void, undefined> {
-        const store = options.bypassStore ? undefined : aiConfigStorage.getStore();
-        let apiKey = options.apiKey || store?.apiKey || this.defaultApiKey;
-        let baseURL = normalizeBaseUrl(options.apiBaseUrl || store?.apiBaseUrl || this.defaultBaseUrl);
-        const activeModel = options.model || (options.bypassStore ? undefined : store?.model) || this.defaultModel;
+        const resolved = this.resolveRuntime(options);
 
-        const client = this.getClient(apiKey, baseURL, options.bypassStore);
-        if (client) {
+        if (resolved.configured && resolved.provider !== 'offline' && resolved.provider !== 'gemini') {
             try {
+                const client = new OpenAI({
+                    baseURL: resolved.baseUrl,
+                    apiKey: resolved.apiKey,
+                });
                 const stream = await client.chat.completions.create({
-                    model: activeModel === 'antigravity-brain' ? 'openrouter/free' : activeModel,
+                    model: resolved.model,
                     messages: options.messages as any,
                     temperature: options.temperature ?? 0.3,
                     max_tokens: options.max_tokens ?? 2048,
@@ -329,22 +458,18 @@ export class AntigravityBrainProvider implements LLMProvider {
 
                 for await (const chunk of stream) {
                     const text = chunk.choices[0]?.delta?.content ?? '';
-                    if (text) {
-                        yield text;
-                    }
+                    if (text) yield text;
                 }
                 return;
             } catch (err: any) {
-                console.warn('[Antigravity] Stream client failed, streaming autonomous response:', err.message);
+                console.warn('[HybridLLM] Stream failed, falling back to offline output:', err?.message || err);
             }
         }
 
-        // Stream autonomous synthesis
-        const fullResponse = synthesizeAntigravityResponse(options);
-        const words = fullResponse.split(/(\s+)/);
+        const result = await this.chatWithMeta(options);
+        const words = result.text.split(/(\s+)/);
         for (const word of words) {
             yield word;
-            await new Promise(r => setTimeout(r, 12));
         }
     }
 
@@ -353,41 +478,47 @@ export class AntigravityBrainProvider implements LLMProvider {
     }
 
     getName(): string {
-        return 'Antigravity AI Brain';
+        const health = this.getHealth();
+        return health.mode === 'live'
+            ? `${health.provider.toUpperCase()} (${health.model})`
+            : 'Offline Blueprint Mode';
     }
 }
 
 class UnifiedLLMProvider {
-    private provider: AntigravityBrainProvider;
-    private activeProvider: LLMProvider | null = null;
+    private provider: HybridLLMProvider;
 
     constructor() {
-        this.provider = new AntigravityBrainProvider();
+        this.provider = new HybridLLMProvider();
     }
 
     async initialize(): Promise<void> {
-        this.activeProvider = this.provider;
-        console.log('[LLM] Antigravity AI Brain initialized as central workspace intelligence (Zero API Key required)');
+        const health = this.provider.getHealth();
+        console.log(
+            health.mode === 'live'
+                ? `[LLM] Explicit Hybrid AI initialized: LIVE via ${health.provider} (${health.model})`
+                : `[LLM] Explicit Hybrid AI initialized: OFFLINE BLUEPRINT MODE (${health.reason || 'no API key'})`
+        );
     }
 
     async *chatStream(options: LLMCompletionOptions): AsyncGenerator<string, void, undefined> {
-        if (!this.activeProvider) {
-            throw new Error('Antigravity Brain not initialized');
-        }
-
-        yield* this.activeProvider.chatStream(options);
+        yield* this.provider.chatStream(options);
     }
 
     async chat(options: LLMCompletionOptions): Promise<string> {
-        if (!this.activeProvider) {
-            throw new Error('Antigravity Brain not initialized');
-        }
+        return this.provider.chat(options);
+    }
 
-        return await this.activeProvider.chat(options);
+    async chatWithMeta(options: LLMCompletionOptions): Promise<LLMCompletionResult> {
+        return this.provider.chatWithMeta(options);
+    }
+
+    getHealth(override?: Partial<RequestAiConfig>): ProviderHealth {
+        return this.provider.getHealth(override);
     }
 
     getActiveProvider(): string {
-        return this.activeProvider?.getName() || 'Antigravity AI Brain';
+        return this.provider.getName();
     }
 }
 
@@ -401,8 +532,6 @@ export async function initializeLLMProvider(): Promise<void> {
 export function getLLMProvider(): UnifiedLLMProvider {
     if (!unifiedProvider) {
         unifiedProvider = new UnifiedLLMProvider();
-        unifiedProvider.initialize();
     }
-
     return unifiedProvider;
 }

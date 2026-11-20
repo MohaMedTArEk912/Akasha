@@ -113,22 +113,30 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.syncCloud', async () => {
+            const projectId = await getActiveProjectId();
+            const serverUrl = 'http://localhost:3001/api/akasha';
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: 'Akasha: Syncing project to MongoDB GridFS...',
+                title: 'Akasha: Syncing full-stack project to MongoDB GridFS...',
                 cancellable: false
             }, async (progress) => {
                 try {
-                    progress.report({ increment: 30, message: 'Inspecting workspace files...' });
-                    await new Promise(r => setTimeout(r, 400));
+                    progress.report({ increment: 35, message: 'Calling Akasha GridFS Cloud Sync API...' });
+                    const res = await fetch(`${serverUrl}/codegen/sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ projectId })
+                    });
+                    const data: any = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(data.error || `Server returned ${res.status}`);
+                    }
 
-                    progress.report({ increment: 70, message: 'Streaming chunks to MongoDB GridFS...' });
-                    await new Promise(r => setTimeout(r, 600));
-
+                    progress.report({ increment: 65, message: 'Cloud sync complete.' });
                     quotaService.consumeTokens(450, 'cloud_sync');
-                    vscode.window.showInformationMessage('☁ Project successfully synchronized to MongoDB GridFS cloud storage!');
+                    vscode.window.showInformationMessage(`☁ ${data.message || 'Project synchronized to MongoDB GridFS cloud storage!'}`);
                 } catch (err: any) {
-                    vscode.window.showErrorMessage(`Sync failed: ${err.message}`);
+                    vscode.window.showErrorMessage(`Cloud Sync failed: ${err.message}`);
                 }
             });
         })
@@ -142,8 +150,8 @@ export function activate(context: vscode.ExtensionContext) {
                 const selection = editor ? editor.document.getText(editor.selection) : '';
 
                 prompt = await vscode.window.showInputBox({
-                    prompt: 'What task would you like Antigravity to perform?',
-                    placeHolder: selection ? 'Refactor selected code, generate tests, or add feature...' : 'Build an analytics page, fix a bug, or sync to cloud...'
+                    prompt: 'What task would you like Akasha to dispatch?',
+                    placeHolder: selection ? 'Refactor selected code, generate tests, or add feature...' : 'Generate full-stack starter or hand off a Feature Slice via MCP...'
                 });
             }
 
@@ -157,78 +165,75 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.synthesizeProject', async () => {
             const description = await vscode.window.showInputBox({
-                prompt: 'Describe the project you want Antigravity to synthesize:',
-                placeHolder: 'e.g. Real-time SaaS analytics dashboard with MongoDB storage and authentication'
+                prompt: 'Describe the project or feature you want Akasha to generate:',
+                placeHolder: 'e.g. Sneaker e-commerce storefront with cart, coupons, and inventory admin'
             });
 
             if (!description) return;
 
-            quotaService.consumeTokens(2500, 'project_synthesis');
-            vscode.window.showInformationMessage(
-                `🚀 Antigravity Brain started project synthesis for: "${description}". Check terminal and sidebar.`
-            );
+            await dispatchAgentMissionToBackend(description, quotaService, 'parallel', 'generate');
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.generateComponent', async () => {
             const compName = await vscode.window.showInputBox({
-                prompt: 'Name of the reactive component to generate:',
-                placeHolder: 'e.g. MetricCard or AnalyticsChart'
+                prompt: 'Name of the feature/component to dispatch via MCP Build Pack:',
+                placeHolder: 'e.g. CheckoutDrawer or InventoryTable'
             });
 
             if (!compName) return;
 
-            quotaService.consumeTokens(800, 'component_generation');
-            vscode.window.showInformationMessage(
-                `🧩 Antigravity is generating component <${compName} /> with modern glassmorphism styling.`
-            );
+            await dispatchAgentMissionToBackend(`Build reactive component <${compName} /> aligned to project blueprint`, quotaService, 'parallel', 'handoff');
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.verifyBuild', () => {
-            const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Akasha Build Self-Healer');
+            const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Akasha Build Verifier');
             terminal.show();
             terminal.sendText('npm run build');
-            vscode.window.showInformationMessage('🛡 Self-Healing Build verification triggered. Antigravity will trace and resolve any TypeScript errors.');
+            vscode.window.showInformationMessage('🛡 Build verification triggered in terminal.');
         })
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('akasha.openPreview', () => {
-            vscode.env.openExternal(vscode.Uri.parse('http://localhost:5173'));
+        vscode.commands.registerCommand('akasha.openPreview', async () => {
+            const projectId = await getActiveProjectId();
+            const url = projectId && projectId !== 'default_project'
+                ? `http://localhost:5173/preview/${projectId}`
+                : 'http://localhost:5173';
+            vscode.env.openExternal(vscode.Uri.parse(url));
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.openMotionLab', () => {
             vscode.env.openExternal(vscode.Uri.parse('http://localhost:5173'));
-            vscode.window.showInformationMessage('🎨 Opening Akasha Motion & Animation Studio (port 5173)...');
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.dispatchSquadParallel', async () => {
             const prompt = await vscode.window.showInputBox({
-                prompt: 'Enter mission for Antigravity Squad (Parallel Mode):',
-                placeHolder: 'e.g. Synthesize modern analytics dashboard with responsive cards and Express REST controllers'
+                prompt: 'Enter mission to generate full-stack code & verify drift:',
+                placeHolder: 'e.g. Synthesize full-stack app from living blueprint and sync GridFS'
             });
             if (!prompt) return;
 
-            await dispatchAgentMissionToBackend(prompt, quotaService, 'parallel');
+            await dispatchAgentMissionToBackend(prompt, quotaService, 'parallel', 'generate');
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.dispatchSquadSeries', async () => {
             const prompt = await vscode.window.showInputBox({
-                prompt: 'Enter mission for Antigravity Squad (Series Pipeline):',
-                placeHolder: 'e.g. Architect ➔ Frontend ➔ Backend ➔ QA sequential synthesis'
+                prompt: 'Enter mission to compile an MCP Feature Build Pack handoff:',
+                placeHolder: 'e.g. Implement checkout slice with coupon validation and stock decrement'
             });
             if (!prompt) return;
 
-            await dispatchAgentMissionToBackend(prompt, quotaService, 'series');
+            await dispatchAgentMissionToBackend(prompt, quotaService, 'series', 'handoff');
         })
     );
 
@@ -241,32 +246,26 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            const targetRoot = workspaceFolders[0].uri;
-            const akashaDirUri = vscode.Uri.joinPath(targetRoot, '.akasha');
+            const projectId = await getActiveProjectId();
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            const serverUrl = 'http://localhost:3001/api/akasha';
 
             try {
-                await vscode.workspace.fs.createDirectory(akashaDirUri);
-                const blueprintUri = vscode.Uri.joinPath(akashaDirUri, 'blueprint.json');
-                const blueprintData = {
-                    version: '1.0.0',
-                    storage: 'Antigravity Workspace',
-                    tokenSavings: '92%',
-                    compiledAt: new Date().toISOString(),
-                    rules: [
-                        'Structure-first token optimization enabled',
-                        'Follow defined data models and REST contracts',
-                        'Zero ungrounded schemas or hallucinated routes'
-                    ]
-                };
+                const res = await fetch(`${serverUrl}/agent-squad/sync-blueprint-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectId, workspacePath })
+                });
+                const data: any = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data.error || `Server returned ${res.status}`);
+                }
 
-                await vscode.workspace.fs.writeFile(
-                    blueprintUri,
-                    Buffer.from(JSON.stringify(blueprintData, null, 2), 'utf8')
+                vscode.window.showInformationMessage(
+                    `📋 Real Living Blueprint synced to ${data.filePath} (~${data.tokenMetrics?.savingsPercent ?? 0}% token reduction)!`
                 );
-
-                vscode.window.showInformationMessage('📋 Structured Blueprint (.json) synced to .akasha/blueprint.json! Antigravity will use this for ~92% token savings.');
             } catch (err: any) {
-                vscode.window.showErrorMessage(`Failed to sync blueprint: ${err.message}`);
+                vscode.window.showErrorMessage(`Failed to sync blueprint from Akasha server: ${err.message}`);
             }
         })
     );
@@ -305,17 +304,22 @@ async function getActiveProjectId(): Promise<string> {
     return 'default_project';
 }
 
-async function dispatchAgentMissionToBackend(prompt: string, quotaService: QuotaService, executionMode: 'parallel' | 'series' = 'parallel') {
+async function dispatchAgentMissionToBackend(
+    prompt: string,
+    quotaService: QuotaService,
+    executionMode: 'parallel' | 'series' = 'parallel',
+    dispatchStrategy: 'generate' | 'handoff' = 'handoff'
+) {
     const projectId = await getActiveProjectId();
     const serverUrl = 'http://localhost:3001/api/akasha';
 
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: `Antigravity Brain (${executionMode.toUpperCase()}): "${prompt.slice(0, 35)}..."`,
+        title: `Akasha (${dispatchStrategy.toUpperCase()}): "${prompt.slice(0, 35)}..."`,
         cancellable: false
     }, async (progress) => {
         try {
-            progress.report({ increment: 15, message: `Step 0: Connecting to Akasha Squad Orchestrator (${executionMode.toUpperCase()})...` });
+            progress.report({ increment: 15, message: `Connecting to Akasha Orchestrator (${dispatchStrategy})...` });
 
             const response = await fetch(`${serverUrl}/agent-squad/dispatch`, {
                 method: 'POST',
@@ -323,7 +327,8 @@ async function dispatchAgentMissionToBackend(prompt: string, quotaService: Quota
                 body: JSON.stringify({
                     projectId,
                     prompt,
-                    executionMode
+                    executionMode,
+                    dispatchStrategy
                 })
             });
 

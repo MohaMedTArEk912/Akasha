@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /preview/
+Disallow: /api/
+
+Sitemap: /sitemap.xml

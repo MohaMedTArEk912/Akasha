@@ -428,79 +428,27 @@ export class StorageService {
     }
 
     /**
-     * Cloud Sync: Synthesize and store all pages and components for a project in MongoDB
+     * Cloud Sync: Synthesize real full-stack files from the project blueprint and persist them to MongoDB GridFS
      */
     async syncProjectToCloud(projectId: string) {
         const project = await prisma.project.findUnique({ where: { id: projectId } });
         if (!project) throw new Error('Project not found');
 
-        const pages = await prisma.page.findMany({ where: { projectId } });
+        const { GeneratorService } = await import('./generator.js');
+        const generator = new GeneratorService();
+        const { files } = await generator.synthesizeFullStackFiles(projectId);
 
-        // Save boilerplate package.json in MongoDB
-        const packageJson = {
-            name: (project.name || 'project').toLowerCase().replace(/\s+/g, '-'),
-            private: true,
-            version: '0.1.0',
-            type: 'module',
-            dependencies: {
-                react: '^18.2.0',
-                'react-dom': '^18.2.0',
-                'react-router-dom': '^6.21.0',
-            },
-        };
-        await this.saveFile(projectId, 'package.json', JSON.stringify(packageJson, null, 2), 'application/json');
-
-        // Sync each page
-        for (const page of pages) {
-            const pageName = page.name.replace(/[^a-zA-Z0-9]/g, '');
-            const pageCode = `import React from 'react';
-
-export default function ${pageName}() {
-  return (
-    <div className="min-h-screen bg-white p-8">
-      <h1 className="text-3xl font-bold mb-4">${page.name}</h1>
-      <p className="text-gray-600">Page path: ${page.path || '/'}</p>
-    </div>
-  );
-}
-`;
-            await this.saveFile(projectId, `src/pages/${pageName}.tsx`, pageCode, 'text/typescript');
+        for (const f of files) {
+            await this.saveFile(projectId, f.path, f.content, f.mimeType);
         }
 
-        // Sync App.tsx
-        const pageImports = pages.map((p) => {
-            const pageName = p.name.replace(/[^a-zA-Z0-9]/g, '');
-            return `import ${pageName} from './pages/${pageName}';`;
-        }).join('\n');
-
-        const routes = pages.map((p) => {
-            const pageName = p.name.replace(/[^a-zA-Z0-9]/g, '');
-            const pathStr = p.path || (p.name === 'Home' ? '/' : `/${p.name.toLowerCase()}`);
-            return `<Route path="${pathStr}" element={<${pageName} />} />`;
-        }).join('\n          ');
-
-        const appTsx = `import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-${pageImports}
-
-export default function App() {
-  return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-slate-50">
-        <Routes>
-          ${routes}
-        </Routes>
-      </div>
-    </BrowserRouter>
-  );
-}
-`;
-        await this.saveFile(projectId, 'src/App.tsx', appTsx, 'text/typescript');
+        const pageCount = files.filter((f) => f.path.startsWith('client/src/pages/')).length;
 
         return {
             success: true,
-            message: 'All project files successfully synchronized to MongoDB Cloud Storage',
-            pageCount: pages.length,
+            message: `Synchronized ${files.length} full-stack files to MongoDB GridFS Cloud Storage`,
+            fileCount: files.length,
+            pageCount,
         };
     }
 }

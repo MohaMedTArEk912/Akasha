@@ -18,6 +18,10 @@ import githubRouter from './github.js';
 import storageRouter from './storage.js';
 import agentSquadRouter from './agentSquad.js';
 import mcpRouter from './mcp.js';
+import playbooksRouter from './playbooks.js';
+import featureSlicesRouter from './featureSlices.js';
+import previewRouter from './preview.js';
+import mockApiRouter from './mockApi.js';
 
 interface RouteMount {
     path: string;
@@ -43,14 +47,18 @@ const routeMounts: RouteMount[] = [
     { path: '/storage', router: storageRouter },
     { path: '/agent-squad', router: agentSquadRouter },
     { path: '/mcp', router: mcpRouter },
+    { path: '/playbooks', router: playbooksRouter },
+    { path: '/slices', router: featureSlicesRouter },
+    { path: '/preview', router: previewRouter },
 ];
 
 /**
  * Registers all API routes onto the Express application with dual-prefix support
- * (/api/* and /api/akasha/*)
+ * (/api/* and /api/akasha/*), plus the dynamic Live Stateful Mock API at /api/mock/*
  */
 export function registerApiRoutes(app: Application): void {
     for (const { path: subpath, router } of routeMounts) {
         app.use([`/api${subpath}`, `/api/akasha${subpath}`], router);
     }
+    app.use('/api/mock', mockApiRouter);
 }

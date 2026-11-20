@@ -35,10 +35,11 @@ client.interceptors.request.use((config) => {
     const ghSession = localStorage.getItem("gh_session")?.trim();
     const ghToken = (localStorage.getItem("gh_pat_token") || localStorage.getItem("gh_token"))?.trim();
     
-    config.headers["x-ai-provider"] = localStorage.getItem("akasha_provider") || "antigravity";
-    config.headers["x-ai-model"] = model || "antigravity-brain";
-    if (apiKey) config.headers["x-ai-api-key"] = apiKey;
-    if (apiBaseUrl) config.headers["x-ai-api-base-url"] = apiBaseUrl;
+    const provider = localStorage.getItem("akasha_provider")?.trim();
+    if (provider && provider !== "antigravity") config.headers["x-ai-provider"] = provider;
+    if (model && model !== "antigravity-brain") config.headers["x-ai-model"] = model;
+    if (apiKey && apiKey !== "antigravity-brain-active") config.headers["x-ai-api-key"] = apiKey;
+    if (apiBaseUrl && apiBaseUrl !== "/api/akasha") config.headers["x-ai-api-base-url"] = apiBaseUrl;
     if (token) config.headers["Authorization"] = `Bearer ${token}`;
     if (ghSession) {
       config.headers["x-gh-session"] = ghSession;

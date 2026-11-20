@@ -1,126 +1,506 @@
+/**
+ * Akasha V2 Real Full-Stack Code Generator
+ *
+ * Generates a complete, runnable React 18 + Tailwind + Express 5 + MongoDB full-stack
+ * application derived directly from the project's Data Models, REST APIs, Pages,
+ * Feature Slices, and Live Mock API seed records—zero placeholder stubs.
+ */
 
 import fs from 'fs-extra';
-import path from 'path';
+import path from 'node:path';
 import prisma from '../lib/prisma.js';
-import { SyncService } from './sync.js';
+import { safeJsonParse } from '../utils/safeJsonParse.js';
+import { compileProjectBlueprint, persistBlueprintToFile } from './structuredBlueprintService.js';
 import { pascalCase } from '../utils/string.js';
 
-export class GeneratorService {
-
-  public async generateFrontend(projectId: string, outputDir: string) {
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
-    if (!project) throw new Error("Project not found");
-
-    const syncService = new SyncService(outputDir);
-
-    // 1. Init Structure
-    await fs.ensureDir(path.join(outputDir, 'src'));
-    await fs.ensureDir(path.join(outputDir, 'src', 'pages'));
-    await fs.ensureDir(path.join(outputDir, 'src', 'components'));
-    await fs.ensureDir(path.join(outputDir, 'public'));
-
-    // 2. Generate Pages
-    const pages = await prisma.page.findMany({ where: { projectId } });
-    for (const page of pages) {
-      // Re-use sync service logic to write page files to the output dir
-      // We need to temporarily point SyncService to this output dir
-      await syncService.syncPageToDisk(page.id, projectId);
-    }
-
-    // 3. Generate App.tsx with Routing
-    await this.generateAppTsx(pages, outputDir);
-
-    // 4. Generate Main.tsx, Index.html, package.json etc.
-    await this.generateBoilerplate(project.name, outputDir);
-
-    return { success: true, path: outputDir };
-  }
-
-  private async generateAppTsx(pages: any[], outputDir: string) {
-    const imports = pages.map(p => `import ${pascalCase(p.name)} from './pages/${pascalCase(p.name)}';`).join('\n');
-    const routes = pages.map(p => {
-      const pathStr = p.path || (p.name === 'Home' ? '/' : `/${p.name.toLowerCase()}`);
-      return `<Route path="${pathStr}" element={<${pascalCase(p.name)} />} />`;
-    }).join('\n          ');
-
-    const content = `import { BrowserRouter, Routes, Route } from 'react-router-dom';
-${imports}
-
-function App() {
-  return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-slate-50">
-        <Routes>
-          ${routes}
-        </Routes>
-      </div>
-    </BrowserRouter>
-  );
+export interface GeneratedFileItem {
+    path: string;
+    content: string;
+    mimeType: string;
 }
 
-export default App;
-`;
-    await fs.writeFile(path.join(outputDir, 'src', 'App.tsx'), content);
+function toTsType(fieldType: string): string {
+    const t = String(fieldType || 'string').toLowerCase();
+    if (t === 'integer' || t === 'float' || t === 'number') return 'number';
+    if (t === 'boolean') return 'boolean';
+    if (t === 'json') return 'Record<string, unknown> | unknown[]';
+    return 'string';
+}
+
+function toResourceSlug(name: string, explicitResource?: string): string {
+    if (explicitResource) return explicitResource.toLowerCase();
+    return `${name.toLowerCase().replace(/[^a-z0-9]+/g, '')}s`;
+}
+
+export class GeneratorService {
+    /**
+     * Synthesizes all full-stack source files in memory (used by disk export, GridFS cloud sync, and browser download).
+     */
+    public async synthesizeFullStackFiles(projectId: string): Promise<{
+        projectName: string;
+        files: GeneratedFileItem[];
+    }> {
+        const project = await prisma.project.findUnique({ where: { id: projectId } });
+        if (!project) throw new Error('Project not found');
+
+        const [blueprint, rawModels, mockRecords] = await Promise.all([
+            compileProjectBlueprint(projectId),
+            prisma.dataModel.findMany({ where: { projectId } }).catch(() => []),
+            prisma.mockRecord.findMany({ where: { projectId } }).catch(() => []),
+        ]);
+
+        const activeModels = (rawModels || []).filter((m: any) => m.archived !== true);
+        const slugName = (project.name || 'akasha-app').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'akasha-app';
+        const files: GeneratedFileItem[] = [];
+
+        const addFile = (filePath: string, content: string, mimeType = 'text/plain') => {
+            files.push({ path: filePath, content, mimeType });
+        };
+
+        // ── 1. Root Metadata, Docker Compose, Env Example & Blueprint ──
+        addFile('.env.example', `PORT=4000\nMONGODB_URI=mongodb://127.0.0.1:27017/${slugName.replace(/-/g, '_')}\nCORS_ORIGIN=http://localhost:5173\n`);
+        addFile('docker-compose.yml', `services:\n  mongodb:\n    image: mongo:7\n    ports:\n      - "27017:27017"\n    volumes:\n      - mongo_data:/data/db\nvolumes:\n  mongo_data:\n`);
+        addFile('.akasha/blueprint.json', JSON.stringify(blueprint, null, 2), 'application/json');
+        addFile('.akasha/BLUEPRINT.md', blueprint.markdownSystemPrompt, 'text/markdown');
+        addFile('README.md', `# ${project.name}\n\n${project.description || 'Generated by Akasha V2 Small-Team Product Studio.'}\n\n## Quick Start\n\n\`\`\`bash\n# 1. Start MongoDB\ndocker compose up -d\n\n# 2. Run Backend\ncd server && npm install && npm run seed && npm run dev\n\n# 3. Run Frontend\ncd client && npm install && npm run dev\n\`\`\`\n\n## Included Feature Slices\n${blueprint.featureSlices.map(s => `- **[${s.lane.toUpperCase()}]** ${s.title}: ${s.summary}`).join('\n') || '- Core CRUD views & API'}\n`, 'text/markdown');
+
+        // ── 2. Server Package & Core Setup ──
+        addFile('server/package.json', JSON.stringify({
+            name: `${slugName}-server`,
+            version: '1.0.0',
+            private: true,
+            type: 'module',
+            scripts: {
+                dev: 'tsx watch src/server.ts',
+                build: 'tsc --noEmit && tsc',
+                start: 'node dist/server.js',
+                seed: 'tsx src/seed.ts',
+            },
+            dependencies: {
+                cors: '^2.8.5',
+                dotenv: '^16.4.5',
+                express: '^5.0.0',
+                mongodb: '^6.12.0',
+            },
+            devDependencies: {
+                '@types/cors': '^2.8.17',
+                '@types/express': '^5.0.0',
+                '@types/node': '^22.0.0',
+                tsx: '^4.19.0',
+                typescript: '^5.6.0',
+            },
+        }, null, 2), 'application/json');
+
+        addFile('server/tsconfig.json', JSON.stringify({
+            compilerOptions: {
+                target: 'ES2022',
+                module: 'NodeNext',
+                moduleResolution: 'NodeNext',
+                outDir: 'dist',
+                rootDir: 'src',
+                strict: true,
+                esModuleInterop: true,
+                skipLibCheck: true,
+            },
+            include: ['src/**/*'],
+        }, null, 2), 'application/json');
+
+        addFile('server/src/db.ts', `import { MongoClient, type Db } from 'mongodb';
+import 'dotenv/config';
+
+const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/${slugName.replace(/-/g, '_')}';
+let cachedDb: Db | null = null;
+
+export async function getDb(): Promise<Db> {
+  if (cachedDb) return cachedDb;
+  const client = new MongoClient(uri);
+  await client.connect();
+  cachedDb = client.db();
+  return cachedDb;
+}
+`, 'text/typescript');
+
+        // Typed Domain Models
+        const modelInterfaces = blueprint.entities.map((entity) => {
+            const props = entity.fields.map((f) => `  ${f.name}${f.required ? '' : '?'}: ${toTsType(f.type)};`).join('\n');
+            return `export interface ${pascalCase(entity.name)} {\n${props}\n  createdAt?: string;\n  updatedAt?: string;\n}`;
+        }).join('\n\n');
+
+        addFile('server/src/types/models.ts', modelInterfaces || 'export interface Item {\n  id: string;\n  title: string;\n  status: string;\n}\n', 'text/typescript');
+
+        // Entity Express Routers
+        const routeImports: string[] = [];
+        const routeMounts: string[] = [];
+
+        const entitiesToGenerate = blueprint.entities.length > 0
+            ? blueprint.entities
+            : [{ name: 'Item', fields: [{ name: 'id', type: 'uuid', required: true }, { name: 'title', type: 'string', required: true }, { name: 'status', type: 'string', required: true }] }];
+
+        for (const entity of entitiesToGenerate) {
+            const rawDoc = activeModels.find((m: any) => m.name.toLowerCase() === entity.name.toLowerCase());
+            const schema = safeJsonParse<Record<string, any>>(rawDoc?.schema, {});
+            const resource = toResourceSlug(entity.name, schema.resource);
+            const routeVar = `${pascalCase(entity.name)}Router`;
+            const requiredFields = entity.fields
+                .filter(f => f.required && !f.isId && f.name !== 'id' && f.name !== 'createdAt' && f.name !== 'updatedAt' && f.name !== 'status')
+                .map(f => f.name);
+
+            routeImports.push(`import ${routeVar} from './routes/${resource}.js';`);
+            routeMounts.push(`app.use('/api/v1/${resource}', ${routeVar});`);
+
+            addFile(`server/src/routes/${resource}.ts`, `import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
+import { getDb } from '../db.js';
+
+const router = Router();
+const COLLECTION = '${resource}';
+const REQUIRED_FIELDS = ${JSON.stringify(requiredFields)};
+
+router.get('/', async (req, res) => {
+  const db = await getDb();
+  const docs = await db.collection(COLLECTION).find({}).sort({ createdAt: -1 }).toArray();
+  const search = typeof req.query.search === 'string' ? req.query.search.trim().toLowerCase() : '';
+  const items = docs.map(({ _id, ...rest }) => rest).filter((item) => !search || JSON.stringify(item).toLowerCase().includes(search));
+  res.json({ data: items, total: items.length });
+});
+
+router.get('/:id', async (req, res) => {
+  const db = await getDb();
+  const doc = await db.collection(COLLECTION).findOne({ id: req.params.id });
+  if (!doc) return res.status(404).json({ error: '${entity.name} not found' });
+  const { _id, ...rest } = doc;
+  return res.json({ data: rest });
+});
+
+router.post('/', async (req, res) => {
+  const body = req.body || {};
+  const missing = REQUIRED_FIELDS.filter((f) => body[f] === undefined || body[f] === null || body[f] === '');
+  if (missing.length > 0) {
+    return res.status(400).json({ error: 'Missing required fields', details: missing });
   }
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const record = { ...body, id: body.id || randomUUID(), status: body.status || 'active', createdAt: now, updatedAt: now };
+  await db.collection(COLLECTION).insertOne(record);
+  return res.status(201).json({ data: record });
+});
 
-  private async generateBoilerplate(projectName: string, outputDir: string) {
-    // package.json
-    const packageJson = {
-      name: projectName.toLowerCase().replace(/\s+/g, '-'),
-      private: true,
-      version: "0.1.0",
-      type: "module",
-      scripts: {
-        dev: "vite",
-        build: "tsc && vite build",
-        preview: "vite preview"
-      },
-      dependencies: {
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-        "react-router-dom": "^6.21.0"
-      },
-      devDependencies: {
-        "@types/react": "^18.2.43",
-        "@types/react-dom": "^18.2.17",
-        "@vitejs/plugin-react": "^4.2.1",
-        "autoprefixer": "^10.4.16",
-        "postcss": "^8.4.32",
-        "tailwindcss": "^3.4.0",
-        "typescript": "^5.2.2",
-        "vite": "^5.0.8"
-      }
-    };
-    await fs.writeJson(path.join(outputDir, 'package.json'), packageJson, { spaces: 2 });
+router.patch('/:id', async (req, res) => {
+  const db = await getDb();
+  const updates = { ...(req.body || {}), updatedAt: new Date().toISOString() };
+  delete updates.id;
+  const result = await db.collection(COLLECTION).findOneAndUpdate(
+    { id: req.params.id },
+    { $set: updates },
+    { returnDocument: 'after' }
+  );
+  if (!result) return res.status(404).json({ error: '${entity.name} not found' });
+  const { _id, ...rest } = result;
+  return res.json({ data: rest });
+});
 
-    // vite.config.ts
-    const viteConfig = `import { defineConfig } from 'vite';
+router.delete('/:id', async (req, res) => {
+  const db = await getDb();
+  const resDel = await db.collection(COLLECTION).deleteOne({ id: req.params.id });
+  if (resDel.deletedCount === 0) return res.status(404).json({ error: '${entity.name} not found' });
+  return res.json({ success: true });
+});
+
+export default router;
+`, 'text/typescript');
+        }
+
+        // Seed script derived from Live Mock API records
+        const seedByResource: Record<string, any[]> = {};
+        for (const r of mockRecords || []) {
+            const resName = String(r.resource || 'items').toLowerCase();
+            if (!seedByResource[resName]) seedByResource[resName] = [];
+            seedByResource[resName]!.push(r.data);
+        }
+        addFile('server/src/seed.ts', `import { getDb } from './db.js';
+
+const SEED_DATA: Record<string, any[]> = ${JSON.stringify(seedByResource, null, 2)};
+
+async function run() {
+  const db = await getDb();
+  for (const [collection, rows] of Object.entries(SEED_DATA)) {
+    if (!rows.length) continue;
+    await db.collection(collection).deleteMany({});
+    await db.collection(collection).insertMany(rows);
+    console.log(\`Seeded \${rows.length} records into \${collection}\`);
+  }
+  process.exit(0);
+}
+
+run().catch((err) => { console.error(err); process.exit(1); });
+`, 'text/typescript');
+
+        addFile('server/src/server.ts', `import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+${routeImports.join('\n')}
+
+const app = express();
+const PORT = Number(process.env.PORT || 4000);
+
+app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
+app.use(express.json());
+
+app.get('/health', (_req, res) => res.json({ status: 'ok', app: ${JSON.stringify(project.name)} }));
+${routeMounts.join('\n')}
+
+app.listen(PORT, () => {
+  console.log(\`${project.name} API listening on http://localhost:\${PORT}\`);
+});
+`, 'text/typescript');
+
+        // ── 3. Client React 18 + Vite + Tailwind App ──
+        addFile('client/package.json', JSON.stringify({
+            name: `${slugName}-client`,
+            version: '1.0.0',
+            private: true,
+            type: 'module',
+            scripts: {
+                dev: 'vite',
+                build: 'tsc --noEmit && vite build',
+                preview: 'vite preview',
+            },
+            dependencies: {
+                react: '^18.3.1',
+                'react-dom': '^18.3.1',
+                'react-router-dom': '^6.28.0',
+            },
+            devDependencies: {
+                '@types/react': '^18.3.12',
+                '@types/react-dom': '^18.3.1',
+                '@vitejs/plugin-react': '^4.3.3',
+                autoprefixer: '^10.4.20',
+                postcss: '^8.4.49',
+                tailwindcss: '^3.4.15',
+                typescript: '^5.6.3',
+                vite: '^5.4.11',
+            },
+        }, null, 2), 'application/json');
+
+        addFile('client/tsconfig.json', JSON.stringify({
+            compilerOptions: {
+                target: 'ES2022',
+                lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+                module: 'ESNext',
+                moduleResolution: 'Bundler',
+                jsx: 'react-jsx',
+                strict: true,
+                noEmit: true,
+                skipLibCheck: true,
+            },
+            include: ['src'],
+        }, null, 2), 'application/json');
+
+        addFile('client/vite.config.ts', `import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: { '/api': 'http://localhost:4000' },
+  },
 });
-`;
-    await fs.writeFile(path.join(outputDir, 'vite.config.ts'), viteConfig);
+`, 'text/typescript');
 
-    // index.html
-    const indexHtml = `<!DOCTYPE html>
+        addFile('client/index.html', `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${projectName}</title>
+    <title>${project.name}</title>
   </head>
-  <body>
+  <body class="bg-slate-950 text-slate-100">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-`;
-    await fs.writeFile(path.join(outputDir, 'index.html'), indexHtml);
+`, 'text/html');
 
-    // main.tsx
-    const mainTsx = `import React from 'react';
+        addFile('client/src/index.css', `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n`, 'text/css');
+        addFile('client/tailwind.config.js', `export default {\n  content: ['./index.html', './src/**/*.{ts,tsx}'],\n  theme: { extend: {} },\n  plugins: [],\n};\n`, 'text/javascript');
+        addFile('client/postcss.config.js', `export default { plugins: { tailwindcss: {}, autoprefixer: {} } };\n`, 'text/javascript');
+
+        addFile('client/src/lib/api.ts', `const API_BASE = '/api/v1';
+
+export async function apiRequest<T = any>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(\`\${API_BASE}\${path}\`, {
+    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    ...init,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || \`HTTP \${res.status}\`);
+  return json as T;
+}
+`, 'text/typescript');
+
+        const pagesToGen = blueprint.pages.length > 0
+            ? blueprint.pages
+            : [{ id: 'home', name: 'Dashboard', path: '/', componentCount: 1, description: project.description }];
+
+        const pageImports: string[] = [];
+        const navLinks: string[] = [];
+        const routeElements: string[] = [];
+
+        for (const page of pagesToGen) {
+            const compName = `${pascalCase(page.name)}Page`;
+            const matchingEntity = entitiesToGenerate.find(e =>
+                page.name.toLowerCase().includes(e.name.toLowerCase())
+            ) || entitiesToGenerate[0]!;
+            const rawDoc = activeModels.find((m: any) => m.name.toLowerCase() === matchingEntity.name.toLowerCase());
+            const schema = safeJsonParse<Record<string, any>>(rawDoc?.schema, {});
+            const resource = toResourceSlug(matchingEntity.name, schema.resource);
+            const editableFields = matchingEntity.fields.filter(f => !f.isId && f.name !== 'id' && f.name !== 'createdAt' && f.name !== 'updatedAt').slice(0, 5);
+
+            pageImports.push(`import ${compName} from './pages/${compName}';`);
+            navLinks.push(`<Link to="${page.path || '/'}" className="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white">${page.name}</Link>`);
+            routeElements.push(`<Route path="${page.path || '/'}" element={<${compName} />} />`);
+
+            addFile(`client/src/pages/${compName}.tsx`, `import React, { useEffect, useState } from 'react';
+import { apiRequest } from '../lib/api';
+
+const FIELDS = ${JSON.stringify(editableFields.map(f => ({ name: f.name, type: f.type, required: f.required })))};
+
+export default function ${compName}() {
+  const [items, setItems] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [formState, setFormState] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const res = await apiRequest<{ data: any[] }>('/${resource}');
+      setItems(res.data || []);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const payload: Record<string, unknown> = {};
+    for (const f of FIELDS) {
+      const val = formState[f.name];
+      if (val !== undefined && val !== '') {
+        payload[f.name] = f.type === 'integer' || f.type === 'float' ? Number(val) : val;
+      }
+    }
+    try {
+      await apiRequest('/${resource}', { method: 'POST', body: JSON.stringify(payload) });
+      setFormState({});
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await apiRequest('/${resource}/' + encodeURIComponent(id), { method: 'DELETE' });
+    await load();
+  };
+
+  const visible = items.filter((item) => !search || JSON.stringify(item).toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">${page.name}</h1>
+          <p className="text-sm text-slate-400">${page.description || `Manage ${matchingEntity.name} records`}</p>
+        </div>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search ${resource}..."
+          className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-sm text-white"
+        />
+      </div>
+
+      {error && <div className="p-3 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-sm">{error}</div>}
+
+      <form onSubmit={handleCreate} className="p-4 rounded-xl bg-slate-900 border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3">
+        {FIELDS.map((f) => (
+          <input
+            key={f.name}
+            type={f.type === 'integer' || f.type === 'float' ? 'number' : 'text'}
+            required={f.required}
+            placeholder={f.name}
+            value={formState[f.name] || ''}
+            onChange={(e) => setFormState((prev) => ({ ...prev, [f.name]: e.target.value }))}
+            className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-sm text-white"
+          />
+        ))}
+        <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold">
+          + Add ${matchingEntity.name}
+        </button>
+      </form>
+
+      <div className="rounded-xl bg-slate-900 border border-slate-800 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-slate-800 text-slate-400 text-xs uppercase">
+            <tr>
+              {FIELDS.map((f) => <th key={f.name} className="p-3">{f.name}</th>)}
+              <th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((item) => (
+              <tr key={item.id} className="border-b border-slate-800/60">
+                {FIELDS.map((f) => <td key={f.name} className="p-3 text-slate-200">{String(item[f.name] ?? '—')}</td>)}
+                <td className="p-3">
+                  <button onClick={() => handleDelete(item.id)} className="text-xs px-2.5 py-1 rounded bg-rose-500/15 text-rose-300 hover:bg-rose-500/25">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {visible.length === 0 && (
+              <tr><td colSpan={FIELDS.length + 1} className="p-6 text-center text-slate-500">No records found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+`, 'text/typescript');
+        }
+
+        const firstPath = pagesToGen[0]?.path || '/';
+        addFile('client/src/App.tsx', `import { BrowserRouter, Routes, Route, Link, Navigate } from 'react-router-dom';
+${pageImports.join('\n')}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <header className="border-b border-slate-800 bg-slate-900/70 backdrop-blur px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+          <span className="font-bold text-white">${project.name}</span>
+          <nav className="flex items-center gap-2 flex-wrap">
+            ${navLinks.join('\n            ')}
+          </nav>
+        </header>
+        <main className="max-w-6xl mx-auto p-6">
+          <Routes>
+            ${routeElements.join('\n            ')}
+            <Route path="*" element={<Navigate to="${firstPath}" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </BrowserRouter>
+  );
+}
+`, 'text/typescript');
+
+        addFile('client/src/main.tsx', `import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
@@ -128,41 +508,42 @@ import './index.css';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
+  </React.StrictMode>
 );
-`;
-    await fs.writeFile(path.join(outputDir, 'src', 'main.tsx'), mainTsx);
+`, 'text/typescript');
 
-    // index.css (Tailwind)
-    const indexCss = `@tailwind base;
-@tailwind components;
-@tailwind utilities;
-`;
-    await fs.writeFile(path.join(outputDir, 'src', 'index.css'), indexCss);
+        return { projectName: project.name, files };
+    }
 
-    // tailwind.config.js
-    const tailwindConfig = `/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-};
-`;
-    await fs.writeFile(path.join(outputDir, 'tailwind.config.js'), tailwindConfig);
+    /**
+     * Generates and writes the complete runnable full-stack project to disk.
+     */
+    public async generateFullStack(projectId: string, outputDir: string) {
+        const { projectName, files } = await this.synthesizeFullStackFiles(projectId);
+        await fs.ensureDir(outputDir);
 
-    // postcss.config.js
-    const postcssConfig = `export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};
-`;
-    await fs.writeFile(path.join(outputDir, 'postcss.config.js'), postcssConfig);
-  }
+        const writtenFiles: string[] = [];
+        for (const f of files) {
+            const target = path.join(outputDir, f.path);
+            await fs.ensureDir(path.dirname(target));
+            await fs.writeFile(target, f.content, 'utf-8');
+            writtenFiles.push(f.path);
+        }
+
+        const blueprint = await compileProjectBlueprint(projectId);
+        await persistBlueprintToFile(outputDir, blueprint);
+
+        return {
+            success: true,
+            projectName,
+            path: outputDir,
+            fileCount: writtenFiles.length,
+            files: writtenFiles,
+        };
+    }
+
+    /** Backwards-compatible alias */
+    public async generateFrontend(projectId: string, outputDir: string) {
+        return this.generateFullStack(projectId, outputDir);
+    }
 }

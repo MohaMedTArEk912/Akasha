@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="akasha-bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2E6BFF" />
+      <stop offset="100%" stop-color="#1347D6" />
+    </linearGradient>
+    <linearGradient id="akasha-shine" x1="32" y1="0" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.24" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#akasha-bg)" />
+  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="15.25" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1.5" />
+  <rect x="2" y="2" width="60" height="30" rx="16" fill="url(#akasha-shine)" />
+  <!-- Geometric Architectural A Monogram -->
+  <path
+    d="M32 14.5L17.5 48H24.6L27.55 40.6H36.45L39.4 48H46.5L32 14.5ZM29.75 34.9L32 28.95L34.25 34.9H29.75Z"
+    fill="#FFFFFF"
+  />
+  <!-- Blueprint precision accent bar -->
+  <rect x="25.5" y="45" width="13" height="3" rx="1.5" fill="#93C5FD" />
+</svg>

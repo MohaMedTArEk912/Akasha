@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import * as ctrl from '../controllers/aiController.js';
 import * as uiBuilderCtrl from '../controllers/uiBuilderAiController.js';
+import { getAiProviderStatus } from '../controllers/playbooksController.js';
 
 const router = Router();
+
+// Explicit Hybrid AI Provider Health
+router.get('/provider-status', getAiProviderStatus);
 
 // Team Management
 router.post('/register', ctrl.register);

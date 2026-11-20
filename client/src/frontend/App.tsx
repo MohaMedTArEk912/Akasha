@@ -1,42 +1,50 @@
 /**
- * Akasha — Main Application - React version
- * 
- * Web-Based Visual Full-Stack IDE
+ * Akasha — Main Application
+ * Small-Team Product Studio + Shareable Live Prototype Preview (`/preview/:projectId`)
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, lazy, Suspense } from "react";
+import { MotionConfig } from "motion/react";
 import "./index.css";
 
-// Components
 import IDELayout from "./components/layout/IDELayout";
 import DashboardLanding from "./pages/DashboardLanding";
-import ErrorBoundary from './components/ui/ErrorBoundary';
+import ErrorBoundary from "./components/ui/ErrorBoundary";
 import FloatingBot from "./components/features/Bot/FloatingBot";
 
-// Stores
 import { initWorkspace } from "./stores/projectStore";
-// Hooks
 import { useProjectStore } from "./hooks/useProjectStore";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-// Context
 import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { DragDropProvider } from "./context/DragDropContext";
 import { SettingsProvider } from "./context/SettingsContext";
 import { BackgroundLoadingProvider } from "./context/BackgroundLoadingContext";
-
 import { handleAddLibraryFromUrlIfPresent } from "./utils/excalidrawLibrarySync";
 
+const ShareablePreviewPage = lazy(() => import("./pages/ShareablePreviewPage"));
+
+function parsePreviewRoute(): { projectId: string; token?: string } | null {
+  if (typeof window === "undefined") return null;
+  const match = window.location.pathname.match(/^\/preview\/([^/]+)\/?$/);
+  if (!match || !match[1]) return null;
+  const params = new URLSearchParams(window.location.search);
+  return {
+    projectId: decodeURIComponent(match[1]),
+    token: params.get("token") || undefined,
+  };
+}
+
 const AppContent: React.FC = () => {
+  const previewRoute = parsePreviewRoute();
   const { project, isDashboardActive } = useProjectStore();
   useKeyboardShortcuts();
 
-  // Initialize workspace, restore project, and handle library imports
   useEffect(() => {
+    if (previewRoute) return;
     const initialize = async () => {
       try {
         await initWorkspace();
-        // Check if page loaded with #addLibrary=<url>
         await handleAddLibraryFromUrlIfPresent();
       } catch (err) {
         console.error("Initialization failed:", err);
@@ -49,9 +57,23 @@ const AppContent: React.FC = () => {
     };
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
-  }, []);
+  }, [Boolean(previewRoute)]);
 
-  // Main navigation logic
+  // Standalone Shareable Prototype Preview Route (`/preview/:projectId?token=...`)
+  if (previewRoute) {
+    return (
+      <Suspense
+        fallback={
+          <div className="h-screen w-screen bg-[#F7F8FA] dark:bg-[#0E1117] text-[#475467] dark:text-slate-300 flex items-center justify-center text-sm font-medium">
+            Loading live prototype...
+          </div>
+        }
+      >
+        <ShareablePreviewPage projectId={previewRoute.projectId} token={previewRoute.token} />
+      </Suspense>
+    );
+  }
+
   if (isDashboardActive || !project) {
     return <DashboardLanding />;
   }
@@ -67,15 +89,17 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <SettingsProvider>
-        <ThemeProvider>
-          <ToastProvider>
-            <BackgroundLoadingProvider>
-              <AppContent />
-            </BackgroundLoadingProvider>
-          </ToastProvider>
-        </ThemeProvider>
-      </SettingsProvider>
+      <MotionConfig reducedMotion="user">
+        <SettingsProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <BackgroundLoadingProvider>
+                <AppContent />
+              </BackgroundLoadingProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </SettingsProvider>
+      </MotionConfig>
     </ErrorBoundary>
   );
 };

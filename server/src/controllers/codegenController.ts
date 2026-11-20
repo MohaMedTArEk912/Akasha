@@ -75,10 +75,25 @@ export async function exportProject(req: Request, res: Response) {
             }
         }
 
-        const result = await generatorService.generateFrontend(projectId, targetDir);
+        const result = await generatorService.generateFullStack(projectId, targetDir);
         res.json(result);
     } catch (error) {
         console.error('Export error:', error);
         res.status(500).json({ error: 'Failed to export project' });
+    }
+}
+
+export async function getGeneratedBundle(req: Request, res: Response) {
+    try {
+        const projectId = Array.isArray(req.params.projectId) ? req.params.projectId[0] : req.params.projectId;
+        if (!projectId) {
+            res.status(400).json({ error: 'Project ID required' });
+            return;
+        }
+        const bundle = await generatorService.synthesizeFullStackFiles(projectId);
+        res.json({ success: true, ...bundle });
+    } catch (error: any) {
+        console.error('Bundle synthesis error:', error);
+        res.status(500).json({ error: error?.message || 'Failed to synthesize full-stack bundle' });
     }
 }

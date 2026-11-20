@@ -48,6 +48,14 @@ export type PrismaLikeClient = {
 	teamChat: ModelDelegate;
 	teamIdea: ModelDelegate;
 	ideaPipeline: ModelDelegate;
+	featureSlice: ModelDelegate;
+	projectComment: ModelDelegate;
+	projectDecision: ModelDelegate;
+	mockRecord: ModelDelegate;
+	agentMission: ModelDelegate;
+	agentTelemetry: ModelDelegate;
+	quotaProfile: ModelDelegate;
+	driftReport: ModelDelegate;
 	$transaction: <T>(arg: ((tx: PrismaLikeClient) => Promise<T> | T) | Array<Promise<T>>) => Promise<T | T[]>;
 	$connect: () => Promise<void>;
 	$disconnect: () => Promise<void>;
@@ -132,6 +140,56 @@ const MODEL_CONFIG: Record<string, ModelConfig> = {
 	teamChat: { collection: 'TeamChat', idField: 'id', relations: {} },
 	teamIdea: { collection: 'TeamIdea', idField: 'id', relations: {} },
 	ideaPipeline: { collection: 'IdeaPipeline', idField: 'id', relations: {} },
+	featureSlice: {
+		collection: 'FeatureSlice',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	projectComment: {
+		collection: 'ProjectComment',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	projectDecision: {
+		collection: 'ProjectDecision',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	mockRecord: {
+		collection: 'MockRecord',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	agentMission: {
+		collection: 'AgentMission',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	agentTelemetry: {
+		collection: 'AgentTelemetry',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
+	quotaProfile: { collection: 'QuotaProfile', idField: 'id', relations: {} },
+	driftReport: {
+		collection: 'DriftReport',
+		idField: 'id',
+		relations: {
+			project: { model: 'project', type: 'one', localField: 'projectId', foreignField: 'id' },
+		},
+	},
 };
 
 function isPlainObject(value: unknown): value is Dict {
