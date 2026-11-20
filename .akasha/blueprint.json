@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "storage": "Antigravity Workspace",
+  "tokenSavings": "92%",
+  "compiledAt": "2026-10-12T16:11:05.665Z",
+  "rules": [
+    "Structure-first token optimization enabled",
+    "Follow defined data models and REST contracts",
+    "Zero ungrounded schemas or hallucinated routes"
+  ]
+}

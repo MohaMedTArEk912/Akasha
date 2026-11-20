@@ -28,6 +28,7 @@ const TeamSpacePage = lazy(() => import("../../pages/TeamSpacePage"));
 const InitiationWizard = lazy(() => import("../project/InitiationWizard"));
 const ProjectDashboard = lazy(() => import("../../pages/ProjectDashboard"));
 const AgentMissionControlPage = lazy(() => import("../../pages/AgentMissionControlPage"));
+const MotionLabPage = lazy(() => import("../../pages/MotionLabPage"));
 
 import {
     LayoutDashboard,
@@ -44,7 +45,9 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Cpu,
+    Wand2,
 } from "lucide-react";
+
 
 /* ───── Navigation Item Definitions ───── */
 export interface AsideNavItemDef {
@@ -72,6 +75,14 @@ const BLUEPRINT_NAV_ITEMS: AsideNavItemDef[] = [
         badge: "AI",
         description: "Antigravity Squad Cockpit",
         icon: Cpu,
+    },
+    {
+        id: "motion-lab",
+        label: "Motion Lab",
+        shortLabel: "Motion",
+        badge: "NEW",
+        description: "Animation Studio & Primitives",
+        icon: Wand2,
     },
     {
         id: "idea",
@@ -220,6 +231,7 @@ const IDELayout: React.FC = () => {
         switch (activePage) {
             case "dashboard": return <ProjectDashboard />;
             case "agent-squad": return <AgentMissionControlPage />;
+            case "motion-lab": return <MotionLabPage />;
             case "idea": return <IdeaPage />;
             case "ui": return <UIIdeationPage />;
             case "usecases": return <UseCasesPage />;

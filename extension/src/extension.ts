@@ -149,14 +149,10 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (!prompt) return;
 
-            // Debit tokens for action
-            quotaService.consumeTokens(1250, 'antigravity_task');
-
-            vscode.window.showInformationMessage(
-                `🚀 Antigravity Brain is executing: "${prompt}". Following the 6-step loop.`
-            );
+            await dispatchAgentMissionToBackend(prompt, quotaService);
         })
     );
+
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.synthesizeProject', async () => {
@@ -206,6 +202,13 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('akasha.openMotionLab', () => {
+            vscode.env.openExternal(vscode.Uri.parse('http://localhost:5173'));
+            vscode.window.showInformationMessage('🎨 Opening Akasha Motion & Animation Studio (port 5173)...');
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('akasha.dispatchSquadParallel', async () => {
             const prompt = await vscode.window.showInputBox({
                 prompt: 'Enter mission for Antigravity Squad (Parallel Mode):',
@@ -213,23 +216,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
             if (!prompt) return;
 
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: 'Antigravity Squad (Parallel): Executing mission...',
-                cancellable: false
-            }, async (progress) => {
-                progress.report({ increment: 20, message: 'Lead Architect: Verifying blueprint contracts...' });
-                await new Promise(r => setTimeout(r, 600));
-
-                progress.report({ increment: 50, message: 'Frontend & Backend: Synthesizing in PARALLEL...' });
-                await new Promise(r => setTimeout(r, 900));
-
-                progress.report({ increment: 30, message: 'QA Self-Healer: Verifying build diagnostics...' });
-                await new Promise(r => setTimeout(r, 500));
-
-                quotaService.consumeTokens(1850, 'squad_parallel_dispatch');
-                vscode.window.showInformationMessage('⚡ Antigravity Squad (Parallel) completed mission successfully! Check Mission Control.');
-            });
+            await dispatchAgentMissionToBackend(prompt, quotaService, 'parallel');
         })
     );
 
@@ -241,28 +228,10 @@ export function activate(context: vscode.ExtensionContext) {
             });
             if (!prompt) return;
 
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: 'Antigravity Squad (Series): Running sequential pipeline...',
-                cancellable: false
-            }, async (progress) => {
-                progress.report({ increment: 25, message: 'Phase 1: Architect spec decomposition...' });
-                await new Promise(r => setTimeout(r, 500));
-
-                progress.report({ increment: 25, message: 'Phase 2: Frontend component generation...' });
-                await new Promise(r => setTimeout(r, 600));
-
-                progress.report({ increment: 25, message: 'Phase 3: Backend REST controllers...' });
-                await new Promise(r => setTimeout(r, 600));
-
-                progress.report({ increment: 25, message: 'Phase 4: QA diagnostic verification...' });
-                await new Promise(r => setTimeout(r, 500));
-
-                quotaService.consumeTokens(1850, 'squad_series_dispatch');
-                vscode.window.showInformationMessage('⛓ Antigravity Squad (Series) pipeline completed successfully!');
-            });
+            await dispatchAgentMissionToBackend(prompt, quotaService, 'series');
         })
     );
+
 
     context.subscriptions.push(
         vscode.commands.registerCommand('akasha.syncBlueprint', async () => {
@@ -320,3 +289,112 @@ export function deactivate() {
         statusBarItem.dispose();
     }
 }
+
+async function getActiveProjectId(): Promise<string> {
+    const folders = vscode.workspace.workspaceFolders;
+    if (folders && folders.length > 0) {
+        try {
+            const blueprintUri = vscode.Uri.joinPath(folders[0].uri, '.akasha', 'blueprint.json');
+            const data = await vscode.workspace.fs.readFile(blueprintUri);
+            const parsed = JSON.parse(Buffer.from(data).toString('utf8'));
+            if (parsed.projectId) return parsed.projectId;
+        } catch {
+            // Blueprint file not present or unparseable
+        }
+    }
+    return 'default_project';
+}
+
+async function dispatchAgentMissionToBackend(prompt: string, quotaService: QuotaService, executionMode: 'parallel' | 'series' = 'parallel') {
+    const projectId = await getActiveProjectId();
+    const serverUrl = 'http://localhost:3001/api/akasha';
+
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Antigravity Brain (${executionMode.toUpperCase()}): "${prompt.slice(0, 35)}..."`,
+        cancellable: false
+    }, async (progress) => {
+        try {
+            progress.report({ increment: 15, message: `Step 0: Connecting to Akasha Squad Orchestrator (${executionMode.toUpperCase()})...` });
+
+            const response = await fetch(`${serverUrl}/agent-squad/dispatch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectId,
+                    prompt,
+                    executionMode
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+
+            quotaService.consumeTokens(1250, 'antigravity_task');
+
+            // Poll for completion
+            let isRunning = true;
+            let attempts = 0;
+            let lastProgress = 15;
+
+            while (isRunning && attempts < 40) {
+                attempts++;
+                await new Promise(r => setTimeout(r, 1000));
+
+                try {
+                    const statusRes = await fetch(`${serverUrl}/agent-squad/mission/${projectId}`);
+                    if (statusRes.ok) {
+                        const statusData: any = await statusRes.json();
+                        const mission = statusData?.mission;
+                        if (mission) {
+                            const newPct = Math.min(95, Math.max(lastProgress, mission.progress || 0));
+                            const delta = newPct - lastProgress;
+                            if (delta > 0) {
+                                lastProgress = newPct;
+                                const latestLog = mission.logs?.[0];
+                                progress.report({
+                                    increment: delta,
+                                    message: latestLog ? `[${latestLog.agentName}]: ${latestLog.stepName}` : `Progress ${newPct}%`
+                                });
+                            }
+
+                            if (mission.status === 'completed' || mission.status === 'failed') {
+                                isRunning = false;
+                                if (mission.status === 'failed') {
+                                    throw new Error(mission.error || 'Mission execution failed');
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    // Ignore transient network errors during poll
+                }
+            }
+
+            progress.report({ increment: 100 - lastProgress, message: 'Mission Complete!' });
+
+            const action = await vscode.window.showInformationMessage(
+                `⚡ Antigravity Brain completed mission: "${prompt.slice(0, 40)}"`,
+                'Open Mission Control',
+                'Live App Preview'
+            );
+
+            if (action === 'Open Mission Control') {
+                vscode.commands.executeCommand('akasha.openDashboard');
+            } else if (action === 'Live App Preview') {
+                vscode.commands.executeCommand('akasha.openPreview');
+            }
+        } catch (err: any) {
+            vscode.window.showWarningMessage(
+                `Akasha Server at ${serverUrl} is not reachable (${err.message}). Start the server with 'npm run dev' to enable full autonomous dispatch.`,
+                'Open Dashboard'
+            ).then((choice) => {
+                if (choice === 'Open Dashboard') {
+                    vscode.commands.executeCommand('akasha.openDashboard');
+                }
+            });
+        }
+    });
+}
+

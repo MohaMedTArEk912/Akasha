@@ -41,6 +41,9 @@ export class DashboardPanel {
                     case 'OPEN_BROWSER':
                         vscode.commands.executeCommand('akasha.openPreview');
                         break;
+                    case 'OPEN_MOTION_LAB':
+                        vscode.commands.executeCommand('akasha.openMotionLab');
+                        break;
                     case 'DISPATCH_SQUAD_PARALLEL':
                         vscode.commands.executeCommand('akasha.dispatchSquadParallel');
                         break;
@@ -485,6 +488,9 @@ export class DashboardPanel {
     </div>
 
     <div class="header-actions">
+      <button class="btn" style="border-color: rgba(6, 182, 212, 0.4); color: #67e8f9; font-weight: 700;" onclick="openMotionLab()">
+        🎨 Motion Studio
+      </button>
       <button class="btn" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399; font-weight: 700;" onclick="saveToAntigravity()">
         💾 Save to Antigravity
       </button>
@@ -779,6 +785,10 @@ export class DashboardPanel {
 
     function openBrowser() {
       vscode.postMessage({ type: 'OPEN_BROWSER' });
+    }
+
+    function openMotionLab() {
+      vscode.postMessage({ type: 'OPEN_MOTION_LAB' });
     }
 
     function dispatchSquadParallel() {

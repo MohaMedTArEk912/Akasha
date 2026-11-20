@@ -101,6 +101,11 @@
         "command": "akasha.syncBlueprint",
         "title": "Akasha: Sync Structured Blueprint (.json)",
         "icon": "$(file-code)"
+      },
+      {
+        "command": "akasha.openMotionLab",
+        "title": "Akasha: Open Motion & Animation Studio",
+        "icon": "$(wand)"
       }
     ],
     "menus": {
@@ -136,12 +141,23 @@
           "group": "navigation@4"
         }
       ]
+    },
+    "configuration": {
+      "title": "Akasha Studio",
+      "properties": {
+        "akasha.autoCloseSidebarOnOpenDashboard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically close the sidebar when opening the main dashboard from the Activity Bar icon."
+        }
+      }
     }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "update-installed": "npm run compile && powershell -Command \"Copy-Item -Path './dist' -Destination '$HOME/.antigravity-ide/extensions/akasha-team.akasha-antigravity-studio-1.0.0/' -Recurse -Force; Copy-Item -Path './package.json' -Destination '$HOME/.antigravity-ide/extensions/akasha-team.akasha-antigravity-studio-1.0.0/package.json' -Force\""
   },
   "devDependencies": {
     "@types/node": "^20.x",

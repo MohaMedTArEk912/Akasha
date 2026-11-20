@@ -24,11 +24,25 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        // Auto-open main dashboard immediately on click / activation
+        this._openDashboardAndOptionallyCloseSidebar();
+
+        // Listen for visibility changes (e.g. when user clicks activity bar icon again)
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                this._openDashboardAndOptionallyCloseSidebar();
+            }
+        });
+
         // Listen for messages from the Webview
         webviewView.webview.onDidReceiveMessage(async (data: any) => {
             switch (data.type) {
                 case 'OPEN_FULL_DASHBOARD': {
-                    vscode.commands.executeCommand('akasha.openDashboard');
+                    this._openDashboardAndOptionallyCloseSidebar();
+                    break;
+                }
+                case 'CLOSE_SIDEBAR': {
+                    vscode.commands.executeCommand('workbench.action.closeSidebar');
                     break;
                 }
                 case 'ASK_ANTIGRAVITY': {
@@ -59,6 +73,10 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
                     vscode.commands.executeCommand('akasha.openPreview');
                     break;
                 }
+                case 'OPEN_MOTION_LAB': {
+                    vscode.commands.executeCommand('akasha.openMotionLab');
+                    break;
+                }
                 case 'DISPATCH_SQUAD_PARALLEL': {
                     vscode.commands.executeCommand('akasha.dispatchSquadParallel');
                     break;
@@ -84,6 +102,18 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
         });
     }
 
+    private _openDashboardAndOptionallyCloseSidebar() {
+        vscode.commands.executeCommand('akasha.openDashboard');
+
+        const config = vscode.workspace.getConfiguration('akasha');
+        const autoClose = config.get<boolean>('autoCloseSidebarOnOpenDashboard', true);
+        if (autoClose) {
+            setTimeout(() => {
+                vscode.commands.executeCommand('workbench.action.closeSidebar');
+            }, 120);
+        }
+    }
+
     public updateWebviewState() {
         if (!this._view) return;
         const quota = this._quotaService.getQuota();
@@ -102,7 +132,7 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Akasha Studio with Antigravity</title>
+  <title>Akasha Studio</title>
   <style>
     :root {
       --bg-dark: #090d16;
@@ -116,20 +146,24 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       --success: #10b981;
     }
 
+    * { box-sizing: border-box; }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
-      padding: 14px;
+      padding: 16px 12px;
       color: var(--text-main);
       background: transparent;
       user-select: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 14px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border-color);
     }
@@ -154,19 +188,110 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
       letter-spacing: 0.04em;
     }
 
-    .card {
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10.5px;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .launcher-card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 12px;
+      border-radius: 14px;
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
       backdrop-filter: blur(14px);
+    }
+
+    .icon-glow {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.2));
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .action-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .action-btn.primary {
+      background: linear-gradient(135deg, #4f46e5, #0891b2);
+      color: white;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .action-btn.primary:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+      box-shadow: 0 0 22px rgba(6, 182, 212, 0.5);
+    }
+
+    .action-btn.secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      font-weight: 500;
+      font-size: 11px;
+      padding: 7px 10px;
+    }
+
+    .action-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .quota-card {
+      background: rgba(17, 24, 39, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 12px;
     }
 
     .quota-header {
       display: flex;
       justify-content: space-between;
-      font-size: 11.5px;
+      font-size: 10.5px;
       color: var(--text-muted);
       margin-bottom: 6px;
     }
@@ -174,9 +299,9 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     .progress-bar-bg {
       background: rgba(255, 255, 255, 0.06);
       border-radius: 999px;
-      height: 7px;
+      height: 5px;
       overflow: hidden;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .progress-bar-fill {
@@ -190,106 +315,8 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     .quota-stats {
       display: flex;
       justify-content: space-between;
-      font-size: 10.5px;
-      font-weight: 600;
-    }
-
-    .status-pill {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 10.5px;
-      color: #38bdf8;
-      background: rgba(56, 189, 248, 0.1);
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      padding: 3px 8px;
-      border-radius: 6px;
-    }
-
-    .action-btn {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      background: #1e293b;
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 11.5px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-bottom: 7px;
-      transition: all 0.2s ease;
-    }
-
-    .action-btn:hover {
-      background: #334155;
-      border-color: var(--accent);
-      box-shadow: 0 0 12px var(--accent-glow);
-    }
-
-    .action-btn.primary {
-      background: linear-gradient(135deg, #4f46e5, #0891b2);
-      border: none;
-      color: white;
-      font-weight: 700;
-    }
-
-    .action-btn.primary:hover {
-      filter: brightness(1.12);
-      box-shadow: 0 0 16px rgba(8, 145, 178, 0.45);
-    }
-
-    .action-btn.secondary {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 11px;
-    }
-
-    .input-box {
-      width: 100%;
-      box-sizing: border-box;
-      background: rgba(10, 15, 29, 0.9);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 9px;
-      color: var(--text-main);
-      font-size: 12px;
-      margin-bottom: 8px;
-      resize: vertical;
-      min-height: 55px;
-      font-family: inherit;
-    }
-
-    .input-box:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 7px;
-    }
-
-    .dashboard-banner-btn {
-      background: linear-gradient(135deg, #4f46e5, #06b6d4) !important;
-      color: white !important;
-      font-weight: 700 !important;
-      padding: 10px 12px !important;
-      font-size: 12px !important;
-      margin-bottom: 12px !important;
-      border: 1px solid rgba(255, 255, 255, 0.25) !important;
-      box-shadow: 0 0 16px rgba(99, 102, 241, 0.4) !important;
-      cursor: pointer;
-    }
-
-    .dashboard-banner-btn:hover {
-      filter: brightness(1.15);
-      transform: translateY(-1px);
-      box-shadow: 0 0 22px rgba(6, 182, 212, 0.6) !important;
+      font-size: 10px;
+      color: var(--text-muted);
     }
   </style>
 </head>
@@ -297,22 +324,30 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
   <div class="header">
     <div class="brand">
       <span>Akasha</span>
-      <span class="badge">Antigravity Brain</span>
+      <span class="badge">Studio</span>
     </div>
     <div class="status-pill">
-      <span>●</span> Zero-Key Active
+      <span>●</span> Active
     </div>
   </div>
 
-  <!-- Primary Dashboard Trigger Button -->
-  <button class="action-btn dashboard-banner-btn" onclick="openFullDashboard()">
-    🚀 Open Full Antigravity Dashboard ↗
-  </button>
+  <div class="launcher-card">
+    <div class="icon-glow">🚀</div>
+    <div>
+      <div class="title">Main Dashboard Active</div>
+      <div class="desc">Akasha Antigravity Dashboard is running in the main editor canvas.</div>
+    </div>
+    <button class="action-btn primary" onclick="openFullDashboard()">
+      🚀 Focus Main Dashboard
+    </button>
+    <button class="action-btn secondary" onclick="closeSidebar()">
+      ✕ Close Sidebar Window
+    </button>
+  </div>
 
-  <!-- Quota Meter Card -->
-  <div class="card">
+  <div class="quota-card">
     <div class="quota-header">
-      <span>Token Budget (${quota.tier.toUpperCase()})</span>
+      <span>Tokens (${quota.tier.toUpperCase()})</span>
       <span id="percent-label">${percent}%</span>
     </div>
     <div class="progress-bar-bg">
@@ -324,117 +359,33 @@ export class AkashaWebviewProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
-  <!-- Direct Agent Instruction Card -->
-  <div class="card">
-    <div style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.04em;">
-      Direct Antigravity Mission
-    </div>
-    <textarea id="prompt-input" class="input-box" placeholder="Ask Antigravity to build, refactor, generate, or explain anything..."></textarea>
-    <button class="action-btn primary" onclick="sendPrompt()">
-      ✨ Execute via Antigravity Brain
-    </button>
-  </div>
-
-  <!-- Autonomous Missions Card -->
-  <div class="card">
-    <div style="font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.04em;">
-      Autonomous Workflows
-    </div>
-    <div class="grid-2">
-      <button class="action-btn secondary" onclick="synthesizeProject()">
-        🚀 Synthesize App
-      </button>
-      <button class="action-btn secondary" onclick="generateComponent()">
-        🧩 New Component
-      </button>
-    </div>
-    <div class="grid-2">
-      <button class="action-btn secondary" onclick="verifyBuild()">
-        🛡 Self-Healing Build
-      </button>
-      <button class="action-btn secondary" onclick="openPreview()">
-        🌐 Live Preview
-      </button>
-    </div>
-    <div class="grid-2" style="margin-top: 6px;">
-      <button class="action-btn secondary" style="border-color: rgba(99,102,241,0.4); color: #a5b4fc;" onclick="dispatchSquadParallel()">
-        ⚡ Squad (Parallel)
-      </button>
-      <button class="action-btn secondary" style="border-color: rgba(6,182,212,0.4); color: #67e8f9;" onclick="dispatchSquadSeries()">
-        ⛓ Squad (Series)
-      </button>
-    </div>
-    <button class="action-btn secondary" style="margin-top: 4px; border-color: rgba(16,185,129,0.4); color: #6ee7b7;" onclick="syncBlueprint()">
-      📋 Sync Blueprint (.json)
-    </button>
-    <button class="action-btn primary" style="background: linear-gradient(135deg, #059669, #0284c7); margin-top: 6px;" onclick="saveToAntigravity()">
-      💾 Save to Antigravity
-    </button>
-    <button class="action-btn secondary" style="margin-top: 4px;" onclick="syncCloud()">
-      ☁ Sync to MongoDB GridFS
-    </button>
-  </div>
-
   <script>
     const vscode = acquireVsCodeApi();
+
+    // Trigger opening dashboard as soon as webview mounts
+    vscode.postMessage({ type: 'OPEN_FULL_DASHBOARD' });
 
     function openFullDashboard() {
       vscode.postMessage({ type: 'OPEN_FULL_DASHBOARD' });
     }
 
-    function sendPrompt() {
-      const input = document.getElementById('prompt-input');
-      const val = input.value.trim();
-      if (!val) return;
-      vscode.postMessage({ type: 'ASK_ANTIGRAVITY', prompt: val });
-      input.value = '';
-    }
-
-    function synthesizeProject() {
-      vscode.postMessage({ type: 'SYNTHESIZE_PROJECT' });
-    }
-
-    function generateComponent() {
-      vscode.postMessage({ type: 'GENERATE_COMPONENT' });
-    }
-
-    function saveToAntigravity() {
-      vscode.postMessage({ type: 'SAVE_TO_ANTIGRAVITY' });
-    }
-
-    function syncCloud() {
-      vscode.postMessage({ type: 'SYNC_CLOUD' });
-    }
-
-    function verifyBuild() {
-      vscode.postMessage({ type: 'RUN_VERIFY' });
-    }
-
-    function openPreview() {
-      vscode.postMessage({ type: 'OPEN_PREVIEW' });
-    }
-
-    function dispatchSquadParallel() {
-      vscode.postMessage({ type: 'DISPATCH_SQUAD_PARALLEL' });
-    }
-
-    function dispatchSquadSeries() {
-      vscode.postMessage({ type: 'DISPATCH_SQUAD_SERIES' });
-    }
-
-    function syncBlueprint() {
-      vscode.postMessage({ type: 'SYNC_BLUEPRINT' });
+    function closeSidebar() {
+      vscode.postMessage({ type: 'CLOSE_SIDEBAR' });
     }
 
     window.addEventListener('message', event => {
-      const message = event.data;
-      if (message.type === 'UPDATE_QUOTA') {
-        const q = message.quota;
-        const pct = Math.min(100, Math.round((q.usedTokens / q.totalTokens) * 100));
-        document.getElementById('percent-label').textContent = pct + '%';
-        document.getElementById('progress-fill').style.width = pct + '%';
-        document.getElementById('used-label').textContent = q.usedTokens.toLocaleString() + ' used';
-        document.getElementById('total-label').textContent = q.totalTokens.toLocaleString() + ' budget';
+      const msg = event.data;
+      if (msg.type === 'UPDATE_QUOTA' && msg.quota) {
+        const q = msg.quota;
+        const p = Math.min(100, Math.round((q.usedTokens / q.totalTokens) * 100));
+        const fill = document.getElementById('progress-fill');
+        const pctLabel = document.getElementById('percent-label');
+        const usedLabel = document.getElementById('used-label');
+        const totalLabel = document.getElementById('total-label');
+        if (fill) fill.style.width = p + '%';
+        if (pctLabel) pctLabel.innerText = p + '%';
+        if (usedLabel) usedLabel.innerText = q.usedTokens.toLocaleString() + ' used';
+        if (totalLabel) totalLabel.innerText = q.totalTokens.toLocaleString() + ' budget';
       }
     });
   </script>

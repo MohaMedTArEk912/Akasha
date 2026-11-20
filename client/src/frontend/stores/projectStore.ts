@@ -1595,7 +1595,7 @@ export function setProject(project: any): void {
 /**
  * Switch the active feature page
  */
-export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings" | "team" | "source" | "agent-squad";
+export type FeaturePage = "dashboard" | "idea" | "ui" | "usecases" | "apis" | "database" | "diagrams" | "code" | "git" | "settings" | "team" | "source" | "agent-squad" | "motion-lab";
 
 export function setActivePage(page: FeaturePage): void {
     const editMode: "visual" | "code" = page === "code" ? "code" : "visual";
